@@ -1,0 +1,6 @@
+boot: cdrom
+ata0-master: type=cdrom, path=kernel.iso, status=inserted
+
+memory: guest=32, host=32
+
+magic_break: enabled=1
