@@ -15,8 +15,10 @@ CARGO := cargo
 RUSTFLAGS := --target $(ARCHDIR)/target.json
 # --edition 2018 is passed only in some of the rules
 
+# kernel/main.rs must be first (see the $(LIBKERNEL) rule)
 SOURCES := \
-	kernel/main.rs  # must be first
+	kernel/main.rs \
+	kernel/vga.rs
 
 OBJECTS := \
     $(ARCH_OBJECTS)
@@ -52,7 +54,7 @@ $(LIBCORE):
 	--crate-name core --crate-type lib $(LIBDIR)/libcore/lib.rs
 
 # Note: --edition 2018 causes weird build failures for this library.
-$(LIBCOMP):
+$(LIBCOMP): $(LIBCORE)
 	cd $(LIBDIR)/compiler-builtins && \
 	cargo rustc --release -- $(RUSTFLAGS) --extern core=$(LIBCORE) && \
 	mv target/release/libcompiler_builtins.rlib ..
