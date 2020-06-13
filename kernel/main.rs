@@ -6,15 +6,30 @@ mod arch;
 
 mod vga;
 
+#[macro_use]
+mod kernel_static;
+
 use core::panic::PanicInfo;
+
+kernel_static! {
+    static ref SOMETHING: usize = {
+        println!("SOMETHING: constructor run");
+        2
+    };
+    static ref ANOTHER: bool = false;
+}
 
 #[no_mangle]
 pub extern "C" fn main() -> ! {
     arch::init();
     vga::init();
-    for i in 0..25 {
-        println!("Hello, world! {}", i);
-    }
+
+    println!("{}", *SOMETHING);
+    println!("{}", *SOMETHING);
+    println!("{}", *SOMETHING);
+    println!("{}", *SOMETHING);
+    println!("{}", *ANOTHER);
+
     loop {}
 }
 

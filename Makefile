@@ -18,6 +18,7 @@ RUSTFLAGS := --target $(ARCHDIR)/target.json
 # kernel/main.rs must be first (see the $(LIBKERNEL) rule)
 SOURCES := \
 	kernel/main.rs \
+	kernel/kernel_static.rs \
 	kernel/vga.rs
 
 OBJECTS := \
