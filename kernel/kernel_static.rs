@@ -30,9 +30,9 @@ impl<T> StaticCell<T> {
 }
 
 macro_rules! kernel_static {
-    (static ref $N:ident : $T:ty = $E:expr; $($t:tt)*) => {
-        struct $N {}
-        static $N: $N = $N {};
+    (($($vis:tt)*) static ref $N:ident : $T:ty = $E:expr; $($t:tt)*) => {
+        $($vis)* struct $N {}
+        $($vis)* static $N: $N = $N {};
         impl core::ops::Deref for $N {
             type Target = $T;
             fn deref(&self) -> &$T {
@@ -43,6 +43,12 @@ macro_rules! kernel_static {
             }
         }
         kernel_static!($($t)*);
+    };
+    (static ref $N:ident : $T:ty = $E:expr; $($t:tt)*) => {
+        kernel_static!(() static ref $N : $T = $E; $($t)*);
+    };
+    (pub static ref $N:ident : $T:ty = $E:expr; $($t:tt)*) => {
+        kernel_static!((pub) static ref $N : $T = $E; $($t)*);
     };
     () => ()
 }
