@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 pub mod interrupts;
+mod stack_trace;
 
 use crate::ArchInitInfo;
 
@@ -34,5 +35,12 @@ pub fn init() -> ArchInitInfo {
 
     ArchInitInfo {
         kernel_size: (kernel_end_addr - text_start_addr) / 1024,
+    }
+}
+
+pub fn panic() {
+    let trace = stack_trace::StackTrace::walk_and_get();
+    for (i, addr) in trace.iter().enumerate() {
+        println!(" stack item #{}: 0x{:08X}", trace.length - i, addr);
     }
 }

@@ -18,6 +18,8 @@
 #![cfg_attr(target_arch = "x86", feature(abi_x86_interrupt))]
 #![cfg_attr(target_arch = "x86", feature(asm))]
 
+use core::panic::PanicInfo;
+
 #[macro_use]
 mod kernel_static;
 
@@ -27,14 +29,12 @@ mod vga;
 #[cfg_attr(target_arch = "x86", path = "arch/x86/mod.rs")]
 mod arch;
 
-use core::panic::PanicInfo;
-
 pub struct ArchInitInfo {
     kernel_size: u32,
 }
 
 #[no_mangle]
-pub extern "C" fn main() -> ! {
+pub extern "C" fn main() {
     vga::init();
     let aif: ArchInitInfo = arch::init();
     println!(
@@ -43,11 +43,14 @@ pub extern "C" fn main() -> ! {
         aif.kernel_size / 4,
     );
 
-    loop {}
+    panic!("Whoa");
+
+    //loop {}
 }
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     println!("{}", info);
+    arch::panic();
     loop {}
 }

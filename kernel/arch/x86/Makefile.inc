@@ -20,4 +20,5 @@ ARCH_SOURCES := \
 
 ARCH_OBJECTS := \
 	$(ARCHDIR)/boot.o \
-    $(ARCHDIR)/mem.o
+    $(ARCHDIR)/mem.o \
+	$(ARCHDIR)/stack_trace.o

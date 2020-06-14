@@ -15,7 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 .set MAGIC,      0xE85250D6
-.set ARCH,       0  // i386
+.set ARCH,       0 // i386
 .set HEADER_LEN, header_end - header_start
 .set CHECKSUM,   -(MAGIC + ARCH + HEADER_LEN)
 
@@ -57,16 +57,10 @@ _entry:
     call load_gdt
     popl %eax
 
-    pushl %ebp
-    movl %esp, %ebp
     pushl %ebx
     pushl %eax
+    xorl %ebp, %ebp
     call main
-    addl $8, %esp
-    popl %ebp
-
-    addl $4, %esp
-    popl %ebp
 
     // Hang if main() returns.
     jmp halt
