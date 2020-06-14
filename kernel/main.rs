@@ -1,34 +1,26 @@
 #![no_std]
-
-#[cfg_attr(target_arch = "x86", path = "arch/x86/mod.rs")]
-#[cfg_attr(target_arch = "x86_64", path = "arch/x86-64/mod.rs")]
-mod arch;
-
-mod vga;
+#![cfg_attr(target_arch = "x86", feature(abi_x86_interrupt))]
+#![cfg_attr(target_arch = "x86", feature(asm))]
 
 #[macro_use]
 mod kernel_static;
 
-use core::panic::PanicInfo;
+#[macro_use]
+mod vga;
 
-kernel_static! {
-    static ref SOMETHING: usize = {
-        println!("SOMETHING: constructor run");
-        2
-    };
-    static ref ANOTHER: bool = false;
-}
+#[cfg_attr(target_arch = "x86", path = "arch/x86/mod.rs")]
+mod arch;
+
+use core::panic::PanicInfo;
 
 #[no_mangle]
 pub extern "C" fn main() -> ! {
-    arch::init();
     vga::init();
+    arch::init();
 
-    println!("{}", *SOMETHING);
-    println!("{}", *SOMETHING);
-    println!("{}", *SOMETHING);
-    println!("{}", *SOMETHING);
-    println!("{}", *ANOTHER);
+    unsafe {
+        asm!("movl $0, %eax; div %eax", options(att_syntax));
+    }
 
     loop {}
 }
