@@ -1,3 +1,27 @@
+// ytret's OS - hobby operating system
+// Copyright (C) 2020  Yuri Tretyakov (ytretyakov18@gmail.com)
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+// The ideas of these structs and impls are based on spin 0.5.2 and lazy_static
+// 1.4.0.  The former is licensed under the MIT License
+// <https://raw.githubusercontent.com/mvdnes/spin-rs/master/LICENSE>; the latter
+// is dual-licensed under the MIT License
+// <https://raw.githubusercontent.com/rust-lang-nursery/lazy-static.rs/master/LICENSE-MIT>
+// and the Apache License
+// <https://raw.githubusercontent.com/rust-lang-nursery/lazy-static.rs/master/LICENSE-APACHE>.
+
 use core::cell::Cell;
 use core::mem::MaybeUninit;
 use core::ops::{Deref, DerefMut, Drop};
