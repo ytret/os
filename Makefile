@@ -10,7 +10,7 @@ ISODIR ?= $(PWD)/isodir
 AS := i686-elf-as
 LD := i686-elf-ld
 RUST := rustc
-CARGO := cargo
+CARGO := cargo # used only for $(LIBCOMP)
 
 RUSTFLAGS := --target $(ARCHDIR)/target.json
 # --edition 2018 is passed only in some of the rules
@@ -19,7 +19,8 @@ RUSTFLAGS := --target $(ARCHDIR)/target.json
 SOURCES := \
 	kernel/main.rs \
 	kernel/kernel_static.rs \
-	kernel/vga.rs
+	kernel/vga.rs \
+	$(ARCH_SOURCES)
 
 OBJECTS := \
     $(ARCH_OBJECTS)
@@ -57,7 +58,7 @@ $(LIBCORE):
 # Note: --edition 2018 causes weird build failures for this library.
 $(LIBCOMP): $(LIBCORE)
 	cd $(LIBDIR)/compiler-builtins && \
-	cargo rustc --release -- $(RUSTFLAGS) --extern core=$(LIBCORE) && \
+	$(CARGO) rustc --release -- $(RUSTFLAGS) --extern core=$(LIBCORE) && \
 	mv target/release/libcompiler_builtins.rlib ..
 
 setup-libs:
