@@ -13,14 +13,19 @@ mod arch;
 
 use core::panic::PanicInfo;
 
+pub struct ArchInitInfo {
+    kernel_size: u32,
+}
+
 #[no_mangle]
 pub extern "C" fn main() -> ! {
     vga::init();
-    arch::init();
-
-    unsafe {
-        asm!("movl $0, %eax; div %eax", options(att_syntax));
-    }
+    let aif: ArchInitInfo = arch::init();
+    println!(
+        "Kernel size: {} KiB ({} pages)",
+        aif.kernel_size,
+        aif.kernel_size / 4,
+    );
 
     loop {}
 }
