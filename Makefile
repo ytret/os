@@ -11,11 +11,12 @@ AS := i686-elf-as
 LD := i686-elf-ld
 RUST := rustc
 CARGO := cargo # used only for $(LIBCOMP)
+RUSTFMT := rustfmt
 
 RUSTFLAGS := --target $(ARCHDIR)/target.json
-# --edition 2018 is passed only in some of the rules
+RUSTFMTFLAGS := --check --edition 2018 --config max_width=80
 
-# kernel/main.rs must be first (see the $(LIBKERNEL) rule)
+# kernel/main.rs must be first (e.g. see the $(LIBKERNEL) rule)
 SOURCES := \
 	kernel/main.rs \
 	kernel/kernel_static.rs \
@@ -36,7 +37,7 @@ LINKLIST := \
 OUTPUT := kernel.bin
 ISOFILE := kernel.iso
 
-.PHONY: all iso clean run
+.PHONY: all iso clean run check-fmt
 
 all: $(OUTPUT)
 
@@ -79,3 +80,6 @@ clean-all: clean
 
 run:
 	qemu-system-i386 -m 32 -cdrom $(ISOFILE)
+
+check-fmt: $(SOURCES)
+	$(RUSTFMT) $(RUSTFMTFLAGS) $<

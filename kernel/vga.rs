@@ -7,10 +7,23 @@ pub struct CursorPos {
 
 #[allow(dead_code)]
 #[repr(u8)]
-enum Color
-{
-    Black, Blue, Green, Cyan, Red, Purple, Brown, Gray, DarkGray, LightBlue,
-    LightGreen, LightCyan, LightRed, LightPurple, Yellow, White
+enum Color {
+    Black,
+    Blue,
+    Green,
+    Cyan,
+    Red,
+    Purple,
+    Brown,
+    Gray,
+    DarkGray,
+    LightBlue,
+    LightGreen,
+    LightCyan,
+    LightRed,
+    LightPurple,
+    Yellow,
+    White,
 }
 
 #[derive(Clone, Copy)]
@@ -18,8 +31,8 @@ enum Color
 pub struct ColorCode(u8);
 
 impl ColorCode {
-    const fn new(fg: Color, bg: Color) -> ColorCode {
-        ColorCode((bg as u8) << 4 | (fg as u8))
+    const fn new(fg: Color, bg: Color) -> Self {
+        Self((bg as u8) << 4 | (fg as u8))
     }
 }
 
@@ -45,8 +58,8 @@ pub struct Writer {
 }
 
 impl Writer {
-    pub const fn new(pos: CursorPos, color_code: ColorCode) -> Writer {
-        Writer {
+    pub const fn new(pos: CursorPos, color_code: ColorCode) -> Self {
+        Self {
             pos,
             color_code,
             buffer: 0xB8000 as *mut Buffer,
@@ -61,8 +74,8 @@ impl Writer {
                     self.new_line();
                 }
                 unsafe {
-                    (*self.buffer).chars[self.pos.row][self.pos.col]
-                        = ScreenChar {
+                    (*self.buffer).chars[self.pos.row][self.pos.col] =
+                        ScreenChar {
                             ascii_char: ch,
                             color_code: self.color_code,
                         };
@@ -91,7 +104,8 @@ impl Writer {
     fn scroll_screen(&mut self, num_rows: usize) {
         unsafe {
             for row in num_rows..BUFFER_HEIGHT {
-                (*self.buffer).chars[row-num_rows] = (*self.buffer).chars[row];
+                (*self.buffer).chars[row - num_rows] =
+                    (*self.buffer).chars[row];
             }
         }
     }
@@ -135,9 +149,10 @@ macro_rules! println {
     })
 }
 
-static mut WRITER: Writer
-    = Writer::new(CursorPos { row: 0, col: 0 },
-                  ColorCode::new(Color::White, Color::Black));
+static mut WRITER: Writer = Writer::new(
+    CursorPos { row: 0, col: 0 },
+    ColorCode::new(Color::White, Color::Black),
+);
 
 pub fn init() {
     unsafe {
