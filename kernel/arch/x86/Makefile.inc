@@ -3,4 +3,5 @@ ARCH_SOURCES := \
     $(ARCHDIR)/interrupts.rs
 
 ARCH_OBJECTS := \
-	$(ARCHDIR)/boot.o
+	$(ARCHDIR)/boot.o \
+    $(ARCHDIR)/mem.o
