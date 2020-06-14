@@ -1,3 +1,4 @@
+use crate::kernel_static::Mutex;
 use core::fmt;
 
 pub struct CursorPos {
@@ -31,7 +32,7 @@ enum Color {
 pub struct ColorCode(u8);
 
 impl ColorCode {
-    const fn new(fg: Color, bg: Color) -> Self {
+    fn new(fg: Color, bg: Color) -> Self {
         Self((bg as u8) << 4 | (fg as u8))
     }
 }
@@ -58,14 +59,6 @@ pub struct Writer {
 }
 
 impl Writer {
-    pub const fn new(pos: CursorPos, color_code: ColorCode) -> Self {
-        Self {
-            pos,
-            color_code,
-            buffer: 0xB8000 as *mut Buffer,
-        }
-    }
-
     pub fn write_char(&mut self, ch: u8) {
         match ch {
             b'\n' => self.new_line(),
@@ -149,20 +142,19 @@ macro_rules! println {
     })
 }
 
-static mut WRITER: Writer = Writer::new(
-    CursorPos { row: 0, col: 0 },
-    ColorCode::new(Color::White, Color::Black),
-);
+kernel_static! {
+    static ref WRITER: Mutex<Writer> = Mutex::new(Writer {
+            pos: CursorPos { row: 0, col: 0 },
+            color_code: ColorCode::new(Color::White, Color::Black),
+            buffer: 0xB8000 as *mut Buffer,
+    });
+}
 
 pub fn init() {
-    unsafe {
-        WRITER.clear_screen();
-    }
+    WRITER.lock().clear_screen();
 }
 
 pub fn _print(args: fmt::Arguments) {
     use core::fmt::Write;
-    unsafe {
-        WRITER.write_fmt(args).unwrap();
-    }
+    WRITER.lock().write_fmt(args).unwrap();
 }

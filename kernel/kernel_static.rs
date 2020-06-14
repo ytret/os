@@ -1,6 +1,7 @@
 use core::cell::Cell;
 use core::mem::MaybeUninit;
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::ops::{Deref, DerefMut, Drop};
+use core::sync::atomic::{spin_loop_hint, AtomicBool, Ordering};
 
 pub struct StaticCell<T> {
     initialized: AtomicBool, // NB: the kernel is one-threaded
@@ -26,6 +27,60 @@ impl<T> StaticCell<T> {
             self.initialized.store(true, Ordering::Relaxed);
         }
         unsafe { &*(*self.data.as_ptr()).as_ptr() }
+    }
+}
+
+pub struct Mutex<T> {
+    locked: AtomicBool,
+    data: Cell<T>,
+}
+
+pub struct MutexWrapper<'a, T: 'a> {
+    locked: &'a AtomicBool,
+    data: &'a mut T,
+}
+
+impl<T> Mutex<T> {
+    pub fn new(data: T) -> Self {
+        Self {
+            locked: AtomicBool::new(false),
+            data: Cell::new(data),
+        }
+    }
+
+    pub fn lock(&self) -> MutexWrapper<T> {
+        while self.locked.compare_and_swap(false, true, Ordering::Relaxed)
+            != false
+        {
+            while self.locked.load(Ordering::Relaxed) {
+                spin_loop_hint();
+            }
+        }
+        MutexWrapper {
+            locked: &self.locked,
+            data: unsafe { &mut *self.data.as_ptr() },
+        }
+    }
+}
+
+unsafe impl<T> Sync for Mutex<T> {}
+
+impl<'a, T> Deref for MutexWrapper<'a, T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        &*self.data
+    }
+}
+
+impl<'a, T> DerefMut for MutexWrapper<'a, T> {
+    fn deref_mut(&mut self) -> &mut T {
+        self.data
+    }
+}
+
+impl<'a, T> Drop for MutexWrapper<'a, T> {
+    fn drop(&mut self) {
+        self.locked.store(false, Ordering::Relaxed);
     }
 }
 
