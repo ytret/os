@@ -15,6 +15,8 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 pub mod interrupts;
+mod pic;
+pub mod port_io;
 mod stack_trace;
 
 use crate::ArchInitInfo;
@@ -26,12 +28,13 @@ extern "C" {
 }
 
 pub fn init() -> ArchInitInfo {
-    //interrupts::init();
-
     let text_start_addr = unsafe { &text_start as *const _ as u32 };
     let kernel_end_addr = unsafe { &kernel_end as *const _ as u32 };
     print!("text_start = 0x{:08X}; ", text_start_addr);
     println!("kernel_end = 0x{:08X}", kernel_end_addr);
+
+    pic::init();
+    interrupts::init();
 
     ArchInitInfo {
         kernel_size: (kernel_end_addr - text_start_addr) / 1024,

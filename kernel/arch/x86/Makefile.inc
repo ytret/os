@@ -16,6 +16,8 @@
 
 ARCH_SOURCES := \
 	$(ARCHDIR)/mod.rs \
+	$(ARCHDIR)/port_io.rs \
+	$(ARCHDIR)/pic.rs \
     $(ARCHDIR)/interrupts.rs
 
 ARCH_OBJECTS := \
