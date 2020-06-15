@@ -55,3 +55,19 @@ where
         res
     }
 }
+
+macro_rules! bitflags {
+    (#[repr($R:ident)] enum $N:ident { $($V:ident = $E:expr,)+ }) => {
+        #[allow(dead_code)]
+        #[repr($R)]
+        enum $N {
+            $($V = $E,)+
+        }
+
+        impl Into<$R> for $N {
+            fn into(self) -> $R {
+                self as $R
+            }
+        }
+    }
+}
