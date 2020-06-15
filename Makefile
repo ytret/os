@@ -36,6 +36,7 @@ RUSTFMTFLAGS := --check --edition 2018 --config max_width=80
 SOURCES := \
 	kernel/main.rs \
 	kernel/kernel_static.rs \
+	kernel/bitflags.rs \
 	kernel/vga.rs \
 	$(ARCH_SOURCES)
 

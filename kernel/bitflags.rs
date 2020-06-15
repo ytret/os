@@ -14,45 +14,44 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#![no_std]
-#![cfg_attr(target_arch = "x86", feature(abi_x86_interrupt))]
-#![cfg_attr(target_arch = "x86", feature(asm))]
+use core::marker::PhantomData;
+use core::ops::{BitOr, BitOrAssign};
 
-use core::panic::PanicInfo;
-
-mod bitflags;
-
-#[macro_use]
-mod kernel_static;
-
-#[macro_use]
-mod vga;
-
-#[cfg_attr(target_arch = "x86", path = "arch/x86/mod.rs")]
-mod arch;
-
-pub struct ArchInitInfo {
-    kernel_size: u32,
+pub struct BitFlags<T, E>
+where
+    T: BitOrAssign<T>,
+    E: Into<T>,
+{
+    pub value: T,
+    phantom: PhantomData<E>,
 }
 
-#[no_mangle]
-pub extern "C" fn main() {
-    vga::init();
-    let aif: ArchInitInfo = arch::init();
-    println!(
-        "Kernel size: {} KiB ({} pages)",
-        aif.kernel_size,
-        aif.kernel_size / 4,
-    );
+impl<T, E> BitFlags<T, E>
+where
+    T: BitOrAssign<T>,
+    E: Into<T>,
+{
+    pub fn new(value: T) -> Self {
+        Self {
+            value,
+            phantom: PhantomData,
+        }
+    }
 
-    panic!("Whoa");
-
-    //loop {}
+    pub fn set_flag(&mut self, flag: E) {
+        self.value |= flag.into();
+    }
 }
 
-#[panic_handler]
-fn panic(info: &PanicInfo) -> ! {
-    println!("{}", info);
-    arch::panic();
-    loop {}
+impl<T, E> BitOr<E> for BitFlags<T, E>
+where
+    T: BitOrAssign<T>,
+    E: Into<T>,
+{
+    type Output = BitFlags<T, E>;
+    fn bitor(self, rhs: E) -> Self::Output {
+        let mut res = self;
+        res.set_flag(rhs);
+        res
+    }
 }
