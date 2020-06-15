@@ -14,6 +14,45 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+extern "C" {
+    fn dummy_isr_0(stack_frame: &InterruptStackFrame);
+    fn dummy_isr_1(stack_frame: &InterruptStackFrame);
+    fn dummy_isr_2(stack_frame: &InterruptStackFrame);
+    fn dummy_isr_3(stack_frame: &InterruptStackFrame);
+    fn dummy_isr_4(stack_frame: &InterruptStackFrame);
+    fn dummy_isr_5(stack_frame: &InterruptStackFrame);
+    fn dummy_isr_6(stack_frame: &InterruptStackFrame);
+    fn dummy_isr_7(stack_frame: &InterruptStackFrame);
+    fn dummy_isr_8(stack_frame: &InterruptStackFrame, err_code: u32);
+    fn dummy_isr_9(stack_frame: &InterruptStackFrame);
+    fn dummy_isr_10(stack_frame: &InterruptStackFrame, err_code: u32);
+    fn dummy_isr_11(stack_frame: &InterruptStackFrame, err_code: u32);
+    fn dummy_isr_12(stack_frame: &InterruptStackFrame, err_code: u32);
+    fn dummy_isr_13(stack_frame: &InterruptStackFrame, err_code: u32);
+    fn dummy_isr_14(stack_frame: &InterruptStackFrame, err_code: u32);
+    fn dummy_isr_15(stack_frame: &InterruptStackFrame);
+    fn dummy_isr_16(stack_frame: &InterruptStackFrame);
+    fn dummy_isr_17(stack_frame: &InterruptStackFrame, err_code: u32);
+    fn dummy_isr_18(stack_frame: &InterruptStackFrame);
+    fn dummy_isr_19(stack_frame: &InterruptStackFrame);
+    fn dummy_isr_20(stack_frame: &InterruptStackFrame);
+    fn dummy_isr_21(stack_frame: &InterruptStackFrame, err_code: u32);
+    fn dummy_isr_22(stack_frame: &InterruptStackFrame);
+    fn dummy_isr_23(stack_frame: &InterruptStackFrame);
+    fn dummy_isr_24(stack_frame: &InterruptStackFrame);
+    fn dummy_isr_25(stack_frame: &InterruptStackFrame);
+    fn dummy_isr_26(stack_frame: &InterruptStackFrame);
+    fn dummy_isr_27(stack_frame: &InterruptStackFrame);
+    fn dummy_isr_28(stack_frame: &InterruptStackFrame);
+    fn dummy_isr_29(stack_frame: &InterruptStackFrame);
+    fn dummy_isr_30(stack_frame: &InterruptStackFrame);
+    fn dummy_isr_31(stack_frame: &InterruptStackFrame);
+
+    // Dummy ISRs.
+    fn dummy_isr_256(stack_frame: &InterruptStackFrame);
+    fn dummy_isr_257(stack_frame: &InterruptStackFrame, err_code: u32);
+}
+
 #[allow(dead_code)]
 #[repr(u8)]
 enum Dpl {
@@ -98,8 +137,12 @@ macro_rules! impl_gate {
     };
 }
 
-impl_gate!(HandlerFunc, dummy_handler);
-impl_gate!(HandlerFuncWithErrCode, dummy_handler_with_err_code);
+impl_gate!(HandlerFunc, dummy_isr_256);
+impl_gate!(HandlerFuncWithErrCode, dummy_isr_257);
+
+type HandlerFunc = unsafe extern "C" fn(&InterruptStackFrame);
+type HandlerFuncWithErrCode =
+    unsafe extern "C" fn(&InterruptStackFrame, err_code: u32);
 
 #[repr(C)]
 struct InterruptStackFrame {
@@ -129,19 +172,16 @@ pub struct InterruptDescriptorTable {
     stack_fault: Gate<HandlerFuncWithErrCode>,
     general_protection: Gate<HandlerFuncWithErrCode>,
     page_fault: Gate<HandlerFuncWithErrCode>,
-    _reserved_1: Gate<HandlerFunc>, // reserved
+    reserved_1: Gate<HandlerFunc>, // reserved
     x87_fpu_floating_point_error: Gate<HandlerFunc>, // reserved
     alignment_check: Gate<HandlerFuncWithErrCode>,
     machine_check: Gate<HandlerFunc>,
     simd_floating_point: Gate<HandlerFunc>,
     virtualization: Gate<HandlerFunc>,
-    _reserved_2: [Gate<HandlerFunc>; 11], // reserved
+    control_protection: Gate<HandlerFuncWithErrCode>,
+    reserved_2: [Gate<HandlerFunc>; 10], // reserved
     interrupts: [Gate<HandlerFunc>; 256 - 32],
 }
-
-type HandlerFunc = extern "x86-interrupt" fn(&InterruptStackFrame);
-type HandlerFuncWithErrCode =
-    extern "x86-interrupt" fn(&InterruptStackFrame, err_code: u32);
 
 impl InterruptDescriptorTable {
     fn new() -> Self {
@@ -161,13 +201,14 @@ impl InterruptDescriptorTable {
             stack_fault: Gate::<HandlerFuncWithErrCode>::dummy(),
             general_protection: Gate::<HandlerFuncWithErrCode>::dummy(),
             page_fault: Gate::<HandlerFuncWithErrCode>::dummy(),
-            _reserved_1: Gate::<HandlerFunc>::dummy(),
+            reserved_1: Gate::<HandlerFunc>::dummy(),
             x87_fpu_floating_point_error: Gate::<HandlerFunc>::dummy(),
             alignment_check: Gate::<HandlerFuncWithErrCode>::dummy(),
             machine_check: Gate::<HandlerFunc>::dummy(),
             simd_floating_point: Gate::<HandlerFunc>::dummy(),
             virtualization: Gate::<HandlerFunc>::dummy(),
-            _reserved_2: [Gate::<HandlerFunc>::dummy(); 11],
+            control_protection: Gate::<HandlerFuncWithErrCode>::dummy(),
+            reserved_2: [Gate::<HandlerFunc>::dummy(); 10],
             interrupts: [Gate::<HandlerFunc>::dummy(); 256 - 32],
         }
     }
@@ -182,148 +223,53 @@ struct IdtDescriptor {
 kernel_static! {
     pub static ref IDT: InterruptDescriptorTable = {
         let mut idt = InterruptDescriptorTable::new();
-        idt.divide_error.set_handler(divide_error_handler);
-        idt.debug.set_handler(debug_handler);
-        idt.non_maskable_int.set_handler(non_maskable_int_handler);
-        idt.breakpoint.set_handler(breakpoint_handler);
-        idt.overflow.set_handler(overflow_handler);
-        idt.bound_range_exceeded.set_handler(bound_range_exceeded_handler);
-        idt.invalid_opcode.set_handler(invalid_opcode_handler);
-        idt.device_not_available.set_handler(device_not_available_handler);
-        idt.double_fault.set_handler(double_fault_handler);
-        idt.invalid_tss.set_handler(invalid_tss_handler);
-        idt.segment_not_present.set_handler(segment_not_present_handler);
-        idt.stack_fault.set_handler(stack_fault_handler);
-        idt.general_protection.set_handler(general_protection_handler);
-        idt.page_fault.set_handler(page_fault_handler);
-        idt.alignment_check.set_handler(alignment_check_handler);
-        idt.machine_check.set_handler(machine_check_handler);
-        idt.simd_floating_point.set_handler(simd_floating_point_handler);
-        idt.virtualization.set_handler(virtualization_handler);
+        idt.divide_error.set_handler(dummy_isr_0);
+        idt.debug.set_handler(dummy_isr_1);
+        idt.non_maskable_int.set_handler(dummy_isr_2);
+        idt.breakpoint.set_handler(dummy_isr_3);
+        idt.overflow.set_handler(dummy_isr_4);
+        idt.bound_range_exceeded.set_handler(dummy_isr_5);
+        idt.invalid_opcode.set_handler(dummy_isr_6);
+        idt.device_not_available.set_handler(dummy_isr_7);
+        idt.double_fault.set_handler(dummy_isr_8);
+        idt.coprocessor_segment_overrun.set_handler(dummy_isr_9);
+        idt.invalid_tss.set_handler(dummy_isr_10);
+        idt.segment_not_present.set_handler(dummy_isr_11);
+        idt.stack_fault.set_handler(dummy_isr_12);
+        idt.general_protection.set_handler(dummy_isr_13);
+        idt.page_fault.set_handler(dummy_isr_14);
+        idt.reserved_1.set_handler(dummy_isr_15);
+        idt.x87_fpu_floating_point_error.set_handler(dummy_isr_16);
+        idt.alignment_check.set_handler(dummy_isr_17);
+        idt.machine_check.set_handler(dummy_isr_18);
+        idt.simd_floating_point.set_handler(dummy_isr_19);
+        idt.virtualization.set_handler(dummy_isr_20);
+        idt.control_protection.set_handler(dummy_isr_21);
+        idt.reserved_2[0].set_handler(dummy_isr_22);
+        idt.reserved_2[1].set_handler(dummy_isr_23);
+        idt.reserved_2[2].set_handler(dummy_isr_24);
+        idt.reserved_2[3].set_handler(dummy_isr_25);
+        idt.reserved_2[4].set_handler(dummy_isr_26);
+        idt.reserved_2[5].set_handler(dummy_isr_27);
+        idt.reserved_2[6].set_handler(dummy_isr_28);
+        idt.reserved_2[7].set_handler(dummy_isr_29);
+        idt.reserved_2[8].set_handler(dummy_isr_30);
+        idt.reserved_2[9].set_handler(dummy_isr_31);
         idt
     };
 }
 
-extern "x86-interrupt" fn divide_error_handler(
-    _stack_frame: &InterruptStackFrame,
-) {
-    panic!("Divide by zero exception.");
-}
-
-extern "x86-interrupt" fn debug_handler(_stack_frame: &InterruptStackFrame) {
-    panic!("Debug exception.");
-}
-
-extern "x86-interrupt" fn non_maskable_int_handler(
-    _stack_frame: &InterruptStackFrame,
-) {
-    panic!("Non-maskable interrupt exception.");
-}
-
-extern "x86-interrupt" fn breakpoint_handler(
-    _stack_frame: &InterruptStackFrame,
-) {
-    panic!("Breakpoint exception.");
-}
-
-extern "x86-interrupt" fn overflow_handler(_stack_frame: &InterruptStackFrame) {
-    panic!("Overflow exception.");
-}
-
-extern "x86-interrupt" fn bound_range_exceeded_handler(
-    _stack_frame: &InterruptStackFrame,
-) {
-    panic!("Bound range exceeded exception.");
-}
-
-extern "x86-interrupt" fn invalid_opcode_handler(
-    _stack_frame: &InterruptStackFrame,
-) {
-    panic!("Invalid opcode exception.");
-}
-
-extern "x86-interrupt" fn device_not_available_handler(
-    _stack_frame: &InterruptStackFrame,
-) {
-    panic!("Device not available exception.");
-}
-
-extern "x86-interrupt" fn double_fault_handler(
-    _stack_frame: &InterruptStackFrame,
-    _err_code: u32,
-) {
-    panic!("Double fault.");
-}
-
-extern "x86-interrupt" fn invalid_tss_handler(
-    _stack_frame: &InterruptStackFrame,
-    _err_code: u32,
-) {
-    panic!("Invalid TSS exception.");
-}
-
-extern "x86-interrupt" fn segment_not_present_handler(
-    _stack_frame: &InterruptStackFrame,
-    _err_code: u32,
-) {
-    panic!("Segment not present exception.");
-}
-
-extern "x86-interrupt" fn stack_fault_handler(
-    _stack_frame: &InterruptStackFrame,
-    _err_code: u32,
-) {
-    panic!("Stack fault.");
-}
-
-extern "x86-interrupt" fn general_protection_handler(
-    _stack_frame: &InterruptStackFrame,
-    _err_code: u32,
-) {
-    panic!("General protection exception.");
-}
-
-extern "x86-interrupt" fn page_fault_handler(
-    _stack_frame: &InterruptStackFrame,
-    _err_code: u32,
-) {
-    panic!("Page fault.");
-}
-
-extern "x86-interrupt" fn alignment_check_handler(
-    _stack_frame: &InterruptStackFrame,
-    _err_code: u32,
-) {
-    panic!("Alignment check exception.");
-}
-
-extern "x86-interrupt" fn machine_check_handler(
-    _stack_frame: &InterruptStackFrame,
-) {
-    panic!("Machine check exception.");
-}
-
-extern "x86-interrupt" fn simd_floating_point_handler(
-    _stack_frame: &InterruptStackFrame,
-) {
-    panic!("SIMD floating point exception.");
-}
-
-extern "x86-interrupt" fn virtualization_handler(
-    _stack_frame: &InterruptStackFrame,
-) {
-    panic!("Virtualization exception.");
-}
-
-extern "x86-interrupt" fn dummy_handler(_stack_frame: &InterruptStackFrame) {
-    panic!("Dummy exception handler called.");
-}
-
-extern "x86-interrupt" fn dummy_handler_with_err_code(
-    _stack_frame: &InterruptStackFrame,
-    _err_code: u32,
-) {
-    panic!("Dummy exception handler (with an error code) called.");
+#[no_mangle]
+pub extern "C" fn dummy_interrupt_handler(int_num: u32, err_code: u32) {
+    println!("Dummy interrupt handler called.");
+    print!(" interrupt number: {}", int_num);
+    if int_num == 256 || int_num == 257 {
+        println!(" -- note: not original interrupt number");
+    } else {
+        println!()
+    }
+    println!(" error code: {:08b}", err_code);
+    panic!("Unhandled interrupt.");
 }
 
 pub fn init() {
