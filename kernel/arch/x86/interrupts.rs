@@ -268,7 +268,14 @@ pub extern "C" fn dummy_interrupt_handler(int_num: u32, err_code: u32) {
     } else {
         println!()
     }
-    println!(" error code: {:08b}", err_code);
+    println!(
+        " error code: {:08b}_{:08b}_{:08b}_{:08b} (0x{:08X})",
+        (err_code >> 24) & 0xF,
+        (err_code >> 16) & 0xF,
+        (err_code >> 08) & 0xF,
+        (err_code >> 00) & 0xF,
+        err_code
+    );
     panic!("Unhandled interrupt.");
 }
 
