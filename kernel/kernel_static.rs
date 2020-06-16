@@ -110,6 +110,7 @@ impl<'a, T> Drop for MutexWrapper<'a, T> {
 
 macro_rules! kernel_static {
     (($($vis:tt)*) static ref $N:ident : $T:ty = $E:expr; $($t:tt)*) => {
+        #[allow(non_camel_case_types)]
         $($vis)* struct $N {}
         $($vis)* static $N: $N = $N {};
         impl core::ops::Deref for $N {

@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 pub mod interrupts;
+mod paging;
 mod pic;
 pub mod port_io;
 mod stack_trace;
@@ -30,15 +31,19 @@ extern "C" {
 pub fn init() -> ArchInitInfo {
     let text_start_addr = unsafe { &text_start as *const _ as u32 };
     let kernel_end_addr = unsafe { &kernel_end as *const _ as u32 };
+    let kernel_size = kernel_end_addr - text_start_addr;
     print!("text_start = 0x{:08X}; ", text_start_addr);
     println!("kernel_end = 0x{:08X}", kernel_end_addr);
 
     pic::init();
     interrupts::init();
+    paging::init(kernel_size);
 
-    ArchInitInfo {
-        kernel_size: (kernel_end_addr - text_start_addr) / 1024,
+    unsafe {
+        asm!("movl $0x400000, %edx ; divb (%edx)", options(att_syntax));
     }
+
+    ArchInitInfo { kernel_size }
 }
 
 pub fn panic() {

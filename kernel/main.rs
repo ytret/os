@@ -42,7 +42,7 @@ pub extern "C" fn main() {
     let aif: ArchInitInfo = arch::init();
     println!(
         "Kernel size: {} KiB ({} pages)",
-        aif.kernel_size,
+        aif.kernel_size / 1024,
         aif.kernel_size / 4,
     );
 

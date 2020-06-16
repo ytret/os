@@ -17,6 +17,7 @@
 use core::marker::PhantomData;
 use core::ops::{BitOr, BitOrAssign};
 
+#[derive(Clone, Copy)]
 pub struct BitFlags<T, E>
 where
     T: BitOrAssign<T>,
@@ -59,6 +60,7 @@ where
 macro_rules! bitflags {
     (#[repr($R:ident)] enum $N:ident { $($V:ident = $E:expr,)+ }) => {
         #[allow(dead_code)]
+        #[derive(Clone, Copy)]
         #[repr($R)]
         enum $N {
             $($V = $E,)+

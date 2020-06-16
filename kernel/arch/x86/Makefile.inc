@@ -18,7 +18,8 @@ ARCH_SOURCES := \
 	$(ARCHDIR)/mod.rs \
 	$(ARCHDIR)/port_io.rs \
 	$(ARCHDIR)/pic.rs \
-    $(ARCHDIR)/interrupts.rs
+    $(ARCHDIR)/interrupts.rs \
+	$(ARCHDIR)/paging.rs
 
 ARCH_OBJECTS := \
 	$(ARCHDIR)/boot.o \
