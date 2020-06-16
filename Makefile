@@ -29,7 +29,7 @@ RUST := rustc
 CARGO := cargo # used only for $(LIBCOMP)
 RUSTFMT := rustfmt
 
-RUSTFLAGS := --target $(ARCHDIR)/target.json
+RUSTFLAGS := --target $(ARCHDIR)/target.json -L $(LIBDIR)
 RUSTFMTFLAGS := --check --edition 2018 --config max_width=80
 
 # kernel/main.rs must be first (e.g. see the $(LIBKERNEL) rule)
@@ -54,7 +54,7 @@ LINKLIST := \
 OUTPUT := kernel.bin
 ISOFILE := kernel.iso
 
-.PHONY: all iso clean run check-fmt
+.PHONY: all get-libs iso clean run check-fmt
 
 all: $(OUTPUT)
 
@@ -66,21 +66,19 @@ $(OUTPUT): $(LINKLIST)
 
 $(LIBKERNEL): $(SOURCES) $(LIBCORE) $(LIBCOMP)
 	$(RUST) $(RUSTFLAGS) --edition 2018 --out-dir $(LIBDIR) \
-	--crate-name kernel --crate-type staticlib $< \
-	--extern core=$(LIBCORE) --extern compiler_builtins=$(LIBCOMP)
+	--crate-name kernel --crate-type staticlib $<
 
 $(LIBCORE):
 	$(RUST) -O $(RUSTFLAGS) --edition 2018 --out-dir $(LIBDIR) \
-	--crate-name core --crate-type lib $(LIBDIR)/libcore/lib.rs
+	--crate-name core --crate-type rlib $(LIBDIR)/libcore/lib.rs
 
-# Note: --edition 2018 causes weird build failures for this library.
+# Note: --edition 2018 causes build failures for this library.
 $(LIBCOMP): $(LIBCORE)
 	cd $(LIBDIR)/compiler-builtins && \
-	$(CARGO) rustc --release --features mem -- $(RUSTFLAGS) \
-	--extern core=$(LIBCORE) && \
+	$(CARGO) rustc --release --features mem -- $(RUSTFLAGS) && \
 	mv target/release/libcompiler_builtins.rlib ..
 
-setup-libs:
+get-libs:
 	cp -R $$(rustc --print sysroot)/lib/rustlib/src/rust/src $(LIBDIR)
 	cd $(LIBDIR) && git clone "https://github.com/rust-lang/compiler-builtins"
 

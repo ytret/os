@@ -9,7 +9,7 @@ and its prerequisite `libcompiler_builtins` for the selected target (set in
 is fetched from [rust-lang/compiler-builtins][libcomp_github].  To copy these
 two into the `lib/` subdirectory, simply run:
 
-    $ make setup-libs
+    $ make get-libs
 
 Once you have the source code for `libcore` and `libcompiler_builtins`, you can
 compile these crates and the kernel and link everything together:
@@ -18,7 +18,7 @@ compile these crates and the kernel and link everything together:
 
 The final ELF binary is called `kernel.bin`.  If you ever need to recompile the
 two dependencies, you can safely delete the `lib/` directory and run the
-`setup-libs` recipe again.
+`get-libs` recipe again.
 
 [gcc_cross_comp]: https://wiki.osdev.org/GCC_Cross-Compiler
 [libcomp_github]: https://github.com/rust-lang/compiler-builtins
