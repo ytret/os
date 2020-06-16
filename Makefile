@@ -76,7 +76,8 @@ $(LIBCORE):
 # Note: --edition 2018 causes weird build failures for this library.
 $(LIBCOMP): $(LIBCORE)
 	cd $(LIBDIR)/compiler-builtins && \
-	$(CARGO) rustc --release -- $(RUSTFLAGS) --extern core=$(LIBCORE) && \
+	$(CARGO) rustc --release --features mem -- $(RUSTFLAGS) \
+	--extern core=$(LIBCORE) && \
 	mv target/release/libcompiler_builtins.rlib ..
 
 setup-libs:
