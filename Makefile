@@ -14,8 +14,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https:#www.gnu.org/licenses/>.
 
-.PHONY: all clean install
-
 ARCH ?= x86
 ARCHDIR := $(PWD)/kernel/arch/$(ARCH)
 include $(ARCHDIR)/Makefile.inc
@@ -54,7 +52,7 @@ LINKLIST := \
 OUTPUT := kernel.bin
 ISOFILE := kernel.iso
 
-.PHONY: all get-libs iso clean run check-fmt
+.PHONY: all get-libs iso clean clean-all run check-fmt
 
 all: $(OUTPUT)
 
