@@ -39,10 +39,6 @@ pub fn init() -> ArchInitInfo {
     interrupts::init();
     paging::init(kernel_size);
 
-    unsafe {
-        asm!("movl $0x400000, %edx ; divb (%edx)", options(att_syntax));
-    }
-
     ArchInitInfo { kernel_size }
 }
 

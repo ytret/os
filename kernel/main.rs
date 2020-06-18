@@ -32,13 +32,25 @@ mod vga;
 #[cfg_attr(target_arch = "x86", path = "arch/x86/mod.rs")]
 mod arch;
 
+mod mbi;
+
 pub struct ArchInitInfo {
     kernel_size: u32,
 }
 
 #[no_mangle]
-pub extern "C" fn main() {
+pub extern "C" fn main(magic_num: u32, boot_info: *const mbi::BootInfo) {
     vga::init();
+
+    if magic_num == 0x36D76289 {
+        println!("Booted by Multiboot2-compatible bootloader");
+        unsafe {
+            mbi::parse(boot_info);
+        }
+    } else {
+        panic!("Booted by unknown bootloader.");
+    }
+
     let aif: ArchInitInfo = arch::init();
     println!(
         "Kernel size: {} KiB ({} pages)",
