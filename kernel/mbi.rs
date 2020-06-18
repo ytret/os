@@ -310,7 +310,10 @@ pub unsafe fn parse(boot_info: *const BootInfo) {
     let mut ptr = boot_info as *const u8;
 
     let bi = &*(ptr as *const BootInfo);
-    println!("Total multiboot information size: {} bytes", bi.total_size);
+    println!(
+        "Multiboot information is at 0x{:08X}, total size: {} bytes",
+        ptr as u32, bi.total_size,
+    );
     ptr = ptr.offset(8);
 
     let mut num_tags = 0;
@@ -330,7 +333,7 @@ pub unsafe fn parse(boot_info: *const BootInfo) {
         print!("[{:02}:", tag_type);
         match tag_size {
             size if size < 100 => {
-                print!("{:2}b] ", size);
+                print!("{:02}b] ", size);
             }
             size if size < 1000 => {
                 print!("{:3}] ", size);
@@ -385,15 +388,15 @@ pub unsafe fn parse(boot_info: *const BootInfo) {
             }
             6 => {
                 let tag = &*(ptr as *const MemoryMap);
-                let num_of_entries = (tag.tag_size - 16) / tag.entry_size;
+                let num_entries = (tag.tag_size - 16) / tag.entry_size;
                 println!(
                     "Memory map: entry size: {}, entry version: {}, \
                      entries: {}",
-                    tag.entry_size, tag.entry_version, num_of_entries,
+                    tag.entry_size, tag.entry_version, num_entries,
                 );
                 let mut i = 0;
                 let mut added_to_info = 0;
-                while i < num_of_entries {
+                while i < num_entries {
                     let entry = &*((&tag.entries as *const _ as *const u8)
                         .add((i * tag.entry_size) as usize)
                         as *const MemoryMapEntry);
@@ -528,4 +531,11 @@ pub unsafe fn parse(boot_info: *const BootInfo) {
         ptr = ptr.add(ptr.align_offset(8)); // 8 bytes
         num_tags += 1;
     }
+
+    let actual_size = ptr as u32 + 8 - boot_info as u32; // 8 is for the end tag
+    println!("Actual MBI size: {} bytes", actual_size);
+    assert_eq!(
+        bi.total_size, actual_size,
+        "Declared and actual MBI sizes are different."
+    );
 }
