@@ -43,7 +43,7 @@ pub extern "C" fn main() {
     println!(
         "Kernel size: {} KiB ({} pages)",
         aif.kernel_size / 1024,
-        aif.kernel_size / 4,
+        aif.kernel_size / 4096,
     );
 
     loop {}
