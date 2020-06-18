@@ -385,28 +385,32 @@ pub unsafe fn parse(boot_info: *const BootInfo) {
             }
             6 => {
                 let tag = &*(ptr as *const MemoryMap);
+                let num_of_entries = (tag.tag_size - 16) / tag.entry_size;
                 println!(
                     "Memory map: entry size: {}, entry version: {}, \
                      entries: {}",
-                    tag.entry_size,
-                    tag.entry_version,
-                    (tag.tag_size - 16) / tag.entry_size,
+                    tag.entry_size, tag.entry_version, num_of_entries,
                 );
-                /*
                 let mut i = 0;
-                while i * tag.entry_size < tag.tag_size - 16 {
+                let mut added_to_info = 0;
+                while i < num_of_entries {
                     let entry = &*((&tag.entries as *const _ as *const u8)
                         .add((i * tag.entry_size) as usize)
                         as *const MemoryMapEntry);
+                    let start = entry.base_addr;
+                    let length = entry.length;
+                    let _type = MemoryMapRegionType::from(entry.region_type);
                     println!(
-                        " start: 0x{:08X}, end: 0x{:08X}, type: {}",
-                        entry.base_addr as u32,
-                        (entry.base_addr + entry.length) as u32,
-                        MemoryMapRegionType::from(entry.region_type),
+                        " start: 0x{:08X}_{:08X}, end: 0x{:08X}_{:08X}, \
+                         type: {}",
+                        (start >> 32) & 0xFFFFFFFF,
+                        (start >> 00) & 0xFFFFFFFF,
+                        ((start + length) >> 32) & 0xFFFFFFFF,
+                        ((start + length) >> 00) & 0xFFFFFFFF,
+                        _type,
                     );
                     i += 1;
                 }
-                */
             }
             7 => {
                 let tag = &*(ptr as *const VbeInfo);
