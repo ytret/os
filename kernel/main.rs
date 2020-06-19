@@ -36,6 +36,7 @@ mod mbi;
 
 pub struct KernelInfo {
     arch_init_info: ArchInitInfo,
+    available_memory_regions: [(u64, u64); 32], // 32 is enough maybe
 }
 
 pub struct ArchInitInfo {
@@ -50,6 +51,7 @@ impl KernelInfo {
                 kernel_start: 0,
                 kernel_end: 0,
             },
+            available_memory_regions: [(0, 0); 32],
         }
     }
 }
@@ -62,7 +64,7 @@ pub extern "C" fn main(magic_num: u32, boot_info: *const mbi::BootInfo) {
     if magic_num == 0x36D76289 {
         println!("Booted by Multiboot2-compatible bootloader");
         unsafe {
-            mbi::parse(boot_info);
+            mbi::parse(boot_info, &mut kernel_info);
         }
     } else {
         panic!("Booted by unknown bootloader.");

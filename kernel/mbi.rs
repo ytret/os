@@ -16,6 +16,8 @@
 
 #![allow(dead_code)]
 
+use crate::KernelInfo;
+
 macro_rules! type_enum {
     (#[repr($REPR:ident)] enum $N:ident { Reserved = $R:literal, $($V:ident = $D:literal,)* }) => {
         #[repr($REPR)]
@@ -306,7 +308,7 @@ fn str_from_ascii(ptr: &[u8], size: u32) -> &str {
     core::str::from_utf8(slice).unwrap()
 }
 
-pub unsafe fn parse(boot_info: *const BootInfo) {
+pub unsafe fn parse(boot_info: *const BootInfo, kernel_info: &mut KernelInfo) {
     let mut ptr = boot_info as *const u8;
 
     let bi = &*(ptr as *const BootInfo);
@@ -412,6 +414,19 @@ pub unsafe fn parse(boot_info: *const BootInfo) {
                         ((start + length) >> 00) & 0xFFFFFFFF,
                         _type,
                     );
+                    match _type {
+                        MemoryMapRegionType::Available
+                            if added_to_info
+                                < kernel_info
+                                    .available_memory_regions
+                                    .len() =>
+                        {
+                            kernel_info.available_memory_regions
+                                [added_to_info] = (start, start + length);
+                            added_to_info += 1;
+                        }
+                        _ => {}
+                    }
                     i += 1;
                 }
             }
