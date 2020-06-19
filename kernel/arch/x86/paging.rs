@@ -75,19 +75,6 @@ impl<F: Into<u32>> Entry<F> {
     }
 }
 
-/*
-impl<'a, T, F> Into<u32> for Entry<'a, T, F>
-where
-    F: Into<u32>,
-{
-    fn into(self) -> u32 {
-        assert_eq!(self.addr.into() & 0xFFF, 0);
-        assert_eq!(self.flags.value & !(0xFFF), 0);
-        self.addr.into() | self.flags.value
-    }
-}
-*/
-
 #[repr(align(4096))]
 pub struct Directory([Entry<DirectoryEntryFlags>; 1024]);
 
@@ -114,30 +101,32 @@ impl Table {
 kernel_static! {
     static ref KERNEL_PAGE_DIR: Directory = {
         let mut kpd = Directory::new();
-        kpd.0[0].set_addr(&*KERNEL_PAGE_TABLE as *const _ as *const u32);
+        kpd.0[0].set_addr(&(&*KERNEL_PAGE_TABLES)[0] as *const _ as *const u32);
         kpd.0[0].set_flag(DirectoryEntryFlags::Present);
+        kpd.0[1].set_addr(&(&*KERNEL_PAGE_TABLES)[1] as *const _ as *const u32);
+        kpd.0[1].set_flag(DirectoryEntryFlags::Present);
         kpd
     };
 
-    static ref KERNEL_PAGE_TABLE: Table = {
-        // Identity map the first 4 MiB.
-        let mut kpt = Table::new();
-        let mut i = 0;
-        while i < kpt.0.len() {
-            let entry = &mut kpt.0[i];
-            entry.set_addr((i << 12) as *const u32);
-            entry.set_flag(TableEntryFlags::Present);
-            i += 1;
+    static ref KERNEL_PAGE_TABLES: [Table; 2] = {
+        // Identity map the first 8 MiB.
+        let mut tables = [Table::new(); 2];
+        for i in 0..tables.len() {
+            for j in 0..tables[i].0.len() {
+                let entry = &mut tables[i].0[j];
+                entry.set_addr((i << 22 | j << 12) as *const u32);
+                entry.set_flag(TableEntryFlags::Present);
+            }
         }
-        kpt
+        tables
     };
 }
 
 pub fn init(kernel_size: u32) {
     let kernel_size_mib = kernel_size as f64 / 1024.0 / 1024.0;
-    if kernel_size_mib >= 3.0 {
+    if kernel_size_mib >= 7.0 {
         panic!(
-            "Kernel size has exceeded 3 MiB ({} MiB). \
+            "Kernel size has exceeded 7 MiB ({} MiB). \
              Please modify paging code.",
             kernel_size_mib
         );
