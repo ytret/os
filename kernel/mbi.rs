@@ -16,6 +16,7 @@
 
 #![allow(dead_code)]
 
+use crate::memory_region;
 use crate::KernelInfo;
 
 macro_rules! type_enum {
@@ -422,7 +423,10 @@ pub unsafe fn parse(boot_info: *const BootInfo, kernel_info: &mut KernelInfo) {
                                     .len() =>
                         {
                             kernel_info.available_memory_regions
-                                [added_to_info] = (start, start + length);
+                                [added_to_info] = memory_region::Region {
+                                start,
+                                end: start + length,
+                            };
                             added_to_info += 1;
                         }
                         _ => {}

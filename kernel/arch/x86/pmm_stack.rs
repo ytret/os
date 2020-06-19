@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use crate::memory_region::{OverlappingWith, Region};
 use crate::KernelInfo;
 
 extern "C" {
@@ -38,51 +39,56 @@ impl PmmStack {
     }
 
     fn fill(&mut self, kernel_info: &KernelInfo) {
-        let kernel_start = kernel_info.arch_init_info.kernel_start as u64;
-        let kernel_end = kernel_info.arch_init_info.kernel_end as u64;
+        let kernel_region = Region {
+            start: kernel_info.arch_init_info.kernel_start as u64,
+            end: kernel_info.arch_init_info.kernel_end as u64,
+        };
 
         for region in kernel_info.available_memory_regions.iter() {
-            let (mut start, mut end) = (region.0, region.1);
-            if start == 0 && end == 0 {
+            let mut region = region.clone();
+            if region.start == 0 && region.end == 0 {
                 // End of slice.
                 break;
             }
-            if start < kernel_start && kernel_end < end {
-                // The region contains the kernel.
-                unimplemented!("a free region covers the kernel");
-            }
-            if kernel_start <= start && start < kernel_end {
-                if end <= kernel_end {
-                    // The region is located in the kernel.
-                    continue;
-                } else {
-                    // The region starts in the kernel.
-                    start = kernel_end;
+            match region.overlapping_with(kernel_region) {
+                OverlappingWith::Covers => {
+                    unimplemented!("a free region covers the kernel");
                 }
+                OverlappingWith::StartsIn => {
+                    region.start = kernel_region.end;
+                }
+                OverlappingWith::IsIn => {
+                    continue;
+                }
+                OverlappingWith::EndsIn => {
+                    region.end = kernel_region.start;
+                }
+                OverlappingWith::NoOverlap => {}
             }
-            if kernel_start < end && end <= kernel_end {
-                // The region ends in the kernel.
-                end = kernel_start;
-            }
-            start = (start + 0xFFF) & !(0xFFF);
-            end &= !(0xFFF);
-            if start >= end {
+            region.start = (region.start + 0xFFF) & !(0xFFF);
+            region.end &= !(0xFFF);
+            if region.start >= region.end {
                 // The region is too small.
                 continue;
             }
-            if end.leading_zeros() < 32 {
-                if start.leading_zeros() >= 32 {
-                    // The region crosses the 4 GiB mark.
-                    end = end & 0xFFFFFFFF;
-                } else {
-                    // Ignore regions above the 4 GiB mark.
-                    println!(
-                        "PmmStack::fill: ignoring a region crossing 4 GiB mark"
-                    );
+            let higher_half = Region {
+                start: 0x00000001_00000000,
+                end: 0xFFFFFFFF_FFFFFFFF,
+            };
+            match region.overlapping_with(higher_half) {
+                OverlappingWith::Covers | OverlappingWith::StartsIn => {
+                    unreachable!();
+                }
+                OverlappingWith::IsIn => {
+                    println!("Ignoring a region above 4 GiB");
                     continue;
                 }
+                OverlappingWith::EndsIn => {
+                    region.end = higher_half.start - 1;
+                }
+                OverlappingWith::NoOverlap => {}
             }
-            for page_addr in (start..end).step_by(4096) {
+            for page_addr in (region.start..region.end).step_by(4096) {
                 self.push_page(page_addr as u32);
             }
         }

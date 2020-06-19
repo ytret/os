@@ -33,10 +33,11 @@ mod vga;
 mod arch;
 
 mod mbi;
+mod memory_region;
 
 pub struct KernelInfo {
     arch_init_info: ArchInitInfo,
-    available_memory_regions: [(u64, u64); 32], // 32 is enough maybe
+    available_memory_regions: [memory_region::Region; 32], // 32 is enough maybe
 }
 
 pub struct ArchInitInfo {
@@ -51,7 +52,10 @@ impl KernelInfo {
                 kernel_start: 0,
                 kernel_end: 0,
             },
-            available_memory_regions: [(0, 0); 32],
+            available_memory_regions: [memory_region::Region {
+                start: 0,
+                end: 0,
+            }; 32],
         }
     }
 }
