@@ -17,6 +17,7 @@
 pub mod interrupts;
 mod paging;
 mod pic;
+mod pmm_stack;
 pub mod port_io;
 mod stack_trace;
 
@@ -39,6 +40,7 @@ pub fn init(kernel_info: &mut KernelInfo) {
     pic::init();
     interrupts::init();
     paging::init(kernel_end_addr as u32 - kernel_start_addr as u32);
+    pmm_stack::init(kernel_info);
 }
 
 pub fn panic() {

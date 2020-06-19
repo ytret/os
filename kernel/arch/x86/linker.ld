@@ -43,6 +43,11 @@ SECTIONS
     {
         *(COMMON)
         *(.bss)
+
+        . = ALIGN(4K);
+        pmm_stack_bottom = .;
+        . = 0x400000; /* 4 MiB to cover 4 GiB */
+        pmm_stack_top = .;
     }
 
     kernel_end = ALIGN(4K);
