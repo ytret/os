@@ -34,12 +34,29 @@ mod arch;
 
 mod mbi;
 
+pub struct KernelInfo {
+    arch_init_info: ArchInitInfo,
+}
+
 pub struct ArchInitInfo {
-    kernel_size: u32,
+    kernel_start: u64,
+    kernel_end: u64,
+}
+
+impl KernelInfo {
+    fn new() -> Self {
+        KernelInfo {
+            arch_init_info: ArchInitInfo {
+                kernel_start: 0,
+                kernel_end: 0,
+            },
+        }
+    }
 }
 
 #[no_mangle]
 pub extern "C" fn main(magic_num: u32, boot_info: *const mbi::BootInfo) {
+    let mut kernel_info = KernelInfo::new();
     vga::init();
 
     if magic_num == 0x36D76289 {
@@ -51,11 +68,13 @@ pub extern "C" fn main(magic_num: u32, boot_info: *const mbi::BootInfo) {
         panic!("Booted by unknown bootloader.");
     }
 
-    let aif: ArchInitInfo = arch::init();
+    arch::init(&mut kernel_info);
+    let kernel_size = kernel_info.arch_init_info.kernel_end
+        - kernel_info.arch_init_info.kernel_start;
     println!(
         "Kernel size: {} KiB ({} pages)",
-        aif.kernel_size / 1024,
-        aif.kernel_size / 4096,
+        kernel_size / 1024,
+        kernel_size / 4096,
     );
 
     loop {}

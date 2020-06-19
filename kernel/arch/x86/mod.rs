@@ -20,26 +20,25 @@ mod pic;
 pub mod port_io;
 mod stack_trace;
 
-use crate::ArchInitInfo;
+use crate::KernelInfo;
 
 extern "C" {
     // see the linker.ld script
-    static text_start: u32;
+    static kernel_start: u32;
     static kernel_end: u32;
 }
 
-pub fn init() -> ArchInitInfo {
-    let text_start_addr = unsafe { &text_start as *const _ as u32 };
-    let kernel_end_addr = unsafe { &kernel_end as *const _ as u32 };
-    let kernel_size = kernel_end_addr - text_start_addr;
-    print!("text_start = 0x{:08X}; ", text_start_addr);
+pub fn init(kernel_info: &mut KernelInfo) {
+    let kernel_start_addr = unsafe { &kernel_start as *const _ as u64 };
+    let kernel_end_addr = unsafe { &kernel_end as *const _ as u64 };
+    print!("kernel_start = 0x{:08X}; ", kernel_start_addr);
     println!("kernel_end = 0x{:08X}", kernel_end_addr);
+    kernel_info.arch_init_info.kernel_start = kernel_start_addr;
+    kernel_info.arch_init_info.kernel_end = kernel_end_addr;
 
     pic::init();
     interrupts::init();
-    paging::init(kernel_size);
-
-    ArchInitInfo { kernel_size }
+    paging::init(kernel_end_addr as u32 - kernel_start_addr as u32);
 }
 
 pub fn panic() {

@@ -21,10 +21,10 @@ ENTRY(_entry)
 SECTIONS
 {
     . = 1M;
+    kernel_start = .;
 
     .text : ALIGN(4K)
     {
-        text_start = .;
         *(.multiboot)
         *(.text)
     }
@@ -37,14 +37,12 @@ SECTIONS
     .data : ALIGN(4K)
     {
         *(.data)
-        data_end = .;
     }
 
     .bss : ALIGN(4K)
     {
         *(COMMON)
         *(.bss)
-        bss_end = .;
     }
 
     kernel_end = ALIGN(4K);
