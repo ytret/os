@@ -43,7 +43,7 @@ header_end:
 
 .section .bss
 stack_bottom:
-.skip 65536
+.skip 131072
 stack_top:
 
 .section .text
