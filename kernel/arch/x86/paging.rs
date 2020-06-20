@@ -17,6 +17,12 @@
 use crate::bitflags::BitFlags;
 use crate::kernel_static::{Mutex, MutexWrapper};
 
+use crate::arch::pmm_stack::PMM_STACK;
+
+extern "C" {
+    fn memset(s: *mut u8, c: i32, n: usize) -> *mut u8;
+}
+
 // These are entry flags common to directory and table entries.
 macro_rules! entry_flags {
     ($N:ident { $($V:ident = $E:expr,)+ }) => {
@@ -150,5 +156,50 @@ pub fn init(kernel_size: u32) {
               movl %eax, %cr0",
              out("eax") _,
              options(att_syntax));
+    }
+}
+
+fn invlpg(virt: u32) {
+    unsafe {
+        asm!("invlpg ({})", in(reg) virt, options(att_syntax));
+    }
+}
+
+pub fn map_page(virt: u32, phys: u32) {
+    assert_eq!(virt & 0xFFF, 0, "virt must be page-aligned");
+    assert_eq!(phys & 0xFFF, 0, "phys must be page-aligned");
+
+    let mut kpd: MutexWrapper<Directory> = KERNEL_PAGE_DIR.lock();
+    let kpd_idx = (virt >> 22) as usize;
+    let kpt_idx = ((virt >> 12) & 0x3FF) as usize;
+
+    let page_table: *mut Table;
+
+    // If there's no such page dir entry, we allocate a physical page to store
+    // the page table there.
+    if (kpd.0[kpd_idx].0 & DirectoryEntryFlags::Present).value == 0 {
+        if kpd.0[kpd_idx].0.value != 0 {
+            unimplemented!("KPD entry is not present, but also not empty");
+        }
+        page_table = PMM_STACK.lock().pop_page() as *mut Table;
+        unsafe {
+            memset(
+                page_table as *mut u8,
+                0,
+                (*page_table).0.len() * core::mem::size_of::<TableEntry>(),
+            );
+        }
+        let entry = &mut (*kpd).0[kpd_idx];
+        (*entry).set_addr(page_table as *const u32 as u32);
+        (*entry).set_flag(DirectoryEntryFlags::Present);
+    } else {
+        page_table = kpd.0[kpd_idx].addr() as *mut Table;
+    }
+
+    unsafe {
+        let entry = &mut (*page_table).0[kpt_idx];
+        (*entry).set_addr(phys);
+        (*entry).set_flag(TableEntryFlags::Present);
+        invlpg(virt);
     }
 }
