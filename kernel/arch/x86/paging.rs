@@ -54,20 +54,18 @@ entry_flags! {
 struct Entry<F: Into<u32>>(BitFlags<u32, F>);
 
 impl<F: Into<u32>> Entry<F> {
-    fn new(addr: *const u32) -> Self {
-        let addr = addr as u32;
-        assert_eq!(addr & 0xFFF, 0, "new: addr must be page-aligned");
+    fn new(addr: u32) -> Self {
+        assert_eq!(addr & 0xFFF, 0, "addr must be page-aligned");
         Entry(BitFlags::new(addr))
     }
 
     fn missing() -> Self {
-        Self::new(core::ptr::null())
+        Self::new(0)
     }
 
-    fn set_addr(&mut self, addr: *const u32) {
-        let addr = addr as u32;
-        assert_eq!(addr & 0xFFF, 0, "set_addr: addr must be page-aligned");
-        self.0.value = addr | self.0.value;
+    fn set_addr(&mut self, addr: u32) {
+        assert_eq!(addr & 0xFFF, 0, "addr must be page-aligned");
+        self.0.value = addr | self.flags().value;
     }
 
     fn set_flag(&mut self, flag: F) {
@@ -101,9 +99,9 @@ impl Table {
 kernel_static! {
     static ref KERNEL_PAGE_DIR: Directory = {
         let mut kpd = Directory::new();
-        kpd.0[0].set_addr(&(&*KERNEL_PAGE_TABLES)[0] as *const _ as *const u32);
+        kpd.0[0].set_addr(&(&*KERNEL_PAGE_TABLES)[0] as *const _ as u32);
         kpd.0[0].set_flag(DirectoryEntryFlags::Present);
-        kpd.0[1].set_addr(&(&*KERNEL_PAGE_TABLES)[1] as *const _ as *const u32);
+        kpd.0[1].set_addr(&(&*KERNEL_PAGE_TABLES)[1] as *const _ as u32);
         kpd.0[1].set_flag(DirectoryEntryFlags::Present);
         kpd
     };
@@ -114,7 +112,7 @@ kernel_static! {
         for i in 0..tables.len() {
             for j in 0..tables[i].0.len() {
                 let entry = &mut tables[i].0[j];
-                entry.set_addr((i << 22 | j << 12) as *const u32);
+                entry.set_addr((i << 22 | j << 12) as u32);
                 entry.set_flag(TableEntryFlags::Present);
             }
         }
