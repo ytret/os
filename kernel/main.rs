@@ -30,28 +30,20 @@ mod kernel_static;
 mod vga;
 
 #[cfg_attr(target_arch = "x86", path = "arch/x86/mod.rs")]
-mod arch;
+pub mod arch;
 
 mod mbi;
 mod memory_region;
 
 pub struct KernelInfo {
-    arch_init_info: ArchInitInfo,
+    arch_init_info: arch::ArchInitInfo,
     available_memory_regions: [memory_region::Region; 32], // 32 is enough maybe
-}
-
-pub struct ArchInitInfo {
-    kernel_start: u64,
-    kernel_end: u64,
 }
 
 impl KernelInfo {
     fn new() -> Self {
         KernelInfo {
-            arch_init_info: ArchInitInfo {
-                kernel_start: 0,
-                kernel_end: 0,
-            },
+            arch_init_info: arch::ArchInitInfo::new(),
             available_memory_regions: [memory_region::Region {
                 start: 0,
                 end: 0,
