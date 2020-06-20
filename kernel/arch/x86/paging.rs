@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use crate::bitflags::BitFlags;
+use crate::kernel_static::{Mutex, MutexWrapper};
 
 // These are entry flags common to directory and table entries.
 macro_rules! entry_flags {
@@ -71,10 +72,20 @@ impl<F: Into<u32>> Entry<F> {
     fn set_flag(&mut self, flag: F) {
         self.0.set_flag(flag);
     }
+
+    fn addr(&self) -> u32 {
+        self.0.value & !0xFFF
+    }
+
+    fn flags(&self) -> BitFlags<u32, F> {
+        BitFlags::new(self.0.value & 0xFFF)
+    }
 }
 
+type DirectoryEntry = Entry<DirectoryEntryFlags>;
+
 #[repr(align(4096))]
-pub struct Directory([Entry<DirectoryEntryFlags>; 1024]);
+pub struct Directory([DirectoryEntry; 1024]);
 
 impl Directory {
     fn new() -> Self {
@@ -86,9 +97,11 @@ impl Directory {
     }
 }
 
+type TableEntry = Entry<TableEntryFlags>;
+
 #[derive(Clone, Copy)]
 #[repr(align(4096))]
-pub struct Table([Entry<TableEntryFlags>; 1024]);
+pub struct Table([TableEntry; 1024]);
 
 impl Table {
     fn new() -> Self {
@@ -97,14 +110,14 @@ impl Table {
 }
 
 kernel_static! {
-    static ref KERNEL_PAGE_DIR: Directory = {
+    pub static ref KERNEL_PAGE_DIR: Mutex<Directory> = Mutex::new({
         let mut kpd = Directory::new();
         kpd.0[0].set_addr(&(&*KERNEL_PAGE_TABLES)[0] as *const _ as u32);
         kpd.0[0].set_flag(DirectoryEntryFlags::Present);
         kpd.0[1].set_addr(&(&*KERNEL_PAGE_TABLES)[1] as *const _ as u32);
         kpd.0[1].set_flag(DirectoryEntryFlags::Present);
         kpd
-    };
+    });
 
     static ref KERNEL_PAGE_TABLES: [Table; 2] = {
         // Identity map the first 8 MiB.
@@ -131,7 +144,7 @@ pub fn init(kernel_size: u32) {
     }
 
     unsafe {
-        KERNEL_PAGE_DIR.load();
+        KERNEL_PAGE_DIR.lock().load();
         asm!("movl %cr0, %eax
               orl $0x80000001, %eax
               movl %eax, %cr0",
