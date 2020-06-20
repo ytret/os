@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use crate::kernel_static::{Mutex, MutexWrapper};
 use crate::memory_region::{OverlappingWith, Region};
 use crate::KernelInfo;
 
@@ -23,7 +24,7 @@ extern "C" {
     static mut pmm_stack_top: u32;
 }
 
-struct PmmStack {
+pub struct PmmStack {
     top: *mut u32,
     pointer: *mut u32,
     bottom: *mut u32,
@@ -65,8 +66,8 @@ impl PmmStack {
                 }
                 OverlappingWith::NoOverlap => {}
             }
-            region.start = (region.start + 0xFFF) & !(0xFFF);
-            region.end &= !(0xFFF);
+            region.start = (region.start + 0xFFF) & !0xFFF;
+            region.end &= !0xFFF;
             if region.start >= region.end {
                 // The region is too small.
                 continue;
@@ -102,11 +103,11 @@ impl PmmStack {
         assert!(self.pointer > self.bottom, "push: stack bottom reached");
         unsafe {
             *self.pointer = addr;
-            self.pointer = self.pointer.offset(-1);
+            self.pointer = self.pointer.sub(1);
         }
     }
 
-    fn pop_page(&mut self) -> u32 {
+    pub fn pop_page(&mut self) -> u32 {
         debug_assert!(
             self.bottom <= self.pointer && self.pointer <= self.top,
             "stack pointer is outside the stack",
@@ -120,10 +121,16 @@ impl PmmStack {
     }
 }
 
-pub fn init(kernel_info: &KernelInfo) {
-    let stack_bottom_addr = unsafe { &mut pmm_stack_bottom as *mut u32 };
-    let stack_top_addr = unsafe { &mut pmm_stack_top as *mut u32 };
-    let mut stack = PmmStack::new(stack_bottom_addr, stack_top_addr);
+kernel_static! {
+    pub static ref PMM_STACK: Mutex<PmmStack> = Mutex::new({
+        let stack_bottom_addr = unsafe { &mut pmm_stack_bottom as *mut u32 };
+        let stack_top_addr = unsafe { &mut pmm_stack_top as *mut u32 };
+        PmmStack::new(stack_bottom_addr, stack_top_addr)
+    });
+}
+
+pub fn init(kernel_info: &mut KernelInfo) {
+    let mut stack: MutexWrapper<PmmStack> = PMM_STACK.lock();
     stack.fill(kernel_info);
     let num_entries = (stack.top as u32 - stack.pointer as u32) / 4;
     println!(
