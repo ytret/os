@@ -41,6 +41,10 @@ extern "C" {
     // see the linker.ld script
     static kernel_start: u32;
     static kernel_end: u32;
+
+    // see boot.s
+    static stack_bottom: u32;
+    static stack_top: u32;
 }
 
 pub fn init(kernel_info: &mut KernelInfo) {
@@ -66,30 +70,6 @@ pub fn init(kernel_info: &mut KernelInfo) {
     pmm_stack::init(kernel_info);
 
     kernel_info.arch_init_info = aif;
-
-    unsafe {
-        let val: u32 = 12;
-        let val_ptr = &val as *const u32 as u32;
-        let val_page = val_ptr & !0xFFF;
-        let val_offset = val_ptr & 0xFFF;
-        println!("value is {:2} at 0x{:08X}", val, val_ptr);
-
-        // A page table already exists.
-        let virt1_page: u32 = 0x7FF000;
-        paging::map_page(virt1_page, val_page);
-        let virt1_ptr = (virt1_page + val_offset) as *const u32;
-        let virt1: u32 = *virt1_ptr;
-        println!("virt1 is {:2} at 0x{:08X}", virt1, virt1_ptr as u32);
-
-        // A new page table is allocated.
-        let virt2_page: u32 = 0xABCDE000;
-        paging::map_page(virt2_page, val_page);
-        let virt2_ptr = (virt2_page + val_offset) as *const u32;
-        let virt2: u32 = *virt2_ptr;
-        println!("virt2 is {:2} at 0x{:08X}", virt2, virt2_ptr as u32);
-
-        loop {}
-    }
 }
 
 pub fn panic() {

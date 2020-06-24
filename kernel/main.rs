@@ -15,7 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #![no_std]
-#![cfg_attr(target_arch = "x86", feature(abi_x86_interrupt))]
+#![feature(alloc_error_handler)]
 #![cfg_attr(target_arch = "x86", feature(asm))]
 
 use core::panic::PanicInfo;
@@ -35,6 +35,9 @@ pub mod arch;
 mod mbi;
 mod memory_region;
 
+extern crate alloc;
+mod allocator;
+
 pub struct KernelInfo {
     arch_init_info: arch::ArchInitInfo,
     available_memory_regions: [memory_region::Region; 32], // 32 is enough maybe
@@ -50,6 +53,11 @@ impl KernelInfo {
             }; 32],
         }
     }
+}
+
+#[repr(align(32))]
+struct Sth {
+    field: u32,
 }
 
 #[no_mangle]
@@ -75,7 +83,26 @@ pub extern "C" fn main(magic_num: u32, boot_info: *const mbi::BootInfo) {
         kernel_size / 4096,
     );
 
-    loop {}
+    // FIXME allocate (vmm) continuous region for heap
+    allocator::init(memory_region::Region {
+        start: kernel_info.arch_init_info.kernel_end as usize,
+        end: kernel_info.arch_init_info.kernel_end as usize + 128,
+    });
+
+    {
+        let a = alloc::boxed::Box::new(Sth { field: 123 });
+        println!("Sth.field: {}", a.field);
+        let b = alloc::vec![1, 2, 3, 4, 5];
+        //for i in 6..10 {
+        //    b.push(i);
+        //}
+        println!("b: {:?}", b);
+
+        println!("all tags:");
+        allocator::KERNEL_HEAP.lock().unwrap().print();
+    }
+    println!("all tags:");
+    allocator::KERNEL_HEAP.lock().unwrap().print();
 }
 
 #[panic_handler]

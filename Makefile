@@ -37,6 +37,7 @@ SOURCES := \
 	kernel/bitflags.rs \
 	kernel/vga.rs \
 	kernel/mbi.rs \
+	kernel/allocator.rs \
 	$(ARCH_SOURCES)
 
 OBJECTS := \
