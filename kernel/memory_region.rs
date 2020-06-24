@@ -15,9 +15,9 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #[derive(Clone, Copy)]
-pub struct Region {
-    pub start: u64,
-    pub end: u64,
+pub struct Region<T = u64> {
+    pub start: T,
+    pub end: T,
 }
 
 pub enum OverlappingWith {
