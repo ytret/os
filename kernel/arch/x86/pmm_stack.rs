@@ -96,19 +96,19 @@ impl PmmStack {
     }
 
     fn push_page(&mut self, addr: u32) {
-        debug_assert!(
+        assert!(
             self.bottom <= self.pointer && self.pointer <= self.top,
             "stack pointer is outside the stack",
         );
         assert!(self.pointer > self.bottom, "push: stack bottom reached");
         unsafe {
-            *self.pointer = addr;
             self.pointer = self.pointer.sub(1);
+            *self.pointer = addr;
         }
     }
 
     pub fn pop_page(&mut self) -> u32 {
-        debug_assert!(
+        assert!(
             self.bottom <= self.pointer && self.pointer <= self.top,
             "stack pointer is outside the stack",
         );
