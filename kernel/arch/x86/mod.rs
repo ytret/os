@@ -53,6 +53,13 @@ pub fn init(kernel_info: &mut KernelInfo) {
     aif.kernel_start = kernel_start_addr;
     aif.kernel_end = kernel_end_addr;
 
+    unsafe {
+        println!(
+            "stack_bottom = 0x{:08X}, stack_top = 0x{:08X}",
+            &stack_bottom as *const _ as u32, &stack_top as *const _ as u32,
+        );
+    }
+
     pic::init();
     interrupts::init();
     paging::init(kernel_end_addr as u32 - kernel_start_addr as u32);

@@ -42,8 +42,10 @@ header_start:
 header_end:
 
 .section .bss
+.global stack_bottom
 stack_bottom:
 .skip 131072
+.global stack_top
 stack_top:
 
 .section .text
