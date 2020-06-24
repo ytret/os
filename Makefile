@@ -24,7 +24,6 @@ ISODIR ?= $(PWD)/isodir
 AS := i686-elf-as
 LD := i686-elf-ld
 RUST := rustc
-CARGO := cargo # used only for $(LIBCOMP)
 RUSTFMT := rustfmt
 
 RUSTFLAGS := --target $(ARCHDIR)/target.json -L $(LIBDIR)
@@ -75,9 +74,10 @@ $(LIBCORE):
 
 # Note: --edition 2018 causes build failures for this library.
 $(LIBCOMP): $(LIBCORE)
-	cd $(LIBDIR)/compiler-builtins && \
-	$(CARGO) rustc --release --features mem -- $(RUSTFLAGS) && \
-	mv target/release/libcompiler_builtins.rlib ..
+	$(RUST) -O $(RUSTFLAGS) --out-dir $(LIBDIR) \
+	--cfg feature=\"compiler-builtins\" --cfg feature=\"mem\" \
+	--crate-name compiler_builtins --crate-type rlib \
+	$(LIBDIR)/compiler-builtins/src/lib.rs
 
 $(LIBALLOC): $(LIBCORE) $(LIBCOMP)
 	$(RUST) -O $(RUSTFLAGS) --edition 2018 --out-dir $(LIBDIR) \
