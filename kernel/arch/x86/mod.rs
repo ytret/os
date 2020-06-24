@@ -25,9 +25,8 @@ use crate::memory_region::Region;
 use crate::KernelInfo;
 
 pub struct ArchInitInfo {
-    // FIXME use usize
-    pub kernel_start: u64,
-    pub kernel_end: u64,
+    pub kernel_start: u32,
+    pub kernel_end: u32,
     pub heap_region: Region<usize>,
 }
 
@@ -54,8 +53,8 @@ extern "C" {
 pub fn init(kernel_info: &mut KernelInfo) {
     let mut aif = ArchInitInfo::new();
 
-    let kernel_start_addr = unsafe { &kernel_start as *const _ as u64 };
-    let kernel_end_addr = unsafe { &kernel_end as *const _ as u64 };
+    let kernel_start_addr = unsafe { &kernel_start as *const _ as u32 };
+    let kernel_end_addr = unsafe { &kernel_end as *const _ as u32 };
     print!("kernel_start = 0x{:08X}; ", kernel_start_addr);
     println!("kernel_end = 0x{:08X}", kernel_end_addr);
     aif.kernel_start = kernel_start_addr;
@@ -70,7 +69,7 @@ pub fn init(kernel_info: &mut KernelInfo) {
 
     pic::init();
     interrupts::init();
-    paging::init(kernel_end_addr as u32 - kernel_start_addr as u32);
+    paging::init(&aif);
     pmm_stack::init(kernel_info);
 
     let heap_region = Region {

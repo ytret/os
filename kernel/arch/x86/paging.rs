@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use crate::arch::ArchInitInfo;
 use crate::bitflags::BitFlags;
 use crate::kernel_static::{Mutex, MutexWrapper};
 
@@ -139,8 +140,9 @@ kernel_static! {
     };
 }
 
-pub fn init(kernel_size: u32) {
-    let kernel_size_mib = kernel_size as f64 / 1024.0 / 1024.0;
+pub fn init(aif: &ArchInitInfo) {
+    let kernel_size_mib =
+        (aif.kernel_end - aif.kernel_start) as f64 / 1024.0 / 1024.0;
     if kernel_size_mib >= 7.0 {
         panic!(
             "Kernel size has exceeded 7 MiB ({} MiB). \

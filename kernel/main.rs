@@ -37,20 +37,18 @@ mod mbi;
 mod memory_region;
 
 use core::panic::PanicInfo;
+use memory_region::Region;
 
 pub struct KernelInfo {
     arch_init_info: arch::ArchInitInfo,
-    available_memory_regions: [memory_region::Region; 32], // 32 is enough maybe
+    available_memory_regions: [Region<u64>; 32], // 32 is enough maybe
 }
 
 impl KernelInfo {
     fn new() -> Self {
         KernelInfo {
             arch_init_info: arch::ArchInitInfo::new(),
-            available_memory_regions: [memory_region::Region {
-                start: 0,
-                end: 0,
-            }; 32],
+            available_memory_regions: [Region { start: 0, end: 0 }; 32],
         }
     }
 }
