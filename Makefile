@@ -58,8 +58,8 @@ ISOFILE := kernel.iso
 
 all: $(OUTPUT)
 
-$(OUTPUT): $(LINKLIST)
-	$(LD) -T $(ARCHDIR)/linker.ld $^ -o $@
+$(OUTPUT): $(LINKLIST) $(ARCHDIR)/linker.ld
+	$(LD) -T $(ARCHDIR)/linker.ld $(LINKLIST) -o $@
 
 %.o: %.s
 	$(AS) -c $< -o $@
