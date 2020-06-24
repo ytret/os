@@ -461,8 +461,8 @@ pub unsafe fn parse(boot_info: *const BootInfo, kernel_info: &mut KernelInfo) {
             9 => {
                 let tag = &*(ptr as *const ElfSymbols);
                 println!(
-                    "ELF symbols: num: {}, entsize: {}, shndx: {}",
-                    tag.num, tag.entsize, tag.shndx,
+                    "ELF symbols at 0x{:08X}: num: {}, entsize: {}, shndx: {}",
+                    tag as *const _ as u32, tag.num, tag.entsize, tag.shndx,
                 );
             }
             10 => {
