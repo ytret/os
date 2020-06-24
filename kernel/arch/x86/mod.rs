@@ -21,11 +21,14 @@ mod pmm_stack;
 pub mod port_io;
 mod stack_trace;
 
+use crate::memory_region::Region;
 use crate::KernelInfo;
 
 pub struct ArchInitInfo {
+    // FIXME use usize
     pub kernel_start: u64,
     pub kernel_end: u64,
+    pub heap_region: Region<usize>,
 }
 
 impl ArchInitInfo {
@@ -33,6 +36,7 @@ impl ArchInitInfo {
         ArchInitInfo {
             kernel_start: 0,
             kernel_end: 0,
+            heap_region: Region { start: 0, end: 0 },
         }
     }
 }
@@ -68,6 +72,13 @@ pub fn init(kernel_info: &mut KernelInfo) {
     interrupts::init();
     paging::init(kernel_end_addr as u32 - kernel_start_addr as u32);
     pmm_stack::init(kernel_info);
+
+    let heap_region = Region {
+        start: kernel_end_addr as usize,
+        end: kernel_end_addr as usize + crate::allocator::KERNEL_HEAP_SIZE,
+    };
+    paging::allocate_region(heap_region.start as u32, heap_region.end as u32);
+    aif.heap_region = heap_region;
 
     kernel_info.arch_init_info = aif;
 }

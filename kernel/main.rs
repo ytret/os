@@ -18,7 +18,7 @@
 #![feature(alloc_error_handler)]
 #![cfg_attr(target_arch = "x86", feature(asm))]
 
-use core::panic::PanicInfo;
+extern crate alloc;
 
 #[macro_use]
 mod bitflags;
@@ -32,11 +32,11 @@ mod vga;
 #[cfg_attr(target_arch = "x86", path = "arch/x86/mod.rs")]
 pub mod arch;
 
+mod allocator;
 mod mbi;
 mod memory_region;
 
-extern crate alloc;
-mod allocator;
+use core::panic::PanicInfo;
 
 pub struct KernelInfo {
     arch_init_info: arch::ArchInitInfo,
@@ -83,11 +83,7 @@ pub extern "C" fn main(magic_num: u32, boot_info: *const mbi::BootInfo) {
         kernel_size / 4096,
     );
 
-    // FIXME allocate (vmm) continuous region for heap
-    allocator::init(memory_region::Region {
-        start: kernel_info.arch_init_info.kernel_end as usize,
-        end: kernel_info.arch_init_info.kernel_end as usize + 128,
-    });
+    allocator::init(kernel_info);
 
     {
         let a = alloc::boxed::Box::new(Sth { field: 123 });

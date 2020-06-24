@@ -15,10 +15,11 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use crate::kernel_static::Mutex;
-
 use crate::memory_region::Region;
+use crate::KernelInfo;
+
 use core::alloc::{GlobalAlloc, Layout};
-use core::mem::{size_of, align_of};
+use core::mem::{align_of, size_of};
 
 struct Allocator;
 
@@ -44,7 +45,7 @@ unsafe impl GlobalAlloc for Allocator {
             chunk_start = (possible_tag as *mut Tag).offset(1) as *mut u8;
             needed_size =
                 chunk_start.align_offset(layout.align()) + layout.size();
-            println!(" chunk size: {}, needed: {}", chunk_size, needed_size);
+            //println!(" chunk size: {}, needed: {}", chunk_size, needed_size);
             if chunk_size >= needed_size + size_of::<Tag>() {
                 chosen_tag = possible_tag as *mut Tag;
                 break;
@@ -77,7 +78,12 @@ unsafe impl GlobalAlloc for Allocator {
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        println!("dealloc: ptr: 0x{:08X}", ptr as u32);
+        println!(
+            "dealloc: ptr: 0x{:08X}, layout: size: {}, align: {}",
+            ptr as u32,
+            layout.size(),
+            layout.align(),
+        );
         assert_eq!(
             ptr.align_offset(layout.align()),
             0,
@@ -95,13 +101,13 @@ unsafe impl GlobalAlloc for Allocator {
         }
 
         let tag = (tag_ptr.add(1) as *mut Tag).sub(1);
-        println!(
-            "- tag at 0x{:08X} -> 0x{:08X}, used: {}, align {}",
-            tag as u32,
-            (*tag).next_tag_addr(),
-            (*tag).is_used() as usize,
-            (*tag).align(),
-        );
+        //println!(
+        //    "- tag at 0x{:08X} -> 0x{:08X}, used: {}, align {}",
+        //    tag as u32,
+        //    (*tag).next_tag_addr(),
+        //    (*tag).is_used() as usize,
+        //    (*tag).align(),
+        //);
 
         (*tag).set_used(false);
         (*tag).align = 1;
@@ -193,11 +199,6 @@ impl Heap {
     fn total_free(&self) -> usize {
         let mut total_free: usize = 0;
         for tag in self.iter_free_tags() {
-            println!(
-                "tag: used: {}, next: 0x{:08X}",
-                tag.is_used() as usize,
-                tag.next_tag_addr(),
-            );
             if !tag.is_end_tag() {
                 total_free += tag.chunk_size();
             }
@@ -291,20 +292,18 @@ impl<'a> Iterator for HeapIter<'a> {
     }
 }
 
+pub const KERNEL_HEAP_SIZE: usize = 1024 * 1024; // 1 MiB
+
 kernel_static! {
     pub static ref KERNEL_HEAP: Mutex<Option<Heap>> = Mutex::new(None);
 }
 
-pub fn init(heap_region: Region<usize>) {
+pub fn init(kernel_info: KernelInfo) {
+    let heap_region = kernel_info.arch_init_info.heap_region;
     let heap_size = heap_region.end - heap_region.start;
     assert!(
         heap_size > 2 * size_of::<Tag>(),
         "heap must be big enough to accomodate at least two tags"
-    );
-
-    println!(
-        "heap_region: start: 0x{:08X}, end: 0x{:08X}",
-        heap_region.start, heap_region.end
     );
 
     let heap_start_tag_ptr = heap_region.start as *mut Tag;
@@ -332,4 +331,11 @@ pub fn init(heap_region: Region<usize>) {
             min_chunk_size: 1,
         });
     }
+
+    println!(
+        "Heap: start: 0x{:08X}, end: 0x{:08X}, total free: {} bytes",
+        heap_region.start,
+        heap_region.end,
+        KERNEL_HEAP.lock().unwrap().total_free(),
+    );
 }
