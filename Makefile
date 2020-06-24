@@ -45,6 +45,7 @@ OBJECTS := \
 LIBKERNEL := $(LIBDIR)/libkernel.a
 LIBCORE := $(LIBDIR)/libcore.rlib
 LIBCOMP := $(LIBDIR)/libcompiler_builtins.rlib
+LIBALLOC := $(LIBDIR)/liballoc.rlib
 
 LINKLIST := \
 	$(OBJECTS) \
@@ -63,7 +64,7 @@ $(OUTPUT): $(LINKLIST)
 %.o: %.s
 	$(AS) -c $< -o $@
 
-$(LIBKERNEL): $(SOURCES) $(LIBCORE) $(LIBCOMP)
+$(LIBKERNEL): $(SOURCES) $(LIBCORE) $(LIBCOMP) $(LIBALLOC)
 	$(RUST) $(RUSTFLAGS) --edition 2018 --out-dir $(LIBDIR) \
 	--crate-name kernel --crate-type staticlib $<
 
@@ -76,6 +77,10 @@ $(LIBCOMP): $(LIBCORE)
 	cd $(LIBDIR)/compiler-builtins && \
 	$(CARGO) rustc --release --features mem -- $(RUSTFLAGS) && \
 	mv target/release/libcompiler_builtins.rlib ..
+
+$(LIBALLOC): $(LIBCORE) $(LIBCOMP)
+	$(RUST) -O $(RUSTFLAGS) --edition 2018 --out-dir $(LIBDIR) \
+	--crate-name alloc --crate-type rlib $(LIBDIR)/liballoc/lib.rs
 
 get-libs:
 	cp -R $$(rustc --print sysroot)/lib/rustlib/src/rust/src $(LIBDIR)
