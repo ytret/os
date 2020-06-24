@@ -203,3 +203,13 @@ pub fn map_page(virt: u32, phys: u32) {
         invlpg(virt);
     }
 }
+
+pub fn allocate_region(start: u32, end: u32) {
+    assert_eq!(start & 0xFFF, 0, "start must be page-aligned");
+    assert_eq!(end & 0xFFF, 0, "end must be page-aligned");
+
+    for virt in (start..end).step_by(4096) {
+        let phys = PMM_STACK.lock().pop_page();
+        map_page(virt, phys);
+    }
+}
