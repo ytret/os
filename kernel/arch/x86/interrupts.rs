@@ -14,6 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use crate::kernel_static::Mutex;
+
+// See interrupts.s
 extern "C" {
     fn dummy_isr_0(stack_frame: &InterruptStackFrame);
     fn dummy_isr_1(stack_frame: &InterruptStackFrame);
@@ -48,7 +51,7 @@ extern "C" {
     fn dummy_isr_30(stack_frame: &InterruptStackFrame);
     fn dummy_isr_31(stack_frame: &InterruptStackFrame);
 
-    // Dummy ISRs.
+    // For all other interrupts.
     fn dummy_isr_256(stack_frame: &InterruptStackFrame);
     fn dummy_isr_257(stack_frame: &InterruptStackFrame, err_code: u32);
 }
@@ -94,7 +97,7 @@ impl core::ops::BitOr<u8> for TypeAttr {
 
 #[derive(Clone, Copy)]
 #[repr(C)]
-struct Gate<T> {
+pub struct Gate<T> {
     offset_1: u16,
     selector: u16,
     zero: u8,
@@ -127,8 +130,7 @@ macro_rules! impl_gate {
                 Gate::<$t>::new($d, 0x08, type_attr)
             }
 
-            #[allow(dead_code)]
-            fn set_handler(&mut self, handler: $t) {
+            pub fn set_handler(&mut self, handler: $t) {
                 let offset = handler as u32;
                 self.offset_1 = (offset & 0xFFFF) as u16;
                 self.offset_2 = ((offset >> 16) & 0xFFFF) as u16;
@@ -144,8 +146,8 @@ type HandlerFunc = unsafe extern "C" fn(&InterruptStackFrame);
 type HandlerFuncWithErrCode =
     unsafe extern "C" fn(&InterruptStackFrame, err_code: u32);
 
-#[repr(C)]
-struct InterruptStackFrame {
+#[repr(C, packed)]
+pub struct InterruptStackFrame {
     eip: u32,
     cs: u32,
     eflags: u32,
@@ -180,7 +182,7 @@ pub struct InterruptDescriptorTable {
     virtualization: Gate<HandlerFunc>,
     control_protection: Gate<HandlerFuncWithErrCode>,
     reserved_2: [Gate<HandlerFunc>; 10], // reserved
-    interrupts: [Gate<HandlerFunc>; 256 - 32],
+    pub interrupts: [Gate<HandlerFunc>; 256 - 32],
 }
 
 impl InterruptDescriptorTable {
@@ -221,7 +223,7 @@ struct IdtDescriptor {
 }
 
 kernel_static! {
-    pub static ref IDT: InterruptDescriptorTable = {
+    pub static ref IDT: Mutex<InterruptDescriptorTable> = Mutex::new({
         let mut idt = InterruptDescriptorTable::new();
         idt.divide_error.set_handler(dummy_isr_0);
         idt.debug.set_handler(dummy_isr_1);
@@ -256,7 +258,7 @@ kernel_static! {
         idt.reserved_2[8].set_handler(dummy_isr_30);
         idt.reserved_2[9].set_handler(dummy_isr_31);
         idt
-    };
+    });
 }
 
 #[no_mangle]

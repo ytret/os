@@ -17,7 +17,7 @@
 .macro CALL_HANDLER int_num err_code
 	pushl \err_code                 // error code
     pushl \int_num                  // interrupt number
-    cld                             // is this mandatory?
+    cld
     call dummy_interrupt_handler
     addl $8, %esp
 .endm
