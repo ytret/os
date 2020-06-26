@@ -48,7 +48,9 @@ bitflags! {
     }
 }
 
-struct Pic {
+const EOI: u8 = 1 << 5;
+
+pub struct Pic {
     master_vector_offset: u8,
     slave_vector_offset: u8,
     master_has_slave_at_ir: u8,
@@ -86,23 +88,30 @@ impl Pic {
         }
     }
 
-    fn set_irq_mask(&self, mut num: u8, mask: bool) {
+    pub fn set_irq_mask(&self, mut irq_num: u8, mask: bool) {
         let port;
-        if num < 8 {
+        if irq_num < 8 {
             port = Port::MasterData as u16;
         } else {
             port = Port::SlaveData as u16;
-            num -= 8;
+            irq_num -= 8;
         }
         unsafe {
             let mut value = port_io::inb(port);
             if mask {
-                value |= 1 << num;
+                value |= 1 << irq_num;
             } else {
-                value &= !(1 << num);
+                value &= !(1 << irq_num);
             }
             port_io::outb(port, value);
         }
+    }
+
+    pub fn send_eoi(&self, irq_num: u8) {
+        if irq_num >= 8 {
+            self.send_slave_command(EOI);
+        }
+        self.send_master_command(EOI);
     }
 
     fn send_command(&self, cmd: u8) {
@@ -140,7 +149,7 @@ impl Pic {
 }
 
 kernel_static! {
-    static ref PIC: Pic = Pic {
+    pub static ref PIC: Pic = Pic {
         master_vector_offset: 32,
         slave_vector_offset: 40,
         master_has_slave_at_ir: 0b0000_0100,
