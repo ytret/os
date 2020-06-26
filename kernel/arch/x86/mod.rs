@@ -17,6 +17,7 @@
 pub mod interrupts;
 mod paging;
 mod pic;
+mod pit;
 mod pmm_stack;
 pub mod port_io;
 mod stack_trace;
@@ -69,6 +70,8 @@ pub fn init(kernel_info: &mut KernelInfo) {
 
     pic::init();
     interrupts::init();
+    pit::init();
+
     paging::init(&aif);
     pmm_stack::init(kernel_info);
 

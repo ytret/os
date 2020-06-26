@@ -53,14 +53,10 @@ impl KernelInfo {
     }
 }
 
-#[repr(align(32))]
-struct Sth {
-    field: u32,
-}
-
 #[no_mangle]
 pub extern "C" fn main(magic_num: u32, boot_info: *const mbi::BootInfo) {
     let mut kernel_info = KernelInfo::new();
+
     vga::init();
 
     if magic_num == 0x36D76289 {
@@ -73,6 +69,7 @@ pub extern "C" fn main(magic_num: u32, boot_info: *const mbi::BootInfo) {
     }
 
     arch::init(&mut kernel_info);
+
     let kernel_size = kernel_info.arch_init_info.kernel_end
         - kernel_info.arch_init_info.kernel_start;
     println!(
@@ -83,20 +80,7 @@ pub extern "C" fn main(magic_num: u32, boot_info: *const mbi::BootInfo) {
 
     allocator::init(&kernel_info);
 
-    {
-        let a = alloc::boxed::Box::new(Sth { field: 123 });
-        println!("Sth.field: {}", a.field);
-        let b = alloc::vec![1, 2, 3, 4, 5];
-        //for i in 6..10 {
-        //    b.push(i);
-        //}
-        println!("b: {:?}", b);
-
-        println!("all tags:");
-        allocator::KERNEL_HEAP.lock().unwrap().print();
-    }
-    println!("all tags:");
-    allocator::KERNEL_HEAP.lock().unwrap().print();
+    loop {}
 }
 
 #[panic_handler]
