@@ -81,7 +81,7 @@ pub extern "C" fn main(magic_num: u32, boot_info: *const mbi::BootInfo) {
         kernel_size / 4096,
     );
 
-    allocator::init(kernel_info);
+    allocator::init(&kernel_info);
 
     {
         let a = alloc::boxed::Box::new(Sth { field: 123 });

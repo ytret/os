@@ -242,6 +242,7 @@ impl Heap {
         }
     }
 
+    #[allow(dead_code)]
     pub fn print(&self) {
         for tag in self.iter_tags() {
             println!(
@@ -298,7 +299,7 @@ kernel_static! {
     pub static ref KERNEL_HEAP: Mutex<Option<Heap>> = Mutex::new(None);
 }
 
-pub fn init(kernel_info: KernelInfo) {
+pub fn init(kernel_info: &KernelInfo) {
     let heap_region = kernel_info.arch_init_info.heap_region;
     let heap_size = heap_region.end - heap_region.start;
     assert!(
