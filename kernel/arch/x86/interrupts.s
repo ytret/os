@@ -18,11 +18,11 @@
 	pushl \err_code                 // error code
     pushl \int_num                  // interrupt number
     cld
-    call dummy_interrupt_handler
+    call dummy_exception_handler
     addl $8, %esp
 .endm
 
-.macro DEFINE_DUMMY_ISR num
+.macro DUMMY_EXCEPTION_ISR num
 .global dummy_isr_\num
 .type dummy_isr_\num, @function
 dummy_isr_\num:
@@ -34,7 +34,7 @@ dummy_isr_\num:
 .size dummy_isr_\num, . - dummy_isr_\num
 .endm
 
-.macro DEFINE_DUMMY_ISR_EC num
+.macro DUMMY_EXCEPTION_ISR_EC num
 .global dummy_isr_\num
 .type dummy_isr_\num, @function
 dummy_isr_\num:
@@ -48,38 +48,58 @@ dummy_isr_\num:
 .size dummy_isr_\num, . - dummy_isr_\num
 .endm
 
-DEFINE_DUMMY_ISR 0          // divide error
-DEFINE_DUMMY_ISR 1          // debug
-DEFINE_DUMMY_ISR 2          // non-maskable interrupt
-DEFINE_DUMMY_ISR 3          // breakpoint
-DEFINE_DUMMY_ISR 4          // overflow
-DEFINE_DUMMY_ISR 5          // bound range exceeded
-DEFINE_DUMMY_ISR 6          // invalid opcode
-DEFINE_DUMMY_ISR 7          // device not available
-DEFINE_DUMMY_ISR_EC 8       // double fault
-DEFINE_DUMMY_ISR 9          // coprocessor segment overrun (old)
-DEFINE_DUMMY_ISR_EC 10      // invalid TSS
-DEFINE_DUMMY_ISR_EC 11      // segment not present
-DEFINE_DUMMY_ISR_EC 12      // stack fault
-DEFINE_DUMMY_ISR_EC 13      // general protection
-DEFINE_DUMMY_ISR_EC 14      // page fault
-DEFINE_DUMMY_ISR 15         // reserved
-DEFINE_DUMMY_ISR 16         // x87 FPU floating-point error
-DEFINE_DUMMY_ISR_EC 17      // alignment check
-DEFINE_DUMMY_ISR 18         // machine check
-DEFINE_DUMMY_ISR 19         // SIMD floating-point
-DEFINE_DUMMY_ISR 20         // virtualization
-DEFINE_DUMMY_ISR_EC 21      // control protection
-DEFINE_DUMMY_ISR 22         // 22-31 reserved
-DEFINE_DUMMY_ISR 23
-DEFINE_DUMMY_ISR 24
-DEFINE_DUMMY_ISR 25
-DEFINE_DUMMY_ISR 26
-DEFINE_DUMMY_ISR 27
-DEFINE_DUMMY_ISR 28
-DEFINE_DUMMY_ISR 29
-DEFINE_DUMMY_ISR 30
-DEFINE_DUMMY_ISR 31
+DUMMY_EXCEPTION_ISR 0       // divide error
+DUMMY_EXCEPTION_ISR 1       // debug
+DUMMY_EXCEPTION_ISR 2       // non-maskable interrupt
+DUMMY_EXCEPTION_ISR 3       // breakpoint
+DUMMY_EXCEPTION_ISR 4       // overflow
+DUMMY_EXCEPTION_ISR 5       // bound range exceeded
+DUMMY_EXCEPTION_ISR 6       // invalid opcode
+DUMMY_EXCEPTION_ISR 7       // device not available
+DUMMY_EXCEPTION_ISR_EC 8    // double fault
+DUMMY_EXCEPTION_ISR 9       // coprocessor segment overrun (old)
+DUMMY_EXCEPTION_ISR_EC 10   // invalid TSS
+DUMMY_EXCEPTION_ISR_EC 11   // segment not present
+DUMMY_EXCEPTION_ISR_EC 12   // stack fault
+DUMMY_EXCEPTION_ISR_EC 13   // general protection
+DUMMY_EXCEPTION_ISR_EC 14   // page fault
+DUMMY_EXCEPTION_ISR 15      // reserved
+DUMMY_EXCEPTION_ISR 16      // x87 FPU floating-point error
+DUMMY_EXCEPTION_ISR_EC 17   // alignment check
+DUMMY_EXCEPTION_ISR 18      // machine check
+DUMMY_EXCEPTION_ISR 19      // SIMD floating-point
+DUMMY_EXCEPTION_ISR 20      // virtualization
+DUMMY_EXCEPTION_ISR_EC 21   // control protection
+DUMMY_EXCEPTION_ISR 22      // 22-31 reserved
+DUMMY_EXCEPTION_ISR 23
+DUMMY_EXCEPTION_ISR 24
+DUMMY_EXCEPTION_ISR 25
+DUMMY_EXCEPTION_ISR 26
+DUMMY_EXCEPTION_ISR 27
+DUMMY_EXCEPTION_ISR 28
+DUMMY_EXCEPTION_ISR 29
+DUMMY_EXCEPTION_ISR 30
+DUMMY_EXCEPTION_ISR 31
 
-DEFINE_DUMMY_ISR 256        // generic ISR
-DEFINE_DUMMY_ISR_EC 257     // generic ISR with an error code
+.global common_isr
+.type common_isr, @function
+common_isr:
+    cli
+    pusha
+    cld
+    call common_interrupt_handler
+    popa
+    iret
+.size common_isr, . - common_isr
+
+.global common_isr_ec
+.type common_isr_ec, @function
+common_isr_ec:
+    cli
+    pusha
+    cld
+    call common_interrupt_handler
+    popa
+    addl $4, %esp
+    iret
+.size common_isr, . - common_isr

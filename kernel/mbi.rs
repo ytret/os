@@ -555,6 +555,6 @@ pub unsafe fn parse(boot_info: *const BootInfo, kernel_info: &mut KernelInfo) {
     println!("Actual MBI size: {} bytes", actual_size);
     assert_eq!(
         bi.total_size, actual_size,
-        "Declared and actual MBI sizes are different."
+        "declared and actual MBI sizes are different"
     );
 }

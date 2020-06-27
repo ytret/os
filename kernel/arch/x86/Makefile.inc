@@ -19,7 +19,7 @@ ARCH_SOURCES := \
 	$(ARCHDIR)/port_io.rs \
 	$(ARCHDIR)/pic.rs \
 	$(ARCHDIR)/pit.rs \
-    $(ARCHDIR)/interrupts.rs \
+	$(ARCHDIR)/interrupts.rs \
 	$(ARCHDIR)/paging.rs \
 	$(ARCHDIR)/pmm_stack.rs
 

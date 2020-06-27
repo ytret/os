@@ -18,6 +18,7 @@ use crate::kernel_static::Mutex;
 
 // See interrupts.s
 extern "C" {
+    // Dummy handlers for exceptions.
     fn dummy_isr_0(stack_frame: &InterruptStackFrame);
     fn dummy_isr_1(stack_frame: &InterruptStackFrame);
     fn dummy_isr_2(stack_frame: &InterruptStackFrame);
@@ -52,8 +53,8 @@ extern "C" {
     fn dummy_isr_31(stack_frame: &InterruptStackFrame);
 
     // For all other interrupts.
-    fn dummy_isr_256(stack_frame: &InterruptStackFrame);
-    fn dummy_isr_257(stack_frame: &InterruptStackFrame, err_code: u32);
+    fn common_isr(stack_frame: &InterruptStackFrame);
+    fn common_isr_ec(stack_frame: &InterruptStackFrame, err_code: u32);
 }
 
 #[allow(dead_code)]
@@ -139,8 +140,8 @@ macro_rules! impl_gate {
     };
 }
 
-impl_gate!(HandlerFunc, dummy_isr_256);
-impl_gate!(HandlerFuncWithErrCode, dummy_isr_257);
+impl_gate!(HandlerFunc, common_isr);
+impl_gate!(HandlerFuncWithErrCode, common_isr_ec);
 
 type HandlerFunc = unsafe extern "C" fn(&InterruptStackFrame);
 type HandlerFuncWithErrCode =
@@ -262,14 +263,9 @@ kernel_static! {
 }
 
 #[no_mangle]
-pub extern "C" fn dummy_interrupt_handler(int_num: u32, err_code: u32) {
-    println!("Dummy interrupt handler called.");
-    print!(" interrupt number: {}", int_num);
-    if int_num == 256 || int_num == 257 {
-        println!(" -- note: not original interrupt number");
-    } else {
-        println!()
-    }
+pub extern "C" fn dummy_exception_handler(int_num: u32, err_code: u32) {
+    println!("Dummy exception handler called.");
+    print!(" exception nnumber: {}", int_num);
     println!(
         " error code: {:08b}_{:08b}_{:08b}_{:08b} (0x{:08X})",
         (err_code >> 24) & 0xF,
@@ -278,6 +274,12 @@ pub extern "C" fn dummy_interrupt_handler(int_num: u32, err_code: u32) {
         (err_code >> 00) & 0xF,
         err_code
     );
+    panic!("Unhandled exception.");
+}
+
+#[no_mangle]
+pub extern "C" fn common_interrupt_handler() {
+    println!("Common interrupt handler called.");
     panic!("Unhandled interrupt.");
 }
 
