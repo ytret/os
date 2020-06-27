@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+mod gdt;
 pub mod interrupts;
 mod paging;
 mod pic;
@@ -53,6 +54,8 @@ extern "C" {
 
 pub fn init(kernel_info: &mut KernelInfo) {
     let mut aif = ArchInitInfo::new();
+
+    gdt::init();
 
     let kernel_start_addr = unsafe { &kernel_start as *const _ as u32 };
     let kernel_end_addr = unsafe { &kernel_end as *const _ as u32 };

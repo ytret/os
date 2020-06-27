@@ -17,6 +17,7 @@
 ARCH_SOURCES := \
 	$(ARCHDIR)/mod.rs \
 	$(ARCHDIR)/port_io.rs \
+	$(ARCHDIR)/gdt.rs \
 	$(ARCHDIR)/pic.rs \
 	$(ARCHDIR)/pit.rs \
 	$(ARCHDIR)/interrupts.rs \
@@ -26,5 +27,6 @@ ARCH_SOURCES := \
 ARCH_OBJECTS := \
 	$(ARCHDIR)/boot.o \
 	$(ARCHDIR)/stack_trace.o \
+	$(ARCHDIR)/gdt.o \
 	$(ARCHDIR)/interrupts.o \
 	$(ARCHDIR)/pit.o

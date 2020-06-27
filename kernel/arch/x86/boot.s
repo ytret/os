@@ -55,10 +55,6 @@ _entry:
     cli
     movl $stack_top, %esp
 
-    pushl %eax
-    call load_gdt
-    popl %eax
-
     pushl %ebx
     pushl %eax
     xorl %ebp, %ebp
@@ -75,40 +71,3 @@ halt:
 1:  hlt
     jmp 1b
 .size halt, . - halt
-
-.local load_gdt
-.type load_gdt, @function
-load_gdt:
-    lgdt gdt
-    ljmp $0x08, $1f
-1:  movw $0x10, %ax
-    movw %ax, %ds
-    movw %ax, %es
-    movw %ax, %fs
-    movw %ax, %gs
-    movw %ax, %ss
-    ret
-.size load_gdt, . - load_gdt
-
-gdt:
-// Null segment (GDT descriptor)
-.word end_gdt - gdt // size
-.long gdt           // offset
-.word 0x0000
-
-// Code segment
-.word 0xFFFF        // limit 0:15
-.word 0x0000        // base 0:15
-.byte 0x00          // base 16:23
-.byte 0x9A          // access byte
-.byte 0xCF          // (flags < 4) | limit 16:19
-.byte 0x00          // base 24:31
-
-// Data segment
-.word 0xFFFF        // limit 0:15
-.word 0x0000        // base 0:15
-.byte 0x00          // base 16:23
-.byte 0x92          // access byte
-.byte 0xCF          // (flags < 4) | limit 16:19
-.byte 0x00          // base 24:31
-end_gdt:
