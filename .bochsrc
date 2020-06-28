@@ -3,4 +3,9 @@ ata0-master: type=cdrom, path=kernel.iso, status=inserted
 
 memory: guest=32, host=32
 
+# From the docbook:
+#   The 'realtime' method sacrifices reproducibility to preserve performance
+#   and host-time correlation.
+clock: sync=realtime
+
 magic_break: enabled=1
