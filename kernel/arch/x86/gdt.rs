@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use core::default::Default;
 use core::mem::size_of;
 
 use crate::bitflags::BitFlags;
@@ -26,7 +25,7 @@ extern "C" {
 
 bitflags! {
     #[repr(u8)]
-    enum AccessByte {
+    pub enum AccessByte {
         Accessed = 1 << 0,
         ReadableWritable = 1 << 1,
         ConformingDirection = 1 << 2,
@@ -39,14 +38,14 @@ bitflags! {
 
 bitflags! {
     #[repr(u8)]
-    enum EntryFlags {
+    pub enum EntryFlags {
         ProtectedMode32Bit = 1 << 6, // not set: 16-bit protected mode
         PageGranularity = 1 << 7, // not set: byte granularity
     }
 }
 
 #[repr(C, packed)]
-struct Entry {
+pub struct Entry {
     limit_0_15: u16,
     base_0_15: u16,
     base_16_23: u8,
@@ -56,7 +55,7 @@ struct Entry {
 }
 
 impl Entry {
-    fn new(base: u32, limit: u32, access_byte: u8, flags: u8) -> Self {
+    pub fn new(base: u32, limit: u32, access_byte: u8, flags: u8) -> Self {
         assert_eq!(limit >> 20, 0, "limit must be 20 bits wide");
         Entry {
             limit_0_15: limit as u16,
@@ -80,8 +79,11 @@ impl Entry {
     }
 
     fn is_null(&self) -> bool {
-        self.limit_0_15 == 0 && self.base_0_15 == 0 && self.base_16_23 == 0
-            && self.access_byte.value == 0 && self.flags_limit_16_19.value == 0
+        self.limit_0_15 == 0
+            && self.base_0_15 == 0
+            && self.base_16_23 == 0
+            && self.access_byte.value == 0
+            && self.flags_limit_16_19.value == 0
             && self.base_24_31 == 0
     }
 }
@@ -101,26 +103,45 @@ impl GlobalDescriptorTable {
     }
 
     fn descriptor(&self) -> GdtDescriptor {
+        GdtDescriptor {
+            size: (self.num_segments() * size_of::<Entry>()) as u16 - 1,
+            offset: &self.0 as *const _ as u32,
+        }
+    }
+
+    pub fn add_segment(&mut self, entry: Entry) -> u16 {
+        let idx = self.num_segments();
+        assert!(idx != self.0.len(), "no place in the GDT for a new entry");
+        self.0[idx] = entry;
+        idx as u16 * 8
+    }
+
+    pub unsafe fn load(&mut self) {
+        // Place the GDT descriptor in the null segment.
+        let null_segment = &mut self.0[0] as *mut Entry;
+        *null_segment = self.descriptor().into();
+
+        // And load it.
+        let descriptor = null_segment as *const GdtDescriptor;
+        load_gdt(descriptor);
+    }
+
+    pub fn kernel_data_segment(&self) -> u16 {
+        0x10
+    }
+
+    fn num_segments(&self) -> usize {
         let mut num_segments = 0;
         for (i, segment) in self.0.iter().enumerate() {
             if i != 0 && segment.is_null() {
-                num_segments = 1 + i;
+                num_segments = i;
                 break;
             } else if i == self.0.len() {
                 num_segments = i;
             }
         }
         assert!(num_segments != 0, "no null entries in the end of GDT");
-        GdtDescriptor {
-            size: (num_segments * size_of::<Entry>()) as u16 - 1,
-            offset: &self.0 as *const _ as u32,
-        }
-    }
-
-    unsafe fn load(&self) {
-        let null_segment = &self.0[0] as *const Entry;
-        let descriptor = null_segment as *const GdtDescriptor;
-        load_gdt(descriptor);
+        num_segments
     }
 }
 
@@ -183,10 +204,6 @@ kernel_static! {
 }
 
 pub fn init() {
-    // Place the GDT descriptor in the null segment.
-    let null_segment = GDT.lock().descriptor().into();
-    GDT.lock().0[0] = null_segment;
-
     unsafe {
         GDT.lock().load();
     }
