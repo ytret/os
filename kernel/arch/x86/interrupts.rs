@@ -263,7 +263,11 @@ kernel_static! {
 }
 
 #[no_mangle]
-pub extern "C" fn dummy_exception_handler(int_num: u32, err_code: u32) {
+pub extern "C" fn dummy_exception_handler(
+    int_num: u32,
+    err_code: u32,
+    stack_frame: &InterruptStackFrame,
+) {
     println!("Dummy exception handler called.");
     println!(" exception number: {}", int_num);
     println!(
@@ -274,12 +278,18 @@ pub extern "C" fn dummy_exception_handler(int_num: u32, err_code: u32) {
         (err_code >> 00) & 0xF,
         err_code
     );
+
+    let eip = stack_frame.eip;
+    println!(" eip: 0x{:08X}", eip);
+
     panic!("Unhandled exception.");
 }
 
 #[no_mangle]
-pub extern "C" fn common_interrupt_handler() {
+pub extern "C" fn common_interrupt_handler(stack_frame: &InterruptStackFrame) {
     println!("Common interrupt handler called.");
+    let eip = stack_frame.eip;
+    println!(" eip: 0x{:08X}", eip);
     panic!("Unhandled interrupt.");
 }
 

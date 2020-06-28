@@ -14,12 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-.macro CALL_HANDLER int_num err_code
+.macro CALL_HANDLER int_num err_code frame_ptr
+	pushl \frame_ptr
 	pushl \err_code                 // error code
     pushl \int_num                  // interrupt number
     cld
     call dummy_exception_handler
-    addl $8, %esp
+    addl $12, %esp
 .endm
 
 .macro DUMMY_EXCEPTION_ISR num
@@ -28,7 +29,9 @@
 dummy_isr_\num:
 	cli
     pusha
-    CALL_HANDLER $\num $0
+    movl %esp, %ebx
+    addl $32, %ebx                  // interrupt stack frame pointer
+    CALL_HANDLER $\num $0 %ebx
     popa
     iret
 .size dummy_isr_\num, . - dummy_isr_\num
@@ -40,10 +43,12 @@ dummy_isr_\num:
 dummy_isr_\num:
 	cli
     pusha
-    movl 32(%esp), %eax     // error code
-    CALL_HANDLER $\num %eax
+    movl %esp, %ebx
+    addl $32, %ebx                  // interrupt stack frame pointer
+    movl 32(%esp), %eax             // error code
+    CALL_HANDLER $\num %eax %ebx
     popa
-    addl $4, %esp           // the error code must be consumed
+    addl $4, %esp                   // the error code must be consumed
     iret
 .size dummy_isr_\num, . - dummy_isr_\num
 .endm
@@ -86,8 +91,12 @@ DUMMY_EXCEPTION_ISR 31
 common_isr:
     cli
     pusha
+    movl %esp, %eax
+    addl $32, %eax
     cld
+    pushl %eax
     call common_interrupt_handler
+    addl $4, %esp
     popa
     iret
 .size common_isr, . - common_isr
@@ -97,8 +106,12 @@ common_isr:
 common_isr_ec:
     cli
     pusha
+    movl %esp, %eax
+    addl $32, %eax
     cld
+    pushl %eax
     call common_interrupt_handler
+    addl $4, %esp
     popa
     addl $4, %esp
     iret
