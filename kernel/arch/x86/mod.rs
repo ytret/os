@@ -92,7 +92,8 @@ pub fn init(kernel_info: &mut KernelInfo) {
 
 pub fn panic() {
     let trace = stack_trace::StackTrace::walk_and_get();
+    println!(" stack trace:");
     for (i, addr) in trace.iter().enumerate() {
-        println!(" stack item #{}: 0x{:08X}", trace.length - i, addr);
+        print!(" #{:02}: 0x{:08X}    ", trace.length - i, addr);
     }
 }
