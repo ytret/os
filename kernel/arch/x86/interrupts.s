@@ -40,7 +40,7 @@ dummy_isr_\num:
 dummy_isr_\num:
 	cli
     pusha
-    movl 36(%esp), %eax     // error code
+    movl 32(%esp), %eax     // error code
     CALL_HANDLER $\num %eax
     popa
     addl $4, %esp           // the error code must be consumed

@@ -265,7 +265,7 @@ kernel_static! {
 #[no_mangle]
 pub extern "C" fn dummy_exception_handler(int_num: u32, err_code: u32) {
     println!("Dummy exception handler called.");
-    print!(" exception nnumber: {}", int_num);
+    println!(" exception number: {}", int_num);
     println!(
         " error code: {:08b}_{:08b}_{:08b}_{:08b} (0x{:08X})",
         (err_code >> 24) & 0xF,
