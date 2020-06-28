@@ -71,11 +71,11 @@ where
 }
 
 macro_rules! bitflags {
-    (#[repr($R:ident)] enum $N:ident { $($V:ident = $E:expr,)+ }) => {
+    (#[repr($R:ident)] ($($vis:tt)*) enum $N:ident { $($V:ident = $E:expr,)+ }) => {
         #[allow(dead_code)]
         #[derive(Clone, Copy)]
         #[repr($R)]
-        enum $N {
+        $($vis)* enum $N {
             $($V = $E,)+
         }
 
@@ -84,5 +84,11 @@ macro_rules! bitflags {
                 self as $R
             }
         }
+    };
+    (#[repr($R:ident)] pub enum $N:ident { $($V:ident = $E:expr,)+ }) => {
+        bitflags!(#[repr($R)] (pub) enum $N { $($V = $E,)+ });
+    };
+    (#[repr($R:ident)] enum $N:ident { $($V:ident = $E:expr,)+ }) => {
+        bitflags!(#[repr($R)] () enum $N { $($V = $E,)+ });
     }
 }
