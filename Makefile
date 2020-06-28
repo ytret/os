@@ -87,7 +87,9 @@ get-libs:
 	cp -R $$(rustc --print sysroot)/lib/rustlib/src/rust/src $(LIBDIR)
 	cd $(LIBDIR) && git clone "https://github.com/rust-lang/compiler-builtins"
 
-iso:
+iso: $(ISOFILE)
+
+$(ISOFILE): $(OUTPUT) grub.cfg
 	mkdir -p $(ISODIR)/boot/grub
 	cp grub.cfg $(ISODIR)/boot/grub/
 	cp $(OUTPUT) $(ISODIR)/boot
