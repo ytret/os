@@ -119,10 +119,17 @@ impl Table {
 kernel_static! {
     pub static ref KERNEL_PAGE_DIR: Mutex<Directory> = Mutex::new({
         let mut kpd = Directory::new();
+
         kpd.0[0].set_addr(&(&*KERNEL_PAGE_TABLES)[0] as *const _ as u32);
         kpd.0[0].set_flag(DirectoryEntryFlags::Present);
+        kpd.0[0].set_flag(DirectoryEntryFlags::ReadWrite);
+        kpd.0[0].set_flag(DirectoryEntryFlags::AnyDpl);
+
         kpd.0[1].set_addr(&(&*KERNEL_PAGE_TABLES)[1] as *const _ as u32);
         kpd.0[1].set_flag(DirectoryEntryFlags::Present);
+        kpd.0[0].set_flag(DirectoryEntryFlags::ReadWrite);
+        kpd.0[1].set_flag(DirectoryEntryFlags::AnyDpl);
+
         kpd
     });
 
@@ -134,6 +141,8 @@ kernel_static! {
                 let entry = &mut tables[i].0[j];
                 entry.set_addr((i << 22 | j << 12) as u32);
                 entry.set_flag(TableEntryFlags::Present);
+                entry.set_flag(TableEntryFlags::ReadWrite);
+                entry.set_flag(TableEntryFlags::AnyDpl);
             }
         }
         tables

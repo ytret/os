@@ -23,6 +23,8 @@ mod pmm_stack;
 pub mod port_io;
 mod stack_trace;
 
+pub mod usermode;
+
 use crate::memory_region::Region;
 use crate::KernelInfo;
 

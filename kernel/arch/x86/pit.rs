@@ -171,10 +171,10 @@ pub extern "C" fn pit_irq0_handler() {
     assert!(period_ms as u32 > 0, "PIT frequency is too high");
     COUNTER_MS.fetch_add(period_ms as u32, Ordering::SeqCst);
 
-    println!("Counter: {}", COUNTER_MS.load(Ordering::SeqCst));
+    //println!("Counter: {}", COUNTER_MS.load(Ordering::SeqCst));
 
     if COUNTER_MS.load(Ordering::SeqCst) >= 1000 {
-        println!("A second.");
+        //println!("A second.");
         COUNTER_MS.store(0, Ordering::SeqCst);
     }
 

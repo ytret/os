@@ -22,11 +22,13 @@ ARCH_SOURCES := \
 	$(ARCHDIR)/pit.rs \
 	$(ARCHDIR)/interrupts.rs \
 	$(ARCHDIR)/paging.rs \
-	$(ARCHDIR)/pmm_stack.rs
+	$(ARCHDIR)/pmm_stack.rs \
+	$(ARCHDIR)/usermode.rs
 
 ARCH_OBJECTS := \
 	$(ARCHDIR)/boot.o \
 	$(ARCHDIR)/stack_trace.o \
 	$(ARCHDIR)/gdt.o \
 	$(ARCHDIR)/interrupts.o \
-	$(ARCHDIR)/pit.o
+	$(ARCHDIR)/pit.o \
+	$(ARCHDIR)/usermode.o

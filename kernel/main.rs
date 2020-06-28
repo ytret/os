@@ -80,7 +80,7 @@ pub extern "C" fn main(magic_num: u32, boot_info: *const mbi::BootInfo) {
 
     allocator::init(&kernel_info);
 
-    loop {}
+    arch::usermode::init();
 }
 
 #[panic_handler]
