@@ -32,7 +32,7 @@ mod vga;
 #[cfg_attr(target_arch = "x86", path = "arch/x86/mod.rs")]
 pub mod arch;
 
-mod allocator;
+mod heap;
 mod mbi;
 mod memory_region;
 
@@ -78,7 +78,7 @@ pub extern "C" fn main(magic_num: u32, boot_info: *const mbi::BootInfo) {
         kernel_size / 4096,
     );
 
-    allocator::init(&kernel_info);
+    heap::init(&kernel_info);
 
     arch::usermode::init();
 }

@@ -82,7 +82,7 @@ pub fn init(kernel_info: &mut KernelInfo) {
 
     let heap_region = Region {
         start: kernel_end_addr as usize,
-        end: kernel_end_addr as usize + crate::allocator::KERNEL_HEAP_SIZE,
+        end: kernel_end_addr as usize + crate::heap::KERNEL_HEAP_SIZE,
     };
     paging::allocate_region(heap_region.start as u32, heap_region.end as u32);
     aif.heap_region = heap_region;
