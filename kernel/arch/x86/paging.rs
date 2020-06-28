@@ -29,7 +29,7 @@ macro_rules! entry_flags {
     ($N:ident { $($V:ident = $E:expr,)+ }) => {
         bitflags! {
             #[repr(u32)]
-            enum $N {
+            pub enum $N {
                 Present = 1 << 0,             // not set: not present
                 ReadWrite = 1 << 1,           // not set: read-only
                 AnyDpl = 1 << 2,              // not set: must be DPL 0 to access
@@ -59,7 +59,7 @@ entry_flags! {
 
 #[derive(Clone, Copy)]
 #[repr(transparent)]
-struct Entry<F: Into<u32>>(BitFlags<u32, F>);
+pub struct Entry<F: Into<u32>>(BitFlags<u32, F>);
 
 impl<F: Into<u32>> Entry<F> {
     fn new(addr: u32) -> Self {
@@ -92,7 +92,7 @@ impl<F: Into<u32>> Entry<F> {
 type DirectoryEntry = Entry<DirectoryEntryFlags>;
 
 #[repr(align(4096))]
-pub struct Directory([DirectoryEntry; 1024]);
+pub struct Directory(pub [DirectoryEntry; 1024]);
 
 impl Directory {
     fn new() -> Self {
