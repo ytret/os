@@ -36,6 +36,8 @@ mod heap;
 mod mbi;
 mod memory_region;
 
+mod scheduler;
+
 use core::panic::PanicInfo;
 use memory_region::Region;
 
@@ -80,7 +82,7 @@ pub extern "C" fn main(magic_num: u32, boot_info: *const mbi::BootInfo) {
 
     heap::init(&kernel_info);
 
-    arch::usermode::init();
+    scheduler::init();
 }
 
 #[panic_handler]

@@ -37,6 +37,7 @@ SOURCES := \
 	kernel/vga.rs \
 	kernel/mbi.rs \
 	kernel/heap.rs \
+	kernel/scheduler.rs \
 	$(ARCH_SOURCES)
 
 OBJECTS := \

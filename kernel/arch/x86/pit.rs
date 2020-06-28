@@ -19,7 +19,8 @@ use core::sync::atomic::{AtomicU32, Ordering};
 use crate::arch::interrupts::{InterruptStackFrame, IDT};
 use crate::arch::pic::PIC;
 use crate::arch::port_io;
-use crate::kernel_static::Mutex;
+
+use crate::scheduler;
 
 extern "C" {
     fn irq0_handler(stack_frame: &InterruptStackFrame); // pit.rs
@@ -83,6 +84,10 @@ impl Pit {
         self.send_reload_value();
     }
 
+    fn set_period(&mut self, period: f64) {
+        self.set_frequency(1.0 / period);
+    }
+
     fn set_frequency(&mut self, freq: f64) {
         let mut reload_value = (BASE_FREQUENCY / freq) as u32;
         if reload_value > 65535 {
@@ -93,6 +98,10 @@ impl Pit {
             reload_value = 65535;
         }
         self.reload_value = reload_value as u16;
+    }
+
+    fn period(&self) -> f64 {
+        1.0 / self.frequency()
     }
 
     fn frequency(&self) -> f64 {
@@ -147,17 +156,17 @@ impl Pit {
     }
 }
 
-kernel_static! {
-    static ref PIT: Mutex<Pit> = Mutex::new(Pit {
-        reload_value: 0,
-        operating_mode: OperatingMode::SquareWaveGenerator,
-        access_mode: AccessMode::BothBytes,
-    });
-}
+static mut PIT: Pit = Pit {
+    reload_value: 0,
+    operating_mode: OperatingMode::SquareWaveGenerator,
+    access_mode: AccessMode::BothBytes,
+};
 
 pub fn init() {
-    PIT.lock().set_frequency(1.0 / 25.0e-3);
-    PIT.lock().init();
+    unsafe {
+        PIT.set_period(50.0e-3);
+        PIT.init();
+    }
 
     IDT.lock().interrupts[0].set_handler(irq0_handler);
     PIC.set_irq_mask(IRQ, false);
@@ -165,18 +174,39 @@ pub fn init() {
 
 static COUNTER_MS: AtomicU32 = AtomicU32::new(0);
 
+use core::sync::atomic::{AtomicBool, AtomicUsize};
+pub static TEMP_SPAWNER_ON: AtomicBool = AtomicBool::new(false);
+static NUM_SPAWNED: AtomicUsize = AtomicUsize::new(0);
+
 #[no_mangle]
 pub extern "C" fn pit_irq0_handler() {
-    let period_ms = 1.0e+3 / PIT.lock().frequency();
-    assert!(period_ms as u32 > 0, "PIT frequency is too high");
-    COUNTER_MS.fetch_add(period_ms as u32, Ordering::SeqCst);
+    let period_ms = unsafe { (PIT.period() * 1.0e+3) as u32 };
+    assert!(period_ms != 0, "PIT frequency is too high");
+    COUNTER_MS.fetch_add(period_ms, Ordering::SeqCst);
 
-    //println!("Counter: {}", COUNTER_MS.load(Ordering::SeqCst));
-
-    if COUNTER_MS.load(Ordering::SeqCst) >= 1000 {
-        //println!("A second.");
-        COUNTER_MS.store(0, Ordering::SeqCst);
+    if TEMP_SPAWNER_ON.load(Ordering::SeqCst)
+        && NUM_SPAWNED.load(Ordering::SeqCst) < 2
+    {
+        println!("Creating a new process");
+        use crate::arch::process::Process;
+        let new_process = Process::new();
+        unsafe {
+            scheduler::SCHEDULER.add_process(new_process);
+        }
+        NUM_SPAWNED.fetch_add(1, Ordering::SeqCst);
     }
 
+    // Send an EOI before scheduling so that the IRQ will interrupt the next
+    // task.  One might just do an iret as a context switch but why bother if
+    // this handler will be executed further (including the iret) when it's time
+    // for this task.
     PIC.send_eoi(0);
+
+    if COUNTER_MS.load(Ordering::SeqCst) >= 1000 {
+        COUNTER_MS.store(0, Ordering::SeqCst);
+        println!("SCHEDULING (period_ms = {})", period_ms);
+        unsafe {
+            scheduler::SCHEDULER.schedule(period_ms);
+        }
+    }
 }

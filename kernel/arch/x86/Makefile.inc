@@ -23,7 +23,8 @@ ARCH_SOURCES := \
 	$(ARCHDIR)/interrupts.rs \
 	$(ARCHDIR)/paging.rs \
 	$(ARCHDIR)/pmm_stack.rs \
-	$(ARCHDIR)/usermode.rs
+	$(ARCHDIR)/process.rs \
+	$(ARCHDIR)/scheduler.rs
 
 ARCH_OBJECTS := \
 	$(ARCHDIR)/boot.o \
@@ -31,4 +32,4 @@ ARCH_OBJECTS := \
 	$(ARCHDIR)/gdt.o \
 	$(ARCHDIR)/interrupts.o \
 	$(ARCHDIR)/pit.o \
-	$(ARCHDIR)/usermode.o
+	$(ARCHDIR)/scheduler.o

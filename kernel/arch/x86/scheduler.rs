@@ -15,28 +15,34 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use crate::arch::gdt;
+use crate::arch::process::Process;
 use crate::bitflags::BitFlags;
+use crate::scheduler::SCHEDULER;
 
-use alloc::alloc::{alloc, Layout};
 use core::mem::size_of;
 
 extern "C" {
     fn jump_into_usermode(
         code_seg: u16,
         data_seg: u16,
-        jump_to: InitUsermodeFunc,
+        jump_to: UsermodeInitFunc,
     ) -> !;
+
+    fn switch_tasks(
+        from: *mut Process,
+        to: *const Process,
+        tss: *mut TaskStateSegment,
+    );
 }
 
-type InitUsermodeFunc = extern "C" fn() -> !;
+type UsermodeInitFunc = extern "C" fn() -> !;
 
 #[allow(dead_code)]
-#[derive(Default)]
 #[repr(C, packed)]
-struct TaskStateSegment {
+pub struct TaskStateSegment {
     link: u16,
     _reserved_link: u16,
-    esp0: u32,
+    pub esp0: u32,
     ss0: u16,
     _reserved_ss0: u16,
     esp1: u32,
@@ -75,18 +81,67 @@ struct TaskStateSegment {
 }
 
 impl TaskStateSegment {
-    fn new(ss0: u16, esp0: u32) -> Self {
-        let mut tss = TaskStateSegment::default();
-        tss.ss0 = ss0;
-        tss.esp0 = esp0;
-        tss.iobp_offset = size_of::<Self>() as u16;
-        tss
+    pub const fn new() -> Self {
+        TaskStateSegment {
+            link: 0,
+            _reserved_link: 0,
+            esp0: 0,
+            ss0: 0,
+            _reserved_ss0: 0,
+            esp1: 0,
+            ss1: 0,
+            _reserved_ss1: 0,
+            esp2: 0,
+            ss2: 0,
+            _reserved_ss2: 0,
+            cr3: 0,
+            eip: 0,
+            eflags: 0,
+            eax: 0,
+            ecx: 0,
+            edx: 0,
+            ebx: 0,
+            esp: 0,
+            ebp: 0,
+            esi: 0,
+            edi: 0,
+            es: 0,
+            _reserved_es: 0,
+            cs: 0,
+            _reserved_cs: 0,
+            ss: 0,
+            _reserved_ss: 0,
+            ds: 0,
+            _reserved_ds: 0,
+            fs: 0,
+            _reserved_fs: 0,
+            gs: 0,
+            _reserved_gs: 0,
+            ldtr: 0,
+            _reserved_ldtr: 0,
+            _reserved_iopb_offset: 0,
+            iobp_offset: size_of::<Self>() as u16,
+        }
     }
 }
 
-static KERNEL_STACK: [u32; 1024] = [0; 1024];
+impl crate::scheduler::Scheduler {
+    pub fn switch_tasks(&self, from: *mut Process, to: *const Process) {
+        // NOTE: call this method with interrupts disabled and enable them after
+        // it returns.
+        let tss = unsafe { &mut TSS };
+        unsafe {
+            switch_tasks(from, to, tss);
+        }
+    }
+}
+
+pub static mut TSS: TaskStateSegment = TaskStateSegment::new();
 
 pub fn init() -> ! {
+    let tss = unsafe { &mut TSS };
+    tss.ss0 = gdt::GDT.lock().kernel_data_segment();
+
     // Update the GDT.
     let entry_for_usermode_code = gdt::Entry::new(
         0x0000_0000,
@@ -119,17 +174,8 @@ pub fn init() -> ! {
             .value,
     );
 
-    let tss_ptr;
-    unsafe {
-        tss_ptr =
-            alloc(Layout::new::<TaskStateSegment>()) as *mut TaskStateSegment;
-        *tss_ptr = TaskStateSegment::new(
-            gdt::GDT.lock().kernel_data_segment(),
-            &KERNEL_STACK[1023] as *const _ as u32,
-        );
-    };
     let entry_for_tss = gdt::Entry::new(
-        tss_ptr as u32,
+        tss as *const _ as u32,
         size_of::<TaskStateSegment>() as u32,
         (BitFlags::new(0)
             | gdt::AccessByte::Present
@@ -145,23 +191,31 @@ pub fn init() -> ! {
         gdt::GDT.lock().add_segment(entry_for_usermode_data);
     let tss_seg = gdt::GDT.lock().add_segment(entry_for_tss);
 
+    // Create the init process and set up its kernel stack.
+    let init_process = Process::new();
+    unsafe {
+        SCHEDULER.add_process(init_process);
+    }
+    tss.esp0 = init_process.esp0;
+
     unsafe {
         // Load the GDT with the new entries.
         gdt::GDT.lock().load();
 
         // Load the TSS.
         asm!("ltr %ax", in("ax") tss_seg, options(att_syntax));
+    }
 
+    unsafe {
         // Jump into usermode.
         jump_into_usermode(usermode_code_seg, usermode_data_seg, usermode_init);
     }
 }
 
 extern "C" fn usermode_init() -> ! {
-    println!("Hello from usermode!");
-    unsafe {
-        // Cause a General protection fault.
-        asm!("cli");
-    }
+    println!("Hello from usermode init!");
+    println!("Enabling the spawner");
+    crate::arch::pit::TEMP_SPAWNER_ON
+        .store(true, core::sync::atomic::Ordering::SeqCst);
     loop {}
 }

@@ -73,7 +73,7 @@ impl<T> Mutex<T> {
     }
 
     pub fn lock(&self) -> MutexWrapper<T> {
-        while self.locked.compare_and_swap(false, true, Ordering::Relaxed)
+        while self.locked.compare_and_swap(false, true, Ordering::Acquire)
             != false
         {
             while self.locked.load(Ordering::Relaxed) {
@@ -104,7 +104,7 @@ impl<'a, T> DerefMut for MutexWrapper<'a, T> {
 
 impl<'a, T> Drop for MutexWrapper<'a, T> {
     fn drop(&mut self) {
-        self.locked.store(false, Ordering::Relaxed);
+        self.locked.store(false, Ordering::Release);
     }
 }
 
