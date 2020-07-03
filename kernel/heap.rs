@@ -25,11 +25,13 @@ struct Allocator;
 
 unsafe impl GlobalAlloc for Allocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        /*
         println!(
             "alloc: layout: size: {}, align: {}",
             layout.size(),
             layout.align(),
         );
+        */
 
         let heap = match *KERNEL_HEAP.lock() {
             Some(kernel_heap) => kernel_heap,
@@ -45,7 +47,6 @@ unsafe impl GlobalAlloc for Allocator {
             chunk_start = (possible_tag as *mut Tag).offset(1) as *mut u8;
             needed_size =
                 chunk_start.align_offset(layout.align()) + layout.size();
-            //println!(" chunk size: {}, needed: {}", chunk_size, needed_size);
             if chunk_size >= needed_size + size_of::<Tag>() {
                 chosen_tag = possible_tag as *mut Tag;
                 break;
@@ -55,6 +56,7 @@ unsafe impl GlobalAlloc for Allocator {
             panic!("alloc: insufficient free heap");
             //return core::ptr::null_mut();
         }
+        //println!(" chosen_tag: 0x{:08X}", chosen_tag as u32);
 
         if (*chosen_tag).chunk_size() - needed_size < heap.min_chunk_size {
             (*chosen_tag).set_used(true);
@@ -78,12 +80,14 @@ unsafe impl GlobalAlloc for Allocator {
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        /*
         println!(
             "dealloc: ptr: 0x{:08X}, layout: size: {}, align: {}",
             ptr as u32,
             layout.size(),
             layout.align(),
         );
+        */
         assert_eq!(
             ptr.align_offset(layout.align()),
             0,
@@ -92,7 +96,7 @@ unsafe impl GlobalAlloc for Allocator {
 
         let heap = match *KERNEL_HEAP.lock() {
             Some(kernel_heap) => kernel_heap,
-            None => unreachable!("dealloc on unitialized kernel heap"),
+            None => panic!("dealloc on unitialized kernel heap"),
         };
 
         let mut tag_ptr: *const u8 = ptr.sub(1);
@@ -101,13 +105,16 @@ unsafe impl GlobalAlloc for Allocator {
         }
 
         let tag = (tag_ptr.add(1) as *mut Tag).sub(1);
-        //println!(
-        //    "- tag at 0x{:08X} -> 0x{:08X}, used: {}, align {}",
-        //    tag as u32,
-        //    (*tag).next_tag_addr(),
-        //    (*tag).is_used() as usize,
-        //    (*tag).align(),
-        //);
+        /*
+        println!(
+            "- tag at 0x{:08X} -> 0x{:08X}, used: {}, align: {}, size: {}",
+            tag as u32,
+            (*tag).next_tag_addr(),
+            (*tag).is_used() as usize,
+            (*tag).align(),
+            (*tag).chunk_size(),
+        );
+        */
 
         (*tag).set_used(false);
         (*tag).align = 1;
@@ -222,6 +229,8 @@ impl Heap {
                 }
                 from = core::ptr::null_mut();
                 to = core::ptr::null();
+            } else {
+                from = core::ptr::null_mut();
             }
         }
     }
