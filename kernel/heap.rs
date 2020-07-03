@@ -60,8 +60,8 @@ unsafe impl GlobalAlloc for Allocator {
             (*chosen_tag).set_used(true);
         } else {
             // Divide the chunk.
-            let second_part =
-                (chosen_tag.add(1) as usize + needed_size) as *mut Tag;
+            let second_part = (((chosen_tag.add(1) as usize + needed_size) + 1)
+                & !1) as *mut Tag;
             *second_part = Tag::new(false, 1, (*chosen_tag).next_tag());
             *chosen_tag = Tag::new(true, layout.align(), second_part);
         }
