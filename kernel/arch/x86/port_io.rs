@@ -18,7 +18,16 @@ pub unsafe fn outb(port: u16, data: u8) {
     asm!(
         "outb %al, %dx",
         in("eax") data as u32,
-        in("edx") port as u32,
+        in("dx") port,
+        options(att_syntax),
+    );
+}
+
+pub unsafe fn outl(port: u16, data: u32) {
+    asm!(
+        "outl %eax, %dx",
+        in("eax") data,
+        in("dx") port,
         options(att_syntax),
     );
 }
@@ -29,8 +38,19 @@ pub unsafe fn inb(port: u16) -> u8 {
         "xorl %eax, %eax
          inb %dx, %al",
         out("eax") data,
-        in("edx") port as u32,
+        in("dx") port,
         options(att_syntax),
     );
     data as u8
+}
+
+pub unsafe fn inl(port: u16) -> u32 {
+    let mut data: u32;
+    asm!(
+        "inl %dx, %eax",
+        out("eax") data,
+        in("dx") port,
+        options(att_syntax),
+    );
+    data
 }
