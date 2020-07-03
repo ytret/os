@@ -82,7 +82,9 @@ pub extern "C" fn main(magic_num: u32, boot_info: *const mbi::BootInfo) {
 
     heap::init(&kernel_info);
 
-    scheduler::init();
+    arch::pci::init();
+
+    //scheduler::init();
 }
 
 #[panic_handler]

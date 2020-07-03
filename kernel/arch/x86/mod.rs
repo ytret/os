@@ -26,6 +26,8 @@ mod stack_trace;
 pub mod process;
 pub mod scheduler;
 
+pub mod pci;
+
 use crate::memory_region::Region;
 use crate::KernelInfo;
 

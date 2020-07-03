@@ -184,6 +184,7 @@ pub extern "C" fn pit_irq0_handler() {
     assert!(period_ms != 0, "PIT frequency is too high");
     COUNTER_MS.fetch_add(period_ms, Ordering::SeqCst);
 
+    /*
     if TEMP_SPAWNER_ON.load(Ordering::SeqCst)
         && NUM_SPAWNED.load(Ordering::SeqCst) < 2
     {
@@ -195,6 +196,7 @@ pub extern "C" fn pit_irq0_handler() {
         }
         NUM_SPAWNED.fetch_add(1, Ordering::SeqCst);
     }
+    */
 
     // Send an EOI before scheduling so that the IRQ will interrupt the next
     // task.  One might just do an iret as a context switch but why bother if
@@ -202,6 +204,7 @@ pub extern "C" fn pit_irq0_handler() {
     // for this task.
     PIC.send_eoi(0);
 
+    /*
     if COUNTER_MS.load(Ordering::SeqCst) >= 1000 {
         COUNTER_MS.store(0, Ordering::SeqCst);
         println!("SCHEDULING (period_ms = {})", period_ms);
@@ -209,4 +212,5 @@ pub extern "C" fn pit_irq0_handler() {
             scheduler::SCHEDULER.schedule(period_ms);
         }
     }
+    */
 }
