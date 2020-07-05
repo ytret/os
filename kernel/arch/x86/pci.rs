@@ -38,8 +38,7 @@ impl Pci {
             self.host_buses.push((0, host_bus));
         } else {
             for bus_num in 0..8 {
-                let conf_space_option = info_device.functions[bus_num];
-                if let Some(_) = conf_space_option {
+                if let Some(_) = info_device.functions[bus_num].conf_space {
                     let host_bus = Bus::new(bus_num as u8);
                     self.host_buses.push((bus_num, host_bus));
                 }
@@ -71,7 +70,7 @@ impl Bus {
         let mut secondary_buses = Vec::new();
         for device_num in 0..32 {
             let device = Device::new(bus_num, device_num);
-            if let Some(conf_space) = device.functions[0] {
+            if let Some(conf_space) = device.functions[0].conf_space {
                 match conf_space {
                     ConfSpace::Device(_) => devices.push(device),
                     ConfSpace::PciToPciBridge(conf_space) => {
@@ -153,9 +152,7 @@ impl ConfAddressBuilder {
 struct Device {
     bus_num: u8,
     device_num: u8,
-    class: DeviceClass,
-    configured: bool,
-    functions: Vec<Option<ConfSpace>>,
+    functions: Vec<Function>,
 }
 
 impl Device {
@@ -163,32 +160,57 @@ impl Device {
         let mut device = Device {
             bus_num,
             device_num,
-            class: DeviceClass::Unknown,
-            configured: false,
-            functions: Vec::with_capacity(8),
+            functions: Vec::new(),
         };
-        device.functions.push(device.conf_space(0));
-        if device.is_multifunctional() {
-            for function_num in 1..8 {
-                device.functions.push(device.conf_space(function_num));
+
+        for function_num in 0..8 {
+            let function = Function::new(bus_num, device_num, function_num);
+            device.functions.push(function);
+            if !device.is_multifunctional() {
+                break;
             }
         }
         device
     }
 
     fn is_multifunctional(&self) -> bool {
-        let is_mf = (self.header_type(0) & (1 << 7)) != 0;
+        let is_mf = (self.functions[0].header_type() & (1 << 7)) != 0;
         is_mf
     }
+}
 
-    fn conf_space(&self, function_num: u8) -> Option<ConfSpace> {
-        let register = |offset| self.register(function_num, offset);
+#[derive(Clone)]
+struct Function {
+    bus_num: u8,
+    device_num: u8,
+    function_num: u8,
+    class: DeviceClass,
+    conf_space: Option<ConfSpace>,
+}
+
+impl Function {
+    fn new(bus_num: u8, device_num: u8, function_num: u8) -> Self {
+        let mut function = Function {
+            bus_num,
+            device_num,
+            function_num,
+            class: DeviceClass::Unknown,
+            conf_space: None,
+        };
+
+        let register = |offset| function.register(offset); // for short
+
+        // If the vendor ID is not valid, the function does not exist and we
+        // don't bother with its configuration.
         let vendor_id = register(0x00) as u16;
         if vendor_id == 0xFFFF {
-            return None;
+            function.conf_space = None;
+            return function;
         }
-        let header_type = self.header_type(function_num) & !(1 << 7);
-        match header_type {
+
+        // Read the configuration space.
+        let header_type = function.header_type() & !(1 << 7);
+        function.conf_space = match header_type {
             0x00 => {
                 let conf_space = DeviceConfSpace {
                     vendor_id,
@@ -264,19 +286,72 @@ impl Device {
                 println!("PCI: ignoring header type 0x{:02X}", other);
                 None
             }
+        };
+
+        // Try to recognize the device function.
+        if let Some(ConfSpace::Device(conf_space)) = function.conf_space {
+            let class_code = conf_space.class_code;
+            let subclass = conf_space.subclass;
+            let prog_if = conf_space.prog_if;
+            function.class = match class_code {
+                0x00 => match subclass {
+                    0x00 => DeviceClass::Unclassified(UnclassifiedSubclass::NonVgaCompatible),
+                    0x01 => DeviceClass::Unclassified(UnclassifiedSubclass::VgaCompatible),
+                    _ => DeviceClass::Unclassified(UnclassifiedSubclass::Unknown),
+                }
+
+                0x01 => match subclass {
+                    0x01 => match prog_if {
+                        0x80 => DeviceClass::MassStorageController(MassStorageControllerSubclass::IdeController(IdeControllerInterface::IsaCompatibilityModeOnlyWithBusMastering)),
+                        _ => DeviceClass::MassStorageController(MassStorageControllerSubclass::IdeController(IdeControllerInterface::Unknown)),
+                    }
+                    0x06 => match prog_if {
+                        0x01 => DeviceClass::MassStorageController(MassStorageControllerSubclass::SerialAta(SerialAtaInterface::Ahci1_0)),
+                        _ => DeviceClass::MassStorageController(MassStorageControllerSubclass::SerialAta(SerialAtaInterface::Unknown)),
+                    }
+                    _ => DeviceClass::MassStorageController(MassStorageControllerSubclass::Other),
+                    _ => DeviceClass::MassStorageController(MassStorageControllerSubclass::Unknown),
+                }
+
+                0x02 => match subclass {
+                    0x00 => DeviceClass::NetworkController(NetworkControllerSubclass::EthernetController),
+                    0x80 => DeviceClass::NetworkController(NetworkControllerSubclass::Other),
+                    _ => DeviceClass::NetworkController(NetworkControllerSubclass::Unknown),
+                }
+
+                0x03 => match subclass {
+                    0x00 => match prog_if {
+                        0x00 => DeviceClass::DisplayController(DisplayControllerSubclass::VgaCompatible(VgaCompatibleInterface::VgaController)),
+                        _ => DeviceClass::DisplayController(DisplayControllerSubclass::VgaCompatible(VgaCompatibleInterface::Unknown)),
+                    },
+                    0x80 => DeviceClass::DisplayController(DisplayControllerSubclass::Other),
+                    _ => DeviceClass::DisplayController(DisplayControllerSubclass::Unknown),
+                }
+
+                0x06 => match subclass {
+                    0x00 => DeviceClass::BridgeDevice(BridgeDeviceSubclass::HostBridge),
+                    0x01 => DeviceClass::BridgeDevice(BridgeDeviceSubclass::IsaBridge),
+                    0x80 => DeviceClass::BridgeDevice(BridgeDeviceSubclass::Other),
+                    _ => DeviceClass::BridgeDevice(BridgeDeviceSubclass::Unknown),
+                }
+
+                _ => DeviceClass::Unknown,
+            };
         }
+
+        function
     }
 
-    fn header_type(&self, function_num: u8) -> u8 {
-        (self.register(function_num, 0x0C) >> 16) as u8
+    fn header_type(&self) -> u8 {
+        (self.register(0x0C) >> 16) as u8
     }
 
-    fn register(&self, function_num: u8, offset: u8) -> u32 {
+    fn register(&self, offset: u8) -> u32 {
         let addr = ConfAddressBuilder::new()
             .enable_bit(true)
             .bus_num(self.bus_num)
             .device_num(self.device_num)
-            .function_num(function_num)
+            .function_num(self.function_num)
             .register_offset(offset)
             .done();
         unsafe {
@@ -287,9 +362,69 @@ impl Device {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum DeviceClass {
     Unknown,
+    Unclassified(UnclassifiedSubclass),
+    MassStorageController(MassStorageControllerSubclass),
+    NetworkController(NetworkControllerSubclass),
+    DisplayController(DisplayControllerSubclass),
+    BridgeDevice(BridgeDeviceSubclass),
+}
+
+#[derive(Clone, Debug)]
+enum UnclassifiedSubclass {
+    Unknown,
+    NonVgaCompatible,
+    VgaCompatible,
+}
+
+#[derive(Clone, Debug)]
+enum MassStorageControllerSubclass {
+    Unknown,
+    IdeController(IdeControllerInterface),
+    SerialAta(SerialAtaInterface),
+    Other,
+}
+
+#[derive(Clone, Debug)]
+enum IdeControllerInterface {
+    Unknown,
+    IsaCompatibilityModeOnlyWithBusMastering,
+}
+
+#[derive(Clone, Debug)]
+enum SerialAtaInterface {
+    Unknown,
+    Ahci1_0,
+}
+
+#[derive(Clone, Debug)]
+enum NetworkControllerSubclass {
+    Unknown,
+    EthernetController,
+    Other,
+}
+
+#[derive(Clone, Debug)]
+enum DisplayControllerSubclass {
+    Unknown,
+    VgaCompatible(VgaCompatibleInterface),
+    Other,
+}
+
+#[derive(Clone, Debug)]
+enum VgaCompatibleInterface {
+    Unknown,
+    VgaController,
+}
+
+#[derive(Clone, Debug)]
+enum BridgeDeviceSubclass {
+    Unknown,
+    HostBridge,
+    IsaBridge,
+    Other,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -298,7 +433,6 @@ enum ConfSpace {
     PciToPciBridge(PciToPciBridgeConfSpace),
 }
 
-#[allow(dead_code)]
 #[derive(Clone, Copy, Debug)]
 struct DeviceConfSpace {
     vendor_id: u16,
@@ -330,7 +464,6 @@ struct DeviceConfSpace {
     max_latency: u8,
 }
 
-#[allow(dead_code)]
 #[derive(Clone, Copy, Debug)]
 struct PciToPciBridgeConfSpace {
     vendor_id: u16,
@@ -404,17 +537,25 @@ fn print_bus(offset: usize, bus: &Bus) {
         }
         print!("Device 0x{:02X} : ", device.device_num);
         for (j, function_num) in (0..device.functions.len()).enumerate() {
-            if j != 0 {
-                for _ in 0..offset + 14 {
-                    print!(" ");
+            if let Some(conf_space) = device.functions[function_num].conf_space
+            {
+                if j != 0 {
+                    for _ in 0..offset + 14 {
+                        print!(" ");
+                    }
                 }
-            }
-            if let Some(conf_space) = device.functions[function_num] {
                 match conf_space {
                     ConfSpace::Device(cs) => {
                         println!(
-                            "Function {} {:04X}:{:04X}",
-                            function_num, cs.vendor_id, cs.device_id,
+                            "Function {} {:04X}:{:04X} \
+                             Class {:02X}:{:02X}:{:02X} {:?}",
+                            function_num,
+                            cs.vendor_id,
+                            cs.device_id,
+                            cs.class_code,
+                            cs.subclass,
+                            cs.prog_if,
+                            device.functions[function_num].class,
                         );
                     }
                     ConfSpace::PciToPciBridge(_) => {
@@ -424,6 +565,7 @@ fn print_bus(offset: usize, bus: &Bus) {
                     _ => println!("unreachable"),
                 }
             } else {
+                /*
                 println!(
                     "Ignoring {} {:04X}:{:04X} Header Type 0x{:02X}",
                     function_num,
@@ -431,6 +573,7 @@ fn print_bus(offset: usize, bus: &Bus) {
                     (device.register(function_num as u8, 0x00) >> 16) as u16,
                     device.header_type(function_num as u8),
                 );
+                */
             }
         }
     }
