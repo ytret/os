@@ -32,8 +32,9 @@ RUSTFMTFLAGS := --check --edition 2018 --config max_width=80
 # kernel/main.rs must be first (e.g. see the $(LIBKERNEL) rule)
 SOURCES := \
 	kernel/main.rs \
-	kernel/kernel_static.rs \
 	kernel/bitflags.rs \
+	kernel/kernel_static.rs \
+	kernel/port.rs \
 	kernel/vga.rs \
 	kernel/mbi.rs \
 	kernel/heap.rs \
