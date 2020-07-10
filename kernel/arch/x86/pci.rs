@@ -17,6 +17,7 @@
 use crate::arch::port_io;
 
 use alloc::vec::Vec;
+use core::marker::PhantomData;
 
 #[derive(Clone)]
 struct Pci {
@@ -74,7 +75,9 @@ impl Bus {
                 match conf_space {
                     ConfSpace::Device(_) => devices.push(device),
                     ConfSpace::PciToPciBridge(conf_space) => {
-                        let secondary_bus_num = conf_space.secondary_bus_num;
+                        let secondary_bus_num = conf_space
+                            .secondary_bus_num
+                            .read(&device.functions[0]);
                         secondary_buses
                             .push((device_num, Bus::new(secondary_bus_num)));
                     }
@@ -212,74 +215,11 @@ impl Function {
         let header_type = function.header_type() & !(1 << 7);
         function.conf_space = match header_type {
             0x00 => {
-                let conf_space = DeviceConfSpace {
-                    vendor_id,
-                    device_id: (register(0x00) >> 16) as u16,
-                    command: register(0x04) as u16,
-                    status: (register(0x04) >> 16) as u16,
-                    revision_id: register(0x08) as u8,
-                    prog_if: (register(0x08) >> 8) as u8,
-                    subclass: (register(0x08) >> 16) as u8,
-                    class_code: (register(0x08) >> 24) as u8,
-                    cache_line_size: register(0x0C) as u8,
-                    latency_timer: (register(0x0C) >> 8) as u8,
-                    header_type: (register(0x0C) >> 16) as u8,
-                    bist: (register(0x0C) >> 24) as u8,
-                    bar0: register(0x10),
-                    bar1: register(0x14),
-                    bar2: register(0x18),
-                    bar3: register(0x1C),
-                    bar4: register(0x20),
-                    bar5: register(0x24),
-                    cardbus_cis_ptr: register(0x28),
-                    subsystem_vendor_id: register(0x2C) as u16,
-                    subsystem_id: (register(0x2C) >> 16) as u16,
-                    expansion_rom_base_addr: register(0x30),
-                    capabilites_ptr: register(0x34) as u8,
-                    interrupt_line: register(0x3C) as u8,
-                    interrupt_pin: (register(0x3C) >> 8) as u8,
-                    min_grant: (register(0x3C) >> 16) as u8,
-                    max_latency: (register(0x3C) >> 24) as u8,
-                };
+                let conf_space = DeviceConfSpace::new();
                 Some(ConfSpace::Device(conf_space))
             }
             0x01 => {
-                let conf_space = PciToPciBridgeConfSpace {
-                    vendor_id,
-                    device_id: (register(0x00) >> 16) as u16,
-                    command: register(0x04) as u16,
-                    status: (register(0x04) >> 16) as u16,
-                    revision_id: register(0x08) as u8,
-                    prog_if: (register(0x08) >> 8) as u8,
-                    subclass: (register(0x08) >> 16) as u8,
-                    class_code: (register(0x08) >> 24) as u8,
-                    cache_line_size: register(0x0C) as u8,
-                    latency_timer: (register(0x0C) >> 8) as u8,
-                    header_type: (register(0x0C) >> 16) as u8,
-                    bist: (register(0x0C) >> 24) as u8,
-                    bar0: register(0x10),
-                    bar1: register(0x14),
-                    primary_bus_num: register(0x18) as u8,
-                    secondary_bus_num: (register(0x18) >> 8) as u8,
-                    subordinate_bus_num: (register(0x18) >> 16) as u8,
-                    secondary_latency_timer: (register(0x18) >> 24) as u8,
-                    io_base: register(0x1C) as u8,
-                    io_limit: (register(0x1C) >> 8) as u8,
-                    secondary_status: (register(0x1C) >> 16) as u16,
-                    memory_base: register(0x20) as u16,
-                    memory_limit: (register(0x20) >> 16) as u16,
-                    prefetchable_memory_base: register(0x24) as u16,
-                    prefetchable_memory_limit: (register(0x24) >> 16) as u16,
-                    prefetchable_base_upper_32_bits: register(0x28),
-                    prefetchable_limit_upper_32_bits: register(0x2C),
-                    io_limit_upper_16_bits: register(0x30) as u16,
-                    io_base_upper_16_bits: (register(0x30) >> 16) as u16,
-                    capability_ptr: register(0x34) as u8,
-                    expansion_rom_base_addr: register(0x38),
-                    interrupt_line: register(0x3C) as u8,
-                    interrupt_pin: (register(0x3C) >> 8) as u8,
-                    bridge_control: (register(0x3C) >> 16) as u16,
-                };
+                let conf_space = PciToPciBridgeConfSpace::new();
                 Some(ConfSpace::PciToPciBridge(conf_space))
             }
             other => {
@@ -290,9 +230,9 @@ impl Function {
 
         // Try to recognize the device function.
         if let Some(ConfSpace::Device(conf_space)) = function.conf_space {
-            let class_code = conf_space.class_code;
-            let subclass = conf_space.subclass;
-            let prog_if = conf_space.prog_if;
+            let class_code = conf_space.class_code.read(&function);
+            let subclass = conf_space.subclass.read(&function);
+            let prog_if = conf_space.prog_if.read(&function);
             function.class = match class_code {
                 0x00 => match subclass {
                     0x00 => DeviceClass::Unclassified(UnclassifiedSubclass::NonVgaCompatible),
@@ -359,6 +299,37 @@ impl Function {
         }
         let value = unsafe { port_io::inl(PORT_CONFIG_DATA) };
         value
+    }
+
+    fn set_register(&self, offset: u8, value: u32) {
+        let addr = ConfAddressBuilder::new()
+            .enable_bit(true)
+            .bus_num(self.bus_num)
+            .device_num(self.device_num)
+            .function_num(self.function_num)
+            .register_offset(offset)
+            .done();
+        unsafe {
+            port_io::outl(PORT_CONFIG_ADDRESS, addr);
+            let before = port_io::inl(PORT_CONFIG_DATA);
+            port_io::outl(PORT_CONFIG_DATA, value);
+            let after = port_io::inl(PORT_CONFIG_DATA);
+            println!(
+                "before: 0x{:08X}, value: 0x{:08X}, after: 0x{:08X}",
+                before, value, after,
+            );
+            if after == before {
+                println!("set_register: could not change");
+            }
+        }
+    }
+
+    fn exists(&self) -> bool {
+        if let Some(conf_space) = self.conf_space {
+            conf_space.has_valid_vendor_id(self)
+        } else {
+            false
+        }
     }
 }
 
@@ -433,73 +404,283 @@ enum ConfSpace {
     PciToPciBridge(PciToPciBridgeConfSpace),
 }
 
+impl ConfSpace {
+    fn has_valid_vendor_id(&self, of_function: &Function) -> bool {
+        match self {
+            ConfSpace::Device(conf_space) => {
+                conf_space.vendor_id.read(of_function) != 0xFFFF
+            }
+            ConfSpace::PciToPciBridge(conf_space) => {
+                conf_space.vendor_id.read(of_function) != 0xFFFF
+            }
+        }
+    }
+}
+
+trait RegisterType: Sized + Into<u32> {
+    fn mask_u32(value: u32) -> Self;
+
+    fn mask() -> u32 {
+        let num_bits = 8 * core::mem::size_of::<Self>() as u32;
+        2u32.pow(num_bits) - 1
+    }
+}
+
+impl RegisterType for u8 {
+    fn mask_u32(value: u32) -> Self {
+        value as u8
+    }
+}
+
+impl RegisterType for u16 {
+    fn mask_u32(value: u32) -> Self {
+        value as u16
+    }
+}
+
+impl RegisterType for u32 {
+    fn mask_u32(value: u32) -> Self {
+        value
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct Register<T: RegisterType> {
+    offset: u8,
+    shift_left: u8,
+    read_only: bool,
+    reserved: bool,
+    phantom_data: PhantomData<T>,
+}
+
+impl<T: RegisterType> Register<T> {
+    fn read_only(offset: u8, shift_left: u8) -> Self {
+        Register {
+            offset,
+            shift_left,
+            read_only: true,
+            reserved: false,
+            phantom_data: PhantomData,
+        }
+    }
+
+    fn read_write(offset: u8, shift_left: u8) -> Self {
+        Register {
+            offset,
+            shift_left,
+            read_only: false,
+            reserved: false,
+            phantom_data: PhantomData,
+        }
+    }
+
+    fn reserved(offset: u8, shift_left: u8) -> Self {
+        Register {
+            offset,
+            shift_left,
+            read_only: true,
+            reserved: true,
+            phantom_data: PhantomData,
+        }
+    }
+
+    fn read(&self, of_function: &Function) -> T {
+        if self.reserved {
+            panic!("It is not allowed to read a reserved field.");
+        } else {
+            let addr = ConfAddressBuilder::new()
+                .enable_bit(true)
+                .bus_num(of_function.bus_num)
+                .device_num(of_function.device_num)
+                .function_num(of_function.function_num)
+                .register_offset(self.offset)
+                .done();
+            unsafe {
+                port_io::outl(PORT_CONFIG_ADDRESS, addr);
+            }
+            let mut value = unsafe { port_io::inl(PORT_CONFIG_DATA) };
+            value = value >> self.shift_left as u32;
+            T::mask_u32(value)
+        }
+    }
+
+    fn write(&self, of_function: &Function, value: T) {
+        if self.reserved {
+            panic!("It is not allowed to read a reserved field.");
+        } else if self.read_only {
+            panic!("Cannot write to a read-only register.");
+        } else {
+            let addr = ConfAddressBuilder::new()
+                .enable_bit(true)
+                .bus_num(of_function.bus_num)
+                .device_num(of_function.device_num)
+                .function_num(of_function.function_num)
+                .register_offset(self.offset)
+                .done();
+            unsafe {
+                port_io::outl(PORT_CONFIG_ADDRESS, addr);
+
+                let before = port_io::inl(PORT_CONFIG_DATA);
+                let mut new_value = before;
+                new_value &= !(T::mask() << self.shift_left);
+                new_value |= value.into() << self.shift_left as u32;
+                if new_value == before {
+                    return;
+                }
+                port_io::outl(PORT_CONFIG_DATA, new_value);
+
+                let after = port_io::inl(PORT_CONFIG_DATA);
+                assert_ne!(
+                    after, before,
+                    "wrote to a register, but it did not change",
+                );
+            }
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 struct DeviceConfSpace {
-    vendor_id: u16,
-    device_id: u16,
-    command: u16,
-    status: u16,
-    revision_id: u8,
-    prog_if: u8,
-    subclass: u8,
-    class_code: u8,
-    cache_line_size: u8,
-    latency_timer: u8,
-    header_type: u8,
-    bist: u8,
-    bar0: u32,
-    bar1: u32,
-    bar2: u32,
-    bar3: u32,
-    bar4: u32,
-    bar5: u32,
-    cardbus_cis_ptr: u32,
-    subsystem_vendor_id: u16,
-    subsystem_id: u16,
-    expansion_rom_base_addr: u32,
-    capabilites_ptr: u8,
-    interrupt_line: u8,
-    interrupt_pin: u8,
-    min_grant: u8,
-    max_latency: u8,
+    vendor_id: Register<u16>,
+    device_id: Register<u16>,
+    command: Register<u16>,
+    status: Register<u16>,
+    revision_id: Register<u8>,
+    prog_if: Register<u8>,
+    subclass: Register<u8>,
+    class_code: Register<u8>,
+    cache_line_size: Register<u8>,
+    latency_timer: Register<u8>,
+    header_type: Register<u8>,
+    bist: Register<u8>,
+    bar0: Register<u32>,
+    bar1: Register<u32>,
+    bar2: Register<u32>,
+    bar3: Register<u32>,
+    bar4: Register<u32>,
+    bar5: Register<u32>,
+    cardbus_cis_ptr: Register<u32>,
+    subsystem_vendor_id: Register<u16>,
+    subsystem_id: Register<u16>,
+    expansion_rom_base_addr: Register<u32>,
+    capabilites_ptr: Register<u8>,
+    interrupt_line: Register<u8>,
+    interrupt_pin: Register<u8>,
+    min_grant: Register<u8>,
+    max_latency: Register<u8>,
+}
+
+impl DeviceConfSpace {
+    fn new() -> Self {
+        DeviceConfSpace {
+            vendor_id: Register::read_only(0x00, 0),
+            device_id: Register::read_only(0x00, 16),
+            command: Register::read_write(0x04, 0),
+            status: Register::read_only(0x04, 16),
+            revision_id: Register::read_only(0x08, 0),
+            prog_if: Register::read_only(0x08, 8),
+            subclass: Register::read_only(0x08, 16),
+            class_code: Register::read_only(0x08, 24),
+            cache_line_size: Register::read_write(0x0C, 0),
+            latency_timer: Register::read_only(0x0C, 8),
+            header_type: Register::read_only(0x0C, 16),
+            bist: Register::read_only(0x0C, 24),
+            bar0: Register::read_write(0x10, 0),
+            bar1: Register::read_write(0x14, 0),
+            bar2: Register::read_write(0x18, 0),
+            bar3: Register::read_write(0x1C, 0),
+            bar4: Register::read_write(0x20, 0),
+            bar5: Register::read_write(0x24, 0),
+            cardbus_cis_ptr: Register::read_only(0x28, 0),
+            subsystem_vendor_id: Register::read_only(0x2C, 0),
+            subsystem_id: Register::read_only(0x2C, 16),
+            expansion_rom_base_addr: Register::read_only(0x30, 0),
+            capabilites_ptr: Register::read_only(0x34, 0),
+            interrupt_line: Register::read_write(0x3C, 0),
+            interrupt_pin: Register::read_write(0x3C, 8),
+            min_grant: Register::read_only(0x3C, 16),
+            max_latency: Register::read_only(0x3C, 24),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
 struct PciToPciBridgeConfSpace {
-    vendor_id: u16,
-    device_id: u16,
-    command: u16,
-    status: u16,
-    revision_id: u8,
-    prog_if: u8,
-    subclass: u8,
-    class_code: u8,
-    cache_line_size: u8,
-    latency_timer: u8,
-    header_type: u8,
-    bist: u8,
-    bar0: u32,
-    bar1: u32,
-    primary_bus_num: u8,
-    secondary_bus_num: u8,
-    subordinate_bus_num: u8,
-    secondary_latency_timer: u8,
-    io_base: u8,
-    io_limit: u8,
-    secondary_status: u16,
-    memory_base: u16,
-    memory_limit: u16,
-    prefetchable_memory_base: u16,
-    prefetchable_memory_limit: u16,
-    prefetchable_base_upper_32_bits: u32,
-    prefetchable_limit_upper_32_bits: u32,
-    io_limit_upper_16_bits: u16,
-    io_base_upper_16_bits: u16,
-    capability_ptr: u8,
-    expansion_rom_base_addr: u32,
-    interrupt_line: u8,
-    interrupt_pin: u8,
-    bridge_control: u16,
+    vendor_id: Register<u16>,
+    device_id: Register<u16>,
+    command: Register<u16>,
+    status: Register<u16>,
+    revision_id: Register<u8>,
+    prog_if: Register<u8>,
+    subclass: Register<u8>,
+    class_code: Register<u8>,
+    cache_line_size: Register<u8>,
+    latency_timer: Register<u8>,
+    header_type: Register<u8>,
+    bist: Register<u8>,
+    bar0: Register<u32>,
+    bar1: Register<u32>,
+    primary_bus_num: Register<u8>,
+    secondary_bus_num: Register<u8>,
+    subordinate_bus_num: Register<u8>,
+    secondary_latency_timer: Register<u8>,
+    io_base: Register<u8>,
+    io_limit: Register<u8>,
+    secondary_status: Register<u16>,
+    memory_base: Register<u16>,
+    memory_limit: Register<u16>,
+    prefetchable_memory_base: Register<u16>,
+    prefetchable_memory_limit: Register<u16>,
+    prefetchable_base_upper_32_bits: Register<u32>,
+    prefetchable_limit_upper_32_bits: Register<u32>,
+    io_limit_upper_16_bits: Register<u16>,
+    io_base_upper_16_bits: Register<u16>,
+    capability_ptr: Register<u8>,
+    expansion_rom_base_addr: Register<u32>,
+    interrupt_line: Register<u8>,
+    interrupt_pin: Register<u8>,
+    bridge_control: Register<u16>,
+}
+
+impl PciToPciBridgeConfSpace {
+    fn new() -> Self {
+        PciToPciBridgeConfSpace {
+            vendor_id: Register::read_only(0x00, 0),
+            device_id: Register::read_only(0x00, 16),
+            command: Register::read_only(0x04, 0),
+            status: Register::read_only(0x04, 16),
+            revision_id: Register::read_only(0x08, 0),
+            prog_if: Register::read_only(0x08, 8),
+            subclass: Register::read_only(0x08, 16),
+            class_code: Register::read_only(0x08, 24),
+            cache_line_size: Register::read_write(0x0C, 0),
+            latency_timer: Register::read_only(0x0C, 8),
+            header_type: Register::read_only(0x0C, 16),
+            bist: Register::read_only(0x0C, 24),
+            bar0: Register::read_write(0x10, 0),
+            bar1: Register::read_write(0x14, 0),
+            primary_bus_num: Register::read_only(0x18, 0),
+            secondary_bus_num: Register::read_only(0x18, 8),
+            subordinate_bus_num: Register::read_only(0x18, 16),
+            secondary_latency_timer: Register::read_only(0x18, 24),
+            io_base: Register::read_only(0x1C, 0),
+            io_limit: Register::read_only(0x1C, 8),
+            secondary_status: Register::read_only(0x1C, 16),
+            memory_base: Register::read_only(0x20, 0),
+            memory_limit: Register::read_only(0x20, 16),
+            prefetchable_memory_base: Register::read_only(0x24, 0),
+            prefetchable_memory_limit: Register::read_only(0x24, 16),
+            prefetchable_base_upper_32_bits: Register::read_only(0x28, 0),
+            prefetchable_limit_upper_32_bits: Register::read_only(0x2C, 0),
+            io_limit_upper_16_bits: Register::read_only(0x30, 0),
+            io_base_upper_16_bits: Register::read_only(0x30, 16),
+            capability_ptr: Register::read_only(0x34, 0),
+            expansion_rom_base_addr: Register::read_only(0x38, 0),
+            interrupt_line: Register::read_write(0x3C, 0),
+            interrupt_pin: Register::read_write(0x3C, 8),
+            bridge_control: Register::read_only(0x3C, 16),
+        }
+    }
 }
 
 const PORT_CONFIG_ADDRESS: u16 = 0xCF8;
@@ -515,6 +696,27 @@ pub fn init() {
     for (host_bus_num, host_bus) in unsafe { &PCI }.host_buses.iter() {
         print!("Host bus 0x{:02X} : ", host_bus_num);
         print_bus(16, host_bus);
+    }
+
+    // Initialize devices.
+    for device in unsafe { &PCI }.all_devices() {
+        for function in device.functions.iter().filter(|x| x.exists()) {
+            match &function.class {
+                DeviceClass::MassStorageController(MassStorageControllerSubclass::IdeController(IdeControllerInterface::IsaCompatibilityModeOnlyWithBusMastering)) => {
+                    if let ConfSpace::Device(conf_space) =
+                        function.conf_space.unwrap()
+                    {
+                        function.set_register(0x3C, 14);
+                        println!("interrupt line: {}", conf_space.interrupt_line.read(function));
+                        println!("interrupt pin: {}", conf_space.interrupt_pin.read(function));
+                        crate::ata::init();
+                    } else {
+                        panic!();
+                    }
+                }
+                _ => {}
+            }
+        }
     }
 }
 
@@ -550,11 +752,11 @@ fn print_bus(offset: usize, bus: &Bus) {
                             "Function {} {:04X}:{:04X} \
                              Class {:02X}:{:02X}:{:02X} {:?}",
                             function_num,
-                            cs.vendor_id,
-                            cs.device_id,
-                            cs.class_code,
-                            cs.subclass,
-                            cs.prog_if,
+                            cs.vendor_id.read(&device.functions[function_num]),
+                            cs.device_id.read(&device.functions[function_num]),
+                            cs.class_code.read(&device.functions[function_num]),
+                            cs.subclass.read(&device.functions[function_num]),
+                            cs.prog_if.read(&device.functions[function_num]),
                             device.functions[function_num].class,
                         );
                     }
