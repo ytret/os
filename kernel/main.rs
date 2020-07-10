@@ -26,6 +26,8 @@ mod bitflags;
 #[macro_use]
 mod kernel_static;
 
+pub mod port;
+
 #[macro_use]
 mod vga;
 
@@ -37,6 +39,8 @@ mod mbi;
 mod memory_region;
 
 mod scheduler;
+
+pub mod ata;
 
 use core::panic::PanicInfo;
 use memory_region::Region;

@@ -127,3 +127,25 @@ irq0_handler:
     popa
     iret
 .size irq0_handler, . - irq0_handler
+
+.global irq14_handler
+.type irq14_handler, @function
+irq14_handler:
+    cli
+    pusha
+    cld
+    call ata_irq14_handler
+    popa
+    iret
+.size irq14_handler, . - irq14_handler
+
+.global irq15_handler
+.type irq15_handler, @function
+irq15_handler:
+    cli
+    pusha
+    cld
+    call ata_irq15_handler
+    popa
+    iret
+.size irq15_handler, . - irq15_handler

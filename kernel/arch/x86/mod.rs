@@ -17,7 +17,7 @@
 mod gdt;
 pub mod interrupts;
 mod paging;
-mod pic;
+pub mod pic;
 mod pit;
 mod pmm_stack;
 pub mod port_io;
