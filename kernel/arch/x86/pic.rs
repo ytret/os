@@ -80,6 +80,7 @@ impl Pic {
 
         // Mask IRQs.
         self.mask_irqs();
+        self.set_irq_mask(self.slave_id, false);
     }
 
     fn mask_irqs(&self) {
