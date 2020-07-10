@@ -2,6 +2,7 @@
 *~
 *.iso
 *.bin
+*.img
 
 /isodir/
 /lib/

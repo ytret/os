@@ -56,8 +56,9 @@ LINKLIST := \
 
 OUTPUT := kernel.bin
 ISOFILE := kernel.iso
+HDIMG := hd.img
 
-.PHONY: all get-libs iso clean clean-all run check-fmt
+.PHONY: all get-libs iso hd clean clean-all run check-fmt
 
 all: $(OUTPUT)
 
@@ -98,6 +99,10 @@ $(ISOFILE): $(OUTPUT) grub.cfg
 	cp $(OUTPUT) $(ISODIR)/boot
 	grub-mkrescue -o $(ISOFILE) $(ISODIR)
 
+hd:
+	rm -rf hd.img
+	bximage -q -mode=create -hd=19M -imgmode=flat $(HDIMG)
+
 clean:
 	rm -rf $(ISOFILE) $(ISODIR) $(LINKLIST) $(OUTPUT)
 
@@ -105,7 +110,9 @@ clean-all: clean
 	rm -rf $(LIBDIR)
 
 run:
-	qemu-system-i386 -m 32 -cdrom $(ISOFILE)
+	qemu-system-i386 -m 32 \
+	                 -drive if=ide,index=0,media=cdrom,file=$(ISOFILE) \
+	                 -drive if=ide,index=1,media=disk,file=hd.img,format=raw
 
 check-fmt: $(SOURCES)
 	$(RUSTFMT) $(RUSTFMTFLAGS) $<

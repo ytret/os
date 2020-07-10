@@ -32,5 +32,4 @@ ARCH_OBJECTS := \
 	$(ARCHDIR)/stack_trace.o \
 	$(ARCHDIR)/gdt.o \
 	$(ARCHDIR)/interrupts.o \
-	$(ARCHDIR)/pit.o \
 	$(ARCHDIR)/scheduler.o
