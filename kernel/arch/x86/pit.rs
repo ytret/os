@@ -23,7 +23,7 @@ use crate::arch::port_io;
 use crate::scheduler;
 
 extern "C" {
-    fn irq0_handler(stack_frame: &InterruptStackFrame); // pit.rs
+    fn irq0_handler(stack_frame: &InterruptStackFrame); // interrupts.s
 }
 
 #[allow(dead_code)]
@@ -181,7 +181,7 @@ static NUM_SPAWNED: AtomicUsize = AtomicUsize::new(0);
 #[no_mangle]
 pub extern "C" fn pit_irq0_handler() {
     let period_ms = unsafe { (PIT.period() * 1.0e+3) as u32 };
-    assert!(period_ms != 0, "PIT frequency is too high");
+    assert_ne!(period_ms, 0, "PIT frequency is too high");
     COUNTER_MS.fetch_add(period_ms, Ordering::SeqCst);
 
     /*

@@ -29,7 +29,7 @@ jump_into_usermode:
     movl %esp, %ebp
 
     movl 8(%ebp), %eax          // eax = usermode code segment
-    movl 12(%ebp), %ebx          // ebx = usermode data segment
+    movl 12(%ebp), %ebx         // ebx = usermode data segment
     movl 16(%ebp), %ecx         // ecx = the address to jump to
 
     // Set RPL to 3, that is to usermode.
@@ -61,8 +61,9 @@ jump_into_usermode:
  *            3) tss: *mut TaskStateSegment
  * This function returns when the scheduler decides to run the caller's task.
  * It returns as if it wasn't ever called.
- * NOTE: the caller must disable interrupts before calling this function and
- * enable them after it returns.
+ * NOTE: one must disable interrupts before calling this function and enable
+ * them after it returns (this applies to both the current and the next task's
+ * code).
  */
 .global switch_tasks
 .type switch_tasks, @function

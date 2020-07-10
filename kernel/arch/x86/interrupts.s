@@ -116,3 +116,14 @@ common_isr_ec:
     addl $4, %esp
     iret
 .size common_isr, . - common_isr
+
+.global irq0_handler
+.type irq0_handler, @function
+irq0_handler:
+    cli
+    pusha
+    cld
+    call pit_irq0_handler
+    popa
+    iret
+.size irq0_handler, . - irq0_handler
