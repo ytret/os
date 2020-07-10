@@ -111,7 +111,7 @@ impl GlobalDescriptorTable {
 
     pub fn add_segment(&mut self, entry: Entry) -> u16 {
         let idx = self.num_segments();
-        assert!(idx != self.0.len(), "no place in the GDT for a new entry");
+        assert_ne!(idx, self.0.len(), "no place in the GDT for a new entry");
         self.0[idx] = entry;
         idx as u16 * 8
     }
@@ -140,7 +140,7 @@ impl GlobalDescriptorTable {
                 num_segments = i;
             }
         }
-        assert!(num_segments != 0, "no null entries in the end of GDT");
+        assert_ne!(num_segments, 0, "no null entries in the end of GDT");
         num_segments
     }
 }

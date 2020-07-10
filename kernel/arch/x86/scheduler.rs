@@ -14,12 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use core::mem::size_of;
+
 use crate::arch::gdt;
 use crate::arch::process::Process;
 use crate::bitflags::BitFlags;
 use crate::scheduler::SCHEDULER;
-
-use core::mem::size_of;
 
 extern "C" {
     fn jump_into_usermode(

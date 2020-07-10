@@ -14,10 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use crate::arch::port_io;
-
 use alloc::vec::Vec;
 use core::marker::PhantomData;
+
+use crate::arch::port_io;
 
 #[derive(Clone)]
 struct Pci {

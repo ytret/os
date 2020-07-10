@@ -20,7 +20,7 @@ use crate::arch::interrupts::{InterruptStackFrame, IDT};
 use crate::arch::pic::PIC;
 use crate::arch::port_io;
 
-use crate::scheduler;
+//use crate::scheduler;
 
 extern "C" {
     fn irq0_handler(stack_frame: &InterruptStackFrame); // interrupts.s

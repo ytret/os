@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use core::mem::size_of;
 use alloc::vec::Vec;
+use core::mem::size_of;
 
 use crate::arch::port_io;
 
@@ -69,7 +69,7 @@ impl PortBuilder {
                 port: port_num,
                 read_sizes: Vec::new(),
                 write_sizes: Vec::new(),
-            }
+            },
         }
     }
 

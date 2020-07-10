@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use core::mem::size_of;
+
 use crate::kernel_static::Mutex;
 
 // See interrupts.s
@@ -294,7 +296,6 @@ pub extern "C" fn common_interrupt_handler(stack_frame: &InterruptStackFrame) {
 }
 
 pub fn init() {
-    use core::mem::size_of;
     let idt_descriptor = IdtDescriptor {
         size: (size_of::<InterruptDescriptorTable>() - 1) as u16,
         offset: &*IDT as *const _ as u32,

@@ -14,9 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use crate::arch::paging;
-
 use alloc::alloc::{alloc, Layout};
+
+use crate::arch::paging;
 
 #[derive(Clone, Copy)]
 #[repr(C, packed)]
