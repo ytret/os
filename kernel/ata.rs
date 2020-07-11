@@ -129,6 +129,24 @@ impl Driver {
         buf.into_boxed_slice()
     }
 
+    fn write(&mut self, lba: u32, num_sectors: u8, data: &[u16]) {
+        unsafe {
+            (*REGISTER_SECTOR_COUNT).write(num_sectors);
+            (*REGISTER_LBA_LOW).write(lba as u8);
+            (*REGISTER_LBA_MID).write((lba >> 8) as u8);
+            (*REGISTER_LBA_HIGH).write((lba >> 16) as u8);
+            (*REGISTER_COMMAND).write(0x30u8);
+        }
+
+        self.wait_until_ready();
+
+        for &word in data {
+            unsafe {
+                (*REGISTER_DATA).write(word);
+            }
+        }
+    }
+
     fn wait_until_ready(&self) {
         unsafe {
             let mut status: u8 = (*REGISTER_STATUS).read();
@@ -188,6 +206,11 @@ pub fn init() {
         | ((ident_data[101] as u64) << 16)
         | ident_data[100] as u64;
     println!("LBA48 addressable sectors: {}", num48);
+
+    let mut data = [0u16; 256];
+    data[0] = 0x1234;
+    data[1] = 0x5678;
+    DRIVER.lock().write(1, 1, &data);
 
     let sector = DRIVER.lock().read(1, 1);
     for i in sector.iter() {
