@@ -703,15 +703,8 @@ pub fn init() {
         for function in device.functions.iter().filter(|x| x.exists()) {
             match &function.class {
                 DeviceClass::MassStorageController(MassStorageControllerSubclass::IdeController(IdeControllerInterface::IsaCompatibilityModeOnlyWithBusMastering)) => {
-                    if let ConfSpace::Device(conf_space) =
-                        function.conf_space.unwrap()
-                    {
-                        function.set_register(0x3C, 14);
-                        println!("interrupt line: {}", conf_space.interrupt_line.read(function));
-                        println!("interrupt pin: {}", conf_space.interrupt_pin.read(function));
+                    unsafe {
                         crate::ata::init();
-                    } else {
-                        panic!();
                     }
                 }
                 _ => {}
