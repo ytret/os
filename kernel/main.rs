@@ -18,6 +18,7 @@
 #![feature(alloc_error_handler)]
 #![cfg_attr(target_arch = "x86", feature(asm))]
 
+#[macro_use]
 extern crate alloc;
 
 #[macro_use]
@@ -41,6 +42,7 @@ mod memory_region;
 mod scheduler;
 
 pub mod ata;
+pub mod disk;
 
 use core::panic::PanicInfo;
 use memory_region::Region;
@@ -89,6 +91,21 @@ pub extern "C" fn main(magic_num: u32, boot_info: *const mbi::BootInfo) {
     arch::pci::init();
 
     //scheduler::init();
+
+    // let data = [0u8; 1024];
+    // data[0] = 0xAB;
+    // data[1] = 0xCD;
+    // data[2] = 0xEF;
+    // println!("{:?}", crate::disk::DISKS.lock()[0].write_sectors(0, &data));
+
+    match crate::disk::DISKS.lock()[0].read_sectors(0, 1) {
+        Ok(data) => {
+            for i in data.iter() {
+                print!("{:02X}", i);
+            }
+        }
+        Err(err) => println!("{:?}", err),
+    }
 }
 
 #[panic_handler]

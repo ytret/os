@@ -14,10 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::marker::PhantomData;
 
 use crate::arch::port_io;
+use crate::disk;
 
 #[derive(Clone)]
 struct Pci {
@@ -704,7 +706,10 @@ pub fn init() {
             match &function.class {
                 DeviceClass::MassStorageController(MassStorageControllerSubclass::IdeController(IdeControllerInterface::IsaCompatibilityModeOnlyWithBusMastering)) => {
                     unsafe {
-                        crate::ata::init();
+                        let buses = crate::ata::init();
+                        for bus in buses {
+                            disk::DISKS.lock().push(Box::new(bus));
+                        }
                     }
                 }
                 _ => {}

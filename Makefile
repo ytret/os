@@ -40,6 +40,7 @@ SOURCES := \
 	kernel/heap.rs \
 	kernel/scheduler.rs \
 	kernel/ata.rs \
+	kernel/disk.rs \
 	$(ARCH_SOURCES)
 
 OBJECTS := \
