@@ -20,7 +20,7 @@ use core::slice;
 
 use crate::arch::interrupts::{InterruptStackFrame, IDT};
 use crate::arch::pic::PIC;
-use crate::disk::{Interface, ReadErr, WriteErr};
+use crate::disk::{Disk, ReadErr, WriteErr};
 use crate::port::{Port, PortBuilder};
 
 extern "C" {
@@ -257,7 +257,7 @@ fn slice_u8_to_u16(from: &[u8]) -> &[u16] {
     }
 }
 
-impl Interface for Bus {
+impl Disk for Bus {
     fn has_sector(&self, sector_idx: usize) -> bool {
         let maybe_drive = self.selected_drive();
         match maybe_drive {

@@ -21,7 +21,7 @@ use alloc::vec::Vec;
 
 use crate::kernel_static::Mutex;
 
-pub trait Interface {
+pub trait Disk {
     fn has_sector(&self, sector_idx: usize) -> bool;
 
     fn read_sector(&self, sector_idx: usize) -> Result<Box<[u8]>, ReadErr>;
@@ -60,5 +60,5 @@ pub enum WriteErr {
 }
 
 kernel_static! {
-    pub static ref DISKS: Mutex<Vec<Box<dyn Interface>>> = Mutex::new(Vec::new());
+    pub static ref DISKS: Mutex<Vec<Box<dyn Disk>>> = Mutex::new(Vec::new());
 }
