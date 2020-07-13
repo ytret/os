@@ -41,7 +41,6 @@ mod memory_region;
 
 mod scheduler;
 
-pub mod ata;
 pub mod disk;
 
 use core::panic::PanicInfo;

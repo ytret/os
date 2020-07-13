@@ -706,7 +706,7 @@ pub fn init() {
             match &function.class {
                 DeviceClass::MassStorageController(MassStorageControllerSubclass::IdeController(IdeControllerInterface::IsaCompatibilityModeOnlyWithBusMastering)) => {
                     unsafe {
-                        let buses = crate::ata::init();
+                        let buses = disk::ata::init();
                         for bus in buses {
                             disk::DISKS.lock().push(Box::new(bus));
                         }
