@@ -21,7 +21,8 @@ use alloc::vec::Vec;
 
 use crate::kernel_static::Mutex;
 
-pub trait Disk {
+pub trait ReadWriteInterface {
+    fn sector_size(&self) -> usize;
     fn has_sector(&self, sector_idx: usize) -> bool;
 
     fn read_sector(&self, sector_idx: usize) -> Result<Box<[u8]>, ReadErr>;
@@ -49,6 +50,7 @@ pub enum ReadErr {
     NoSuchSector,
     TooMuchSectors,
     ZeroNumSectors,
+    Other(&'static str),
 }
 
 #[derive(Debug)]
@@ -57,8 +59,15 @@ pub enum WriteErr {
     NoSuchSector,
     TooMuchSectors,
     EmptyDataPassed,
+    Other(&'static str),
 }
 
+pub struct Disk {
+    pub rw_interface: Box<dyn ReadWriteInterface>,
+}
+
+impl Disk {}
+
 kernel_static! {
-    pub static ref DISKS: Mutex<Vec<Box<dyn Disk>>> = Mutex::new(Vec::new());
+    pub static ref DISKS: Mutex<Vec<Disk>> = Mutex::new(Vec::new());
 }

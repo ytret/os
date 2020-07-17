@@ -16,11 +16,12 @@
 
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use core::mem::align_of;
 use core::slice;
 
 use crate::arch::interrupts::{InterruptStackFrame, IDT};
 use crate::arch::pic::PIC;
-use crate::disk::{Disk, ReadErr, WriteErr};
+use crate::disk::{ReadErr, ReadWriteInterface, WriteErr};
 use crate::port::{Port, PortBuilder};
 
 extern "C" {
@@ -111,6 +112,7 @@ impl Bus {
                 return None;
             }
 
+            // ERR?
             if status & 1 != 0 {
                 let lba_8: u8 = self.registers.lba_8.read();
                 let lba_16: u8 = self.registers.lba_16.read();
@@ -126,6 +128,8 @@ impl Bus {
                     return None;
                 }
             }
+
+            self.wait_until_ready();
 
             let mut buf: Vec<u16> = Vec::with_capacity(256);
             for _ in 0..256 {
@@ -197,6 +201,17 @@ impl Bus {
     }
 
     fn read(&self, lba: u32, num_sectors: u8) -> Box<[u16]> {
+        let mut status = unsafe { self.registers.status.read::<u8>() };
+        if (status >> 3) & 1 != 0 {
+            println!("[ATA] Waiting for DRQ to be unset. Read from data port:");
+            while (status >> 3) & 1 != 0 {
+                let word: u16 = unsafe { self.registers.data.read() };
+                print!("{:04X} ", word);
+                status = unsafe { self.registers.status.read() };
+            }
+            println!("done");
+        }
+
         unsafe {
             self.registers.sector_count.write(num_sectors);
             self.set_lba(lba);
@@ -238,12 +253,11 @@ impl Bus {
 fn boxed_slice_u16_to_u8(from: Box<[u16]>) -> Box<[u8]> {
     unsafe {
         // FIXME: endiannes?
-        let slice_u16: &[u16] = &*Box::into_raw(from);
-        let slice_u8: &[u8] = slice::from_raw_parts(
-            slice_u16.as_ptr() as *const u8,
-            2 * slice_u16.len(),
-        );
-        Box::from_raw(slice_u8 as *const _ as *mut [u8]) // same box
+        let slice_u16_len = from.len();
+        let raw_u16: *mut u16 = Box::into_raw(from).cast();
+        let slice_u8: &mut [u8] =
+            slice::from_raw_parts_mut(raw_u16 as *mut u8, 2 * slice_u16_len);
+        Box::from_raw(slice_u8 as *mut [u8]) // same box
     }
 }
 
@@ -253,11 +267,17 @@ fn slice_u8_to_u16(from: &[u8]) -> &[u16] {
     unsafe {
         // FIXME: endiannes?
         let raw_u8: *const u8 = from.as_ptr();
+        assert_eq!(raw_u8 as usize, align_of::<&[u16]>(), "alignment error");
         slice::from_raw_parts(raw_u8 as *const u16, from.len() / 2)
     }
 }
 
-impl Disk for Bus {
+impl ReadWriteInterface for Bus {
+    fn sector_size(&self) -> usize {
+        // If changing, see also the argument `data` of fn self.write_sector().
+        512
+    }
+
     fn has_sector(&self, sector_idx: usize) -> bool {
         let maybe_drive = self.selected_drive();
         match maybe_drive {
@@ -277,7 +297,14 @@ impl Disk for Bus {
                     Err(ReadErr::NoSuchSector)
                 } else {
                     let data = self.read(sector_idx as u32, 1);
-                    Ok(boxed_slice_u16_to_u8(data))
+                    if sector_idx == 4 {
+                        for i in 0..data.len() / 2 {
+                            print!("{:04X} ", data[i]);
+                        }
+                    }
+                    let boxed = boxed_slice_u16_to_u8(data);
+                    // Ok(boxed_slice_u16_to_u8(data))
+                    Ok(boxed)
                 }
             }
             None => Err(ReadErr::DiskUnavailable),
@@ -318,7 +345,6 @@ impl Disk for Bus {
         sector_idx: usize,
         data: [u8; 512],
     ) -> Result<(), WriteErr> {
-        // FIXME: OS-specific sector size is 512?
         let maybe_drive = self.selected_drive();
         match maybe_drive {
             Some(_) => {
@@ -343,9 +369,8 @@ impl Disk for Bus {
             return Err(WriteErr::EmptyDataPassed);
         }
 
-        // FIXME: OS-specific sector size is 512?
-        assert_eq!(data.len() % 512, 0, "invalid data size");
-        let num_sectors = data.len() / 512;
+        assert_eq!(data.len() % self.sector_size(), 0, "invalid data size");
+        let num_sectors = data.len() / self.sector_size();
 
         let maybe_drive = self.selected_drive();
         match maybe_drive {

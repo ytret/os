@@ -708,7 +708,10 @@ pub fn init() {
                     unsafe {
                         let buses = disk::ata::init();
                         for bus in buses {
-                            disk::DISKS.lock().push(Box::new(bus));
+                            let disk = disk::Disk {
+                                rw_interface: Box::new(bus),
+                            };
+                            disk::DISKS.lock().push(disk);
                         }
                     }
                 }
