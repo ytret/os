@@ -710,6 +710,7 @@ pub fn init() {
                         for bus in buses {
                             let disk = disk::Disk {
                                 rw_interface: Box::new(bus),
+                                file_system: None,
                             };
                             disk::DISKS.lock().push(disk);
                         }

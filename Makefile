@@ -41,6 +41,8 @@ SOURCES := \
 	kernel/scheduler.rs \
 	kernel/disk/mod.rs \
 	kernel/disk/ata.rs \
+	kernel/fs/mod.rs \
+	kernel/fs/ext2.rs \
 	$(ARCH_SOURCES)
 
 OBJECTS := \

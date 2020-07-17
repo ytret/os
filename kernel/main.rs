@@ -43,6 +43,8 @@ mod scheduler;
 
 pub mod disk;
 
+pub mod fs;
+
 use core::panic::PanicInfo;
 use memory_region::Region;
 
@@ -91,19 +93,27 @@ pub extern "C" fn main(magic_num: u32, boot_info: *const mbi::BootInfo) {
 
     //scheduler::init();
 
-    // let data = [0u8; 1024];
-    // data[0] = 0xAB;
-    // data[1] = 0xCD;
-    // data[2] = 0xEF;
-    // println!("{:?}", crate::disk::DISKS.lock()[0].write_sectors(0, &data));
-
-    match crate::disk::DISKS.lock()[0].read_sectors(0, 1) {
-        Ok(data) => {
-            for i in data.iter() {
-                print!("{:02X}", i);
-            }
+    use alloc::boxed::Box;
+    let disk = &mut disk::DISKS.lock()[0];
+    let superblock: Box<[u8]> = disk.rw_interface.read_sectors(2, 2).unwrap();
+    let bgd_tbl: Box<[u8]> = disk.rw_interface.read_sector(4).unwrap();
+    // FIXME: The BGD Table is not always at ext2-block 2.
+    // 0: 0-511
+    // 1: 512-1023
+    // 2: 1024-1535
+    // 3: 1536-2047
+    // 4: 2048-2559
+    // 5: 2560-3071
+    // 6: 3072-3583
+    disk.file_system = Some(Box::new(unsafe {
+        fs::ext2::Ext2::from_raw(&superblock, &bgd_tbl)
+    }));
+    match &disk.file_system {
+        Some(fs) => {
+            let root_dir = fs.root_dir(&disk.rw_interface);
+            println!("{:#?}", root_dir);
         }
-        Err(err) => println!("{:?}", err),
+        None => panic!(),
     }
 }
 
