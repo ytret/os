@@ -120,7 +120,7 @@ struct ExtendedSuperblock {
 
 #[allow(dead_code)]
 #[derive(Clone, Copy, Debug)]
-#[repr(C, packed(32))]
+#[repr(C, packed)]
 struct BlockGroupDescriptor {
     block_usage_bitmap_block_addr: u32,
     inode_usage_bitmap_block_addr: u32,
@@ -303,7 +303,8 @@ impl Ext2 {
                         / superblock.block_group_num_blocks as f64,
                 );
                 for i in 0..num_block_groups {
-                    let raw_bgd = raw_bgd_tbl.add(i);
+                    let raw_bgd = (raw_bgd_tbl as usize + i * 32)
+                        as *const BlockGroupDescriptor;
                     bgd_table.push((*raw_bgd).clone());
                 }
                 bgd_table
