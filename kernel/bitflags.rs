@@ -15,13 +15,18 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use core::marker::PhantomData;
-use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign};
+use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not};
 
 #[derive(Clone, Copy)]
 pub struct BitFlags<T, E>
 where
-    T: BitOrAssign + BitAndAssign,
-    E: Into<T>,
+    T: BitOrAssign
+        + BitAndAssign
+        + BitAnd<T, Output = T>
+        + Not<Output = T>
+        + PartialEq
+        + Copy,
+    E: Into<T> + Copy,
 {
     pub value: T,
     phantom: PhantomData<E>,
@@ -29,8 +34,13 @@ where
 
 impl<T, E> BitFlags<T, E>
 where
-    T: BitOrAssign + BitAndAssign,
-    E: Into<T>,
+    T: BitOrAssign
+        + BitAndAssign
+        + BitAnd<T, Output = T>
+        + Not<Output = T>
+        + PartialEq
+        + Copy,
+    E: Into<T> + Copy,
 {
     pub fn new(value: T) -> Self {
         Self {
@@ -42,12 +52,25 @@ where
     pub fn set_flag(&mut self, flag: E) {
         self.value |= flag.into();
     }
+
+    pub fn unset_flag(&mut self, flag: E) {
+        self.value &= !flag.into();
+    }
+
+    pub fn has_set(&self, flag: E) -> bool {
+        (self & flag) == flag.into()
+    }
 }
 
 impl<T, E> BitOr<E> for BitFlags<T, E>
 where
-    T: BitOrAssign + BitAndAssign,
-    E: Into<T>,
+    T: BitOrAssign
+        + BitAndAssign
+        + BitAnd<T, Output = T>
+        + Not<Output = T>
+        + PartialEq
+        + Copy,
+    E: Into<T> + Copy,
 {
     type Output = BitFlags<T, E>;
     fn bitor(self, rhs: E) -> Self::Output {
@@ -57,16 +80,19 @@ where
     }
 }
 
-impl<T, E> BitAnd<E> for BitFlags<T, E>
+impl<T, E> BitAnd<E> for &BitFlags<T, E>
 where
-    T: BitOrAssign + BitAndAssign,
-    E: Into<T>,
+    T: BitOrAssign
+        + BitAndAssign
+        + BitAnd<T, Output = T>
+        + Not<Output = T>
+        + PartialEq
+        + Copy,
+    E: Into<T> + Copy,
 {
-    type Output = BitFlags<T, E>;
+    type Output = T;
     fn bitand(self, rhs: E) -> Self::Output {
-        let mut res = self;
-        res.value &= rhs.into();
-        res
+        self.value & rhs.into()
     }
 }
 

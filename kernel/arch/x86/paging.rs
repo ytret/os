@@ -59,9 +59,9 @@ entry_flags! {
 
 #[derive(Clone, Copy)]
 #[repr(transparent)]
-pub struct Entry<F: Into<u32>>(BitFlags<u32, F>);
+pub struct Entry<F: Into<u32> + Copy>(BitFlags<u32, F>);
 
-impl<F: Into<u32>> Entry<F> {
+impl<F: Into<u32> + Copy> Entry<F> {
     fn new(addr: u32) -> Self {
         assert_eq!(addr & 0xFFF, 0, "addr must be page-aligned");
         Entry(BitFlags::new(addr))
@@ -188,7 +188,7 @@ pub fn map_page(virt: u32, phys: u32) {
 
     // If there's no such page dir entry, we allocate a physical page to store
     // the page table there.
-    if (kpd.0[kpd_idx].0 & DirectoryEntryFlags::Present).value == 0 {
+    if !kpd.0[kpd_idx].0.has_set(DirectoryEntryFlags::Present) {
         if kpd.0[kpd_idx].0.value != 0 {
             unimplemented!("KPD entry is not present, but also not empty");
         }
