@@ -15,12 +15,12 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use core::marker::PhantomData;
-use core::ops::{BitAnd, BitOr, BitOrAssign};
+use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign};
 
 #[derive(Clone, Copy)]
 pub struct BitFlags<T, E>
 where
-    T: BitOrAssign + BitAnd<Output = T>,
+    T: BitOrAssign + BitAndAssign,
     E: Into<T>,
 {
     pub value: T,
@@ -29,7 +29,7 @@ where
 
 impl<T, E> BitFlags<T, E>
 where
-    T: BitOrAssign + BitAnd<Output = T>,
+    T: BitOrAssign + BitAndAssign,
     E: Into<T>,
 {
     pub fn new(value: T) -> Self {
@@ -46,7 +46,7 @@ where
 
 impl<T, E> BitOr<E> for BitFlags<T, E>
 where
-    T: BitOrAssign + BitAnd<Output = T>,
+    T: BitOrAssign + BitAndAssign,
     E: Into<T>,
 {
     type Output = BitFlags<T, E>;
@@ -59,13 +59,13 @@ where
 
 impl<T, E> BitAnd<E> for BitFlags<T, E>
 where
-    T: BitOrAssign + BitAnd<Output = T>,
+    T: BitOrAssign + BitAndAssign,
     E: Into<T>,
 {
     type Output = BitFlags<T, E>;
     fn bitand(self, rhs: E) -> Self::Output {
         let mut res = self;
-        res.value = res.value & rhs.into();
+        res.value &= rhs.into();
         res
     }
 }
