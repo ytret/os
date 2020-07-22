@@ -21,6 +21,7 @@ use core::mem::{align_of, size_of};
 use core::slice;
 
 use super::{DirEntryContent, Directory, FileSystem};
+use crate::bitflags::BitFlags;
 use crate::disk::{ReadErr, ReadWriteInterface};
 
 #[allow(dead_code)]
@@ -113,6 +114,16 @@ struct ExtendedSuperblock {
 // const REQUIRED_FEATURE_DIRS_WITH_TYPE: u32 = 0x02;
 // const REQUIRED_FEATURE_FS_NEEDS_TO_REPLAY_JOURNAL: u32 = 0x04;
 // const REQUIRED_FEATURE_FS_USES_JOURNAL_DEVICE: u32 = 0x08;
+
+bitflags! {
+    #[repr(u32)]
+    enum RequiredFeature {
+        Compression = 0x01,
+        DirsWithType = 0x02,
+        FsNeedsToReplayJournal = 0x04,
+        FsUsesJournalDevice = 0x08,
+    }
+}
 
 // const FEATURE_OR_READ_ONLY_SPARSE: u32 = 0x01;
 // const FEATURE_OR_READ_ONLY_64BIT_FILE_SIZE: u32 = 0x02;
@@ -239,17 +250,20 @@ struct DirEntry {
     name: [u8; 0],
 }
 
-// const DIR_ENTRY_TYPE_UNKNOWN: u16 = 0;
-// const DIR_ENTRY_TYPE_REGULAR_FILE: u16 = 1;
-// const DIR_ENTRY_TYPE_DIR: u16 = 2;
-// const DIR_ENTRY_TYPE_CHAR_DEVICE: u16 = 3;
-// const DIR_ENTRY_TYPE_BLOCK_DEVICE: u16 = 4;
-// const DIR_ENTRY_TYPE_FIFO: u16 = 5;
-// const DIR_ENTRY_TYPE_SOCKET: u16 = 6;
-// const DIR_ENTRY_TYPE_SYMBOLIC_LINK: u16 = 7;
+// const DIR_ENTRY_TYPE_UNKNOWN: u8 = 0;
+const DIR_ENTRY_TYPE_REGULAR_FILE: u8 = 1;
+const DIR_ENTRY_TYPE_DIR: u8 = 2;
+// const DIR_ENTRY_TYPE_CHAR_DEVICE: u8 = 3;
+// const DIR_ENTRY_TYPE_BLOCK_DEVICE: u8 = 4;
+// const DIR_ENTRY_TYPE_FIFO: u8 = 5;
+// const DIR_ENTRY_TYPE_SOCKET: u8 = 6;
+// const DIR_ENTRY_TYPE_SYMBOLIC_LINK: u8 = 7;
 
 pub struct Ext2 {
     version: (u32, u16), // major, minor
+    //optional_features: BitFlags<u32, OptionalFeature>,
+    required_features: BitFlags<u32, RequiredFeature>,
+
     total_num_blocks: u32,
     block_size: usize,
     inode_size: u16,
@@ -279,10 +293,63 @@ impl Ext2 {
             "invalid raw block group descriptor table size",
         );
         let superblock = &*(raw_superblock.as_ptr() as *const Superblock);
+        let extended_superblock = {
+            if superblock.version_major >= 1 {
+                let mut ptr = raw_superblock.as_ptr() as usize;
+                ptr += size_of::<Superblock>();
+                Some(&*(ptr as *const ExtendedSuperblock))
+            } else {
+                None
+            }
+        };
         let raw_bgd_tbl =
             raw_block_group_descriptor.as_ptr() as *const BlockGroupDescriptor;
         Ext2 {
             version: (superblock.version_major, superblock.version_minor),
+            required_features: {
+                if superblock.version_major >= 1 {
+                    let rf = BitFlags::new(
+                        extended_superblock.unwrap().required_features,
+                    );
+                    let mut rf_copy = rf;
+
+                    if rf_copy.has_set(RequiredFeature::DirsWithType) {
+                        rf_copy.unset_flag(RequiredFeature::DirsWithType);
+                    }
+
+                    // FIXME: return error instead of panic
+                    if rf_copy.has_set(RequiredFeature::Compression) {
+                        panic!(
+                            "Required feature Compression is not \
+                             supported.",
+                        );
+                    }
+                    if rf_copy.has_set(RequiredFeature::FsNeedsToReplayJournal)
+                    {
+                        panic!(
+                            "Required feature FsNeedsToReplayJournal is not \
+                             supported.",
+                        );
+                    }
+                    if rf_copy.has_set(RequiredFeature::FsUsesJournalDevice) {
+                        panic!(
+                            "Required feature FsUsesJournalDevice is not \
+                             supported.",
+                        );
+                    }
+
+                    if rf_copy.value != 0 {
+                        panic!(
+                            "Required features 0x{:X} are not supported",
+                            rf.value,
+                        );
+                    }
+                    rf
+                } else {
+                    BitFlags::new(0)
+                }
+            },
+
             total_num_blocks: superblock.total_num_blocks,
             block_size: 1024 * 2usize.pow(superblock.log_block_size_minus_10),
             inode_size: {
@@ -438,30 +505,54 @@ impl FileSystem for Ext2 {
                     // stored close to each other?
                     let entry = unsafe { &*raw_entry };
                     let inode_idx = entry.inode;
-                    let inode = match self.read_inode(inode_idx, rw_interface) {
-                        Ok(inode) => inode,
-                        Err(err) => return Err(err),
+                    let mut name_len = entry.name_len_0_7 as usize;
+
+                    let _type = {
+                        if self
+                            .required_features
+                            .has_set(RequiredFeature::DirsWithType)
+                        {
+                            match entry.type_or_name_len_8_16 {
+                                DIR_ENTRY_TYPE_REGULAR_FILE => {
+                                    DirEntryContent::RegularFile
+                                }
+                                DIR_ENTRY_TYPE_DIR => {
+                                    DirEntryContent::Directory
+                                }
+                                _ => DirEntryContent::Unknown,
+                            }
+                        } else {
+                            name_len |=
+                                (entry.type_or_name_len_8_16 as usize) << 8;
+                            let inode = match self
+                                .read_inode(inode_idx, rw_interface)
+                            {
+                                Ok(inode) => inode,
+                                Err(err) => return Err(err),
+                            };
+                            match inode._type() {
+                                InodeType::RegularFile => {
+                                    DirEntryContent::RegularFile
+                                }
+                                InodeType::Dir => DirEntryContent::Directory,
+                                _ => DirEntryContent::Unknown,
+                            }
+                        }
                     };
+
                     dir.entries.push(super::DirEntry {
                         id: inode_idx as usize,
                         name: {
                             let s = unsafe {
                                 slice::from_raw_parts(
                                     &entry.name as *const u8,
-                                    // FIXME: REQUIRED_FEATURE_DIRS_WITH_TYPE
-                                    entry.name_len_0_7 as usize,
+                                    name_len,
                                 )
                             };
                             // FIXME: return Err on failure
                             String::from_utf8(s.to_vec()).unwrap()
                         },
-                        content: match inode._type() {
-                            InodeType::RegularFile => {
-                                DirEntryContent::RegularFile
-                            }
-                            InodeType::Dir => DirEntryContent::Directory,
-                            _ => DirEntryContent::Unknown,
-                        },
+                        content: _type,
                     });
                 }
 
