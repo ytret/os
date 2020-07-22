@@ -48,4 +48,10 @@ pub trait FileSystem {
         &self,
         rw_interface: &Box<dyn ReadWriteInterface>,
     ) -> Result<Directory, ReadErr>;
+
+    fn read_dir(
+        &self,
+        id: usize,
+        rw_interface: &Box<dyn ReadWriteInterface>,
+    ) -> Result<Directory, ReadErr>;
 }

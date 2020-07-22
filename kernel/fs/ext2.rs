@@ -402,24 +402,33 @@ impl FileSystem for Ext2 {
         &self,
         rw_interface: &Box<dyn ReadWriteInterface>,
     ) -> Result<Directory, ReadErr> {
-        match self.read_inode(2, rw_interface) {
-            Ok(root_inode) => {
-                let mut root_dir = Directory {
-                    id: 2,
-                    name: String::from("/"),
+        self.read_dir(2, rw_interface)
+    }
+
+    fn read_dir(
+        &self,
+        id: usize,
+        rw_interface: &Box<dyn ReadWriteInterface>,
+    ) -> Result<Directory, ReadErr> {
+        assert_ne!(id as u32, 0, "invalid id");
+        match self.read_inode(id as u32, rw_interface) {
+            Ok(dir_inode) => {
+                let mut dir = Directory {
+                    id,
+                    name: String::new(),
                     entries: Vec::new(),
                 };
 
                 // Traverse the directory.
                 let dbp0 = {
-                    let block_num = root_inode.direct_block_ptr_0 as usize;
+                    let block_num = dir_inode.direct_block_ptr_0 as usize;
                     match self.read_block(block_num, rw_interface) {
                         Ok(block_data) => block_data,
                         Err(err) => return Err(err),
                     }
                 };
                 let first_entry = dbp0.as_ptr() as *const DirEntry;
-                let total_size = self.inode_size(&root_inode);
+                let total_size = self.inode_size(&dir_inode);
                 if total_size > self.block_size {
                     unimplemented!();
                 }
@@ -433,7 +442,7 @@ impl FileSystem for Ext2 {
                         Ok(inode) => inode,
                         Err(err) => return Err(err),
                     };
-                    root_dir.entries.push(super::DirEntry {
+                    dir.entries.push(super::DirEntry {
                         id: inode_idx as usize,
                         name: {
                             let s = unsafe {
@@ -456,7 +465,33 @@ impl FileSystem for Ext2 {
                     });
                 }
 
-                Ok(root_dir)
+                // Obtain the directory name.
+                // FIXME: is ".." always the first dir entry?
+                if dir.entries[0].name != ".." {
+                    unimplemented!();
+                } else if id == 2 {
+                    dir.name = String::from("/");
+                } else {
+                    let parent_dir_id = dir.entries[0].id;
+                    // FIXME: no unwrap
+                    let parent_dir =
+                        self.read_dir(parent_dir_id, rw_interface).unwrap();
+                    let mut found_self = false;
+                    for entry in parent_dir.entries {
+                        println!("id {}, entry id {}", id, entry.id);
+                        if entry.id == id {
+                            dir.name = entry.name;
+                            found_self = true;
+                            break;
+                        }
+                    }
+                    if !found_self {
+                        // unreachable? see fixme above
+                        unimplemented!();
+                    }
+                }
+
+                Ok(dir)
             }
             Err(err) => Err(err),
         }
