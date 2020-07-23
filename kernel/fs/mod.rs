@@ -17,7 +17,7 @@
 pub mod ext2;
 
 use alloc::boxed::Box;
-use alloc::string::String;
+use alloc::string::{FromUtf8Error, String};
 use alloc::vec::Vec;
 
 use crate::disk::{ReadErr, ReadWriteInterface};
@@ -43,15 +43,33 @@ enum DirEntryContent {
     Directory,
 }
 
+#[derive(Debug)]
+pub enum ReadDirErr {
+    DiskErr(ReadErr),
+    InvalidName(FromUtf8Error),
+}
+
+impl From<ReadErr> for ReadDirErr {
+    fn from(err: ReadErr) -> Self {
+        ReadDirErr::DiskErr(err)
+    }
+}
+
+impl From<FromUtf8Error> for ReadDirErr {
+    fn from(err: FromUtf8Error) -> Self {
+        ReadDirErr::InvalidName(err)
+    }
+}
+
 pub trait FileSystem {
     fn root_dir(
         &self,
         rw_interface: &Box<dyn ReadWriteInterface>,
-    ) -> Result<Directory, ReadErr>;
+    ) -> Result<Directory, ReadDirErr>;
 
     fn read_dir(
         &self,
         id: usize,
         rw_interface: &Box<dyn ReadWriteInterface>,
-    ) -> Result<Directory, ReadErr>;
+    ) -> Result<Directory, ReadDirErr>;
 }

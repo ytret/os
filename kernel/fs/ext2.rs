@@ -20,7 +20,7 @@ use alloc::vec::Vec;
 use core::mem::{align_of, size_of};
 use core::slice;
 
-use super::{DirEntryContent, Directory, FileSystem};
+use super::{DirEntryContent, Directory, FileSystem, ReadDirErr};
 use crate::bitflags::BitFlags;
 use crate::disk::{ReadErr, ReadWriteInterface};
 
@@ -421,7 +421,7 @@ impl Ext2 {
 
         let inode_addr = abs_block_with_inode * block_size
             + (idx_in_group * inode_size) % block_size;
-        // FIXME: inode_addr should be u64
+        // FIXME: inode_addr should be u64?
         inode_addr as usize
     }
 
@@ -468,7 +468,7 @@ impl FileSystem for Ext2 {
     fn root_dir(
         &self,
         rw_interface: &Box<dyn ReadWriteInterface>,
-    ) -> Result<Directory, ReadErr> {
+    ) -> Result<Directory, ReadDirErr> {
         self.read_dir(2, rw_interface)
     }
 
@@ -476,116 +476,88 @@ impl FileSystem for Ext2 {
         &self,
         id: usize,
         rw_interface: &Box<dyn ReadWriteInterface>,
-    ) -> Result<Directory, ReadErr> {
+    ) -> Result<Directory, ReadDirErr> {
         assert_ne!(id as u32, 0, "invalid id");
-        match self.read_inode(id as u32, rw_interface) {
-            Ok(dir_inode) => {
-                let mut dir = Directory {
-                    id,
-                    name: String::new(),
-                    entries: Vec::new(),
-                };
+        let dir_inode = self.read_inode(id as u32, rw_interface)?;
+        let mut dir = Directory {
+            id,
+            name: String::new(),
+            entries: Vec::new(),
+        };
 
-                // Traverse the directory.
-                let dbp0 = {
-                    let block_num = dir_inode.direct_block_ptr_0 as usize;
-                    match self.read_block(block_num, rw_interface) {
-                        Ok(block_data) => block_data,
-                        Err(err) => return Err(err),
-                    }
-                };
-                let first_entry = dbp0.as_ptr() as *const DirEntry;
-                let total_size = self.inode_size(&dir_inode);
-                if total_size > self.block_size {
-                    unimplemented!();
-                }
-
-                for raw_entry in self.iter_dir(first_entry, total_size) {
-                    // TODO: read all inodes together in a hope that they are
-                    // stored close to each other?
-                    let entry = unsafe { &*raw_entry };
-                    let inode_idx = entry.inode;
-                    let mut name_len = entry.name_len_0_7 as usize;
-
-                    let _type = {
-                        if self
-                            .required_features
-                            .has_set(RequiredFeature::DirsWithType)
-                        {
-                            match entry.type_or_name_len_8_16 {
-                                DIR_ENTRY_TYPE_REGULAR_FILE => {
-                                    DirEntryContent::RegularFile
-                                }
-                                DIR_ENTRY_TYPE_DIR => {
-                                    DirEntryContent::Directory
-                                }
-                                _ => DirEntryContent::Unknown,
-                            }
-                        } else {
-                            name_len |=
-                                (entry.type_or_name_len_8_16 as usize) << 8;
-                            let inode = match self
-                                .read_inode(inode_idx, rw_interface)
-                            {
-                                Ok(inode) => inode,
-                                Err(err) => return Err(err),
-                            };
-                            match inode._type() {
-                                InodeType::RegularFile => {
-                                    DirEntryContent::RegularFile
-                                }
-                                InodeType::Dir => DirEntryContent::Directory,
-                                _ => DirEntryContent::Unknown,
-                            }
-                        }
-                    };
-
-                    dir.entries.push(super::DirEntry {
-                        id: inode_idx as usize,
-                        name: {
-                            let s = unsafe {
-                                slice::from_raw_parts(
-                                    &entry.name as *const u8,
-                                    name_len,
-                                )
-                            };
-                            // FIXME: return Err on failure
-                            String::from_utf8(s.to_vec()).unwrap()
-                        },
-                        content: _type,
-                    });
-                }
-
-                // Obtain the directory name.
-                // FIXME: is ".." always the first dir entry?
-                if dir.entries[0].name != ".." {
-                    unimplemented!();
-                } else if id == 2 {
-                    dir.name = String::from("/");
-                } else {
-                    let parent_dir_id = dir.entries[0].id;
-                    // FIXME: no unwrap
-                    let parent_dir =
-                        self.read_dir(parent_dir_id, rw_interface).unwrap();
-                    let mut found_self = false;
-                    for entry in parent_dir.entries {
-                        println!("id {}, entry id {}", id, entry.id);
-                        if entry.id == id {
-                            dir.name = entry.name;
-                            found_self = true;
-                            break;
-                        }
-                    }
-                    if !found_self {
-                        // unreachable? see fixme above
-                        unimplemented!();
-                    }
-                }
-
-                Ok(dir)
-            }
-            Err(err) => Err(err),
+        // Traverse the directory.
+        let dbp0 = self
+            .read_block(dir_inode.direct_block_ptr_0 as usize, rw_interface)?;
+        let first_entry = dbp0.as_ptr() as *const DirEntry;
+        let total_size = self.inode_size(&dir_inode);
+        if total_size > self.block_size {
+            unimplemented!();
         }
+
+        for raw_entry in self.iter_dir(first_entry, total_size) {
+            // TODO: read all inodes together in a hope that they are
+            // stored close to each other?
+            let entry = unsafe { &*raw_entry };
+            let inode_idx = entry.inode;
+            let mut name_len = entry.name_len_0_7 as usize;
+
+            let _type = {
+                if self
+                    .required_features
+                    .has_set(RequiredFeature::DirsWithType)
+                {
+                    match entry.type_or_name_len_8_16 {
+                        DIR_ENTRY_TYPE_REGULAR_FILE => {
+                            DirEntryContent::RegularFile
+                        }
+                        DIR_ENTRY_TYPE_DIR => DirEntryContent::Directory,
+                        _ => DirEntryContent::Unknown,
+                    }
+                } else {
+                    name_len |= (entry.type_or_name_len_8_16 as usize) << 8;
+                    let inode = self.read_inode(inode_idx, rw_interface)?;
+                    match inode._type() {
+                        InodeType::RegularFile => DirEntryContent::RegularFile,
+                        InodeType::Dir => DirEntryContent::Directory,
+                        _ => DirEntryContent::Unknown,
+                    }
+                }
+            };
+
+            dir.entries.push(super::DirEntry {
+                id: inode_idx as usize,
+                name: {
+                    let s = unsafe {
+                        slice::from_raw_parts(
+                            &entry.name as *const u8,
+                            name_len,
+                        )
+                    };
+                    String::from_utf8(s.to_vec())?
+                },
+                content: _type,
+            });
+        }
+
+        // Obtain the directory name.
+        // FIXME: is ".." always the first dir entry?
+        if dir.entries[0].name != ".." {
+            unimplemented!();
+        } else if id == 2 {
+            dir.name = String::from("/");
+        } else {
+            let parent_dir_id = dir.entries[0].id;
+            let parent_dir = self.read_dir(parent_dir_id, rw_interface)?;
+            match parent_dir.entries.iter().find(|&e| e.id == id) {
+                Some(itself) => dir.name = itself.name.clone(),
+                None => {
+                    // unreachable? see fixme above
+                    unimplemented!();
+                }
+            }
+        }
+
+        Ok(dir)
     }
 }
 
