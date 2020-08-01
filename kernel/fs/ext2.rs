@@ -18,9 +18,10 @@ use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::mem::{align_of, size_of};
+use core::ops::Range;
 use core::slice;
 
-use super::{DirEntryContent, Directory, FileSystem, ReadDirErr};
+use super::{DirEntryContent, Directory, FileSystem, ReadDirErr, ReadFileErr};
 use crate::bitflags::BitFlags;
 use crate::disk::{ReadErr, ReadWriteInterface};
 
@@ -54,7 +55,7 @@ struct Superblock {
     group_id_can_use_reserved_blocks: u16,
 }
 
-// const EXT2_SIGNATURE: u16 = 0xEF53;
+const EXT2_SIGNATURE: u16 = 0xEF53;
 
 #[allow(dead_code)]
 #[repr(u16)]
@@ -293,6 +294,11 @@ impl Ext2 {
             "invalid raw block group descriptor table size",
         );
         let superblock = &*(raw_superblock.as_ptr() as *const Superblock);
+        assert_eq!(
+            superblock.ext2_signature, EXT2_SIGNATURE,
+            "not ext2: invalid signature",
+        );
+
         let extended_superblock = {
             if superblock.version_major >= 1 {
                 let mut ptr = raw_superblock.as_ptr() as usize;
@@ -311,34 +317,36 @@ impl Ext2 {
                     let rf = BitFlags::new(
                         extended_superblock.unwrap().required_features,
                     );
-                    let mut rf_copy = rf;
+                    let mut absent = rf;
 
-                    if rf_copy.has_set(RequiredFeature::DirsWithType) {
-                        rf_copy.unset_flag(RequiredFeature::DirsWithType);
+                    // Supported features.
+                    if absent.has_set(RequiredFeature::DirsWithType) {
+                        absent.unset_flag(RequiredFeature::DirsWithType);
                     }
 
+                    // Unsupported features.
                     // FIXME: return error instead of panic
-                    if rf_copy.has_set(RequiredFeature::Compression) {
+                    if absent.has_set(RequiredFeature::Compression) {
                         panic!(
                             "Required feature Compression is not \
                              supported.",
                         );
                     }
-                    if rf_copy.has_set(RequiredFeature::FsNeedsToReplayJournal)
-                    {
+                    if absent.has_set(RequiredFeature::FsNeedsToReplayJournal) {
                         panic!(
                             "Required feature FsNeedsToReplayJournal is not \
                              supported.",
                         );
                     }
-                    if rf_copy.has_set(RequiredFeature::FsUsesJournalDevice) {
+                    if absent.has_set(RequiredFeature::FsUsesJournalDevice) {
                         panic!(
                             "Required feature FsUsesJournalDevice is not \
                              supported.",
                         );
                     }
 
-                    if rf_copy.value != 0 {
+                    // Any unsupported features?
+                    if absent.value != 0 {
                         panic!(
                             "Required features 0x{:X} are not supported",
                             rf.value,
@@ -377,30 +385,6 @@ impl Ext2 {
                 bgd_table
             },
         }
-    }
-
-    fn read_block(
-        &self,
-        block_num: usize,
-        rw_interface: &Box<dyn ReadWriteInterface>,
-    ) -> Result<Box<[u8]>, ReadErr> {
-        if block_num >= self.total_num_blocks as usize {
-            return Err(ReadErr::Other("invalid block num"));
-        }
-        let addr = block_num * self.block_size;
-        assert_eq!(
-            addr % rw_interface.sector_size(),
-            0,
-            "cannot convert block address to sector idx",
-        );
-        let sector_idx = addr / rw_interface.sector_size();
-        assert_eq!(
-            self.block_size % rw_interface.sector_size(),
-            0,
-            "cannot convert block size to num of sectors",
-        );
-        let num_sectors = self.block_size / rw_interface.sector_size();
-        rw_interface.read_sectors(sector_idx, num_sectors)
     }
 
     fn inode_addr(&self, inode_idx: u32) -> usize {
@@ -451,6 +435,102 @@ impl Ext2 {
         inode.size as usize
     }
 
+    fn read_inode_block(
+        &self,
+        inode: &Inode,
+        index: usize,
+        rw_interface: &Box<dyn ReadWriteInterface>,
+    ) -> Result<Box<[u8]>, ReadInodeBlockErr> {
+        let sibs_range = Range {
+            start: 12,
+            end: 12 + self.block_size / 4,
+        };
+        let dibs_range = Range {
+            start: sibs_range.end,
+            end: sibs_range.end + sibs_range.len() * self.block_size / 4,
+        };
+        let tibs_range = Range {
+            start: dibs_range.end,
+            end: dibs_range.end + dibs_range.len() * self.block_size / 4,
+        };
+
+        let block_num = if index < 12 {
+            [
+                inode.direct_block_ptr_0,
+                inode.direct_block_ptr_1,
+                inode.direct_block_ptr_2,
+                inode.direct_block_ptr_3,
+                inode.direct_block_ptr_4,
+                inode.direct_block_ptr_5,
+                inode.direct_block_ptr_6,
+                inode.direct_block_ptr_7,
+                inode.direct_block_ptr_8,
+                inode.direct_block_ptr_9,
+                inode.direct_block_ptr_10,
+                inode.direct_block_ptr_11,
+            ][index] as usize
+        } else if sibs_range.contains(&index) {
+            // FIXME block numbers are always 32-bit
+            assert_ne!(inode.singly_indirect_block_ptr, 0);
+            let idx_in_sibs = index - sibs_range.start;
+            self.read_block_entry(
+                inode.singly_indirect_block_ptr as usize,
+                idx_in_sibs,
+                rw_interface,
+            )?
+        } else if dibs_range.contains(&index) {
+            unimplemented!();
+        } else if tibs_range.contains(&index) {
+            unimplemented!();
+        } else {
+            panic!("Too big index.");
+        };
+        if block_num != 0 {
+            Ok(self.read_block(block_num, rw_interface)?)
+        } else {
+            Err(ReadInodeBlockErr::BlockNotFound)
+        }
+    }
+
+    fn read_block_entry(
+        &self,
+        block_num: usize,
+        entry_idx: usize,
+        rw_interface: &Box<dyn ReadWriteInterface>,
+    ) -> Result<usize, ReadErr> {
+        let block = self.read_block(block_num, rw_interface)?;
+        assert!(entry_idx * 4 <= block.len() - 4);
+        let first = entry_idx * 4;
+        Ok(block[first] as usize
+            | ((block[first + 1] as usize) << 8)
+            | ((block[first + 2] as usize) << 16)
+            | ((block[first + 3] as usize) << 24))
+    }
+
+    fn read_block(
+        &self,
+        block_num: usize,
+        rw_interface: &Box<dyn ReadWriteInterface>,
+    ) -> Result<Box<[u8]>, ReadErr> {
+        if block_num >= self.total_num_blocks as usize {
+            return Err(ReadErr::Other("invalid block num"));
+        }
+        let addr = block_num * self.block_size;
+        assert_eq!(
+            addr % rw_interface.sector_size(),
+            0,
+            "cannot convert block address to sector idx",
+        );
+        let sector_idx = addr / rw_interface.sector_size();
+        assert_eq!(
+            self.block_size % rw_interface.sector_size(),
+            0,
+            "cannot convert block size to num of sectors",
+        );
+        let num_sectors = self.block_size / rw_interface.sector_size();
+        rw_interface.read_sectors(sector_idx, num_sectors)
+    }
+
     fn iter_dir(
         &self,
         first_entry: *const DirEntry,
@@ -486,8 +566,7 @@ impl FileSystem for Ext2 {
         };
 
         // Traverse the directory.
-        let dbp0 = self
-            .read_block(dir_inode.direct_block_ptr_0 as usize, rw_interface)?;
+        let dbp0 = self.read_inode_block(&dir_inode, 0, rw_interface).unwrap();
         let first_entry = dbp0.as_ptr() as *const DirEntry;
         let total_size = self.inode_size(&dir_inode);
         if total_size > self.block_size {
@@ -559,6 +638,32 @@ impl FileSystem for Ext2 {
 
         Ok(dir)
     }
+
+    fn read_file(
+        &self,
+        id: usize,
+        rw_interface: &Box<dyn ReadWriteInterface>,
+    ) -> Result<Vec<Box<[u8]>>, ReadFileErr> {
+        assert_ne!(id as u32, 0, "invalid id");
+        let inode = self.read_inode(id as u32, rw_interface)?;
+        let mut i: usize = 0;
+        let mut all_bufs = Vec::new();
+        loop {
+            match self.read_inode_block(&inode, i, rw_interface) {
+                Ok(buf) => {
+                    all_bufs.push(buf);
+                    i += 1;
+                }
+                Err(err) => match err {
+                    ReadInodeBlockErr::BlockNotFound => break,
+                    ReadInodeBlockErr::DiskErr(disk_err) => {
+                        return Err(ReadFileErr::DiskErr(disk_err))
+                    }
+                },
+            }
+        }
+        Ok(all_bufs)
+    }
 }
 
 struct DirEntryIter {
@@ -585,5 +690,17 @@ impl Iterator for DirEntryIter {
                 None
             }
         }
+    }
+}
+
+#[derive(Debug)]
+enum ReadInodeBlockErr {
+    BlockNotFound,
+    DiskErr(ReadErr),
+}
+
+impl From<ReadErr> for ReadInodeBlockErr {
+    fn from(err: ReadErr) -> Self {
+        ReadInodeBlockErr::DiskErr(err)
     }
 }

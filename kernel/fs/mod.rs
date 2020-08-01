@@ -61,6 +61,17 @@ impl From<FromUtf8Error> for ReadDirErr {
     }
 }
 
+#[derive(Debug)]
+pub enum ReadFileErr {
+    DiskErr(ReadErr),
+}
+
+impl From<ReadErr> for ReadFileErr {
+    fn from(err: ReadErr) -> Self {
+        ReadFileErr::DiskErr(err)
+    }
+}
+
 pub trait FileSystem {
     fn root_dir(
         &self,
@@ -72,4 +83,10 @@ pub trait FileSystem {
         id: usize,
         rw_interface: &Box<dyn ReadWriteInterface>,
     ) -> Result<Directory, ReadDirErr>;
+
+    fn read_file(
+        &self,
+        id: usize,
+        rw_interface: &Box<dyn ReadWriteInterface>,
+    ) -> Result<Vec<Box<[u8]>>, ReadFileErr>;
 }
