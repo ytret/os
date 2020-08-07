@@ -90,7 +90,7 @@ struct ExtendedSuperblock {
     superblock_backup_block_group: u16,
     optional_features: u32,
     required_features: u32,
-    features_or_read_only: u32,
+    read_only_features: u32,
     fs_id: u128,
     volume_name: [u8; 16],     // C-style string
     last_mount_path: [u8; 64], // C-style string
@@ -129,6 +129,15 @@ bitflags! {
 // const FEATURE_OR_READ_ONLY_SPARSE: u32 = 0x01;
 // const FEATURE_OR_READ_ONLY_64BIT_FILE_SIZE: u32 = 0x02;
 // const FEATURE_OR_READ_ONLY_DIR_CONTENTS_BIN_TREE: u32 = 0x04;
+
+bitflags! {
+    #[repr(u32)]
+    enum ReadOnlyFeature {
+        SparseSuperblocksAndBgdTables = 0x01,
+        FileSize64Bit = 0x02,
+        DirContentsInBinaryTree = 0x04,
+    }
+}
 
 #[allow(dead_code)]
 #[derive(Clone, Copy, Debug)]
@@ -195,6 +204,23 @@ impl Inode {
             "invalid align",
         );
         unsafe { *raw_enum }
+    }
+
+    fn direct_block_ptrs(&self) -> [u32; 12] {
+        [
+            self.direct_block_ptr_0,
+            self.direct_block_ptr_1,
+            self.direct_block_ptr_2,
+            self.direct_block_ptr_3,
+            self.direct_block_ptr_4,
+            self.direct_block_ptr_5,
+            self.direct_block_ptr_6,
+            self.direct_block_ptr_7,
+            self.direct_block_ptr_8,
+            self.direct_block_ptr_9,
+            self.direct_block_ptr_10,
+            self.direct_block_ptr_11,
+        ]
     }
 }
 
@@ -264,6 +290,7 @@ pub struct Ext2 {
     version: (u32, u16), // major, minor
     //optional_features: BitFlags<u32, OptionalFeature>,
     required_features: BitFlags<u32, RequiredFeature>,
+    read_only_features: BitFlags<u32, ReadOnlyFeature>,
 
     total_num_blocks: u32,
     block_size: usize,
@@ -271,6 +298,8 @@ pub struct Ext2 {
     block_group_num_blocks: u32,
     block_group_num_inodes: u32,
     bgd_table: Vec<BlockGroupDescriptor>,
+
+    read_only: bool,
 }
 
 #[inline(always)]
@@ -298,7 +327,6 @@ impl Ext2 {
             superblock.ext2_signature, EXT2_SIGNATURE,
             "not ext2: invalid signature",
         );
-
         let extended_superblock = {
             if superblock.version_major >= 1 {
                 let mut ptr = raw_superblock.as_ptr() as usize;
@@ -310,6 +338,7 @@ impl Ext2 {
         };
         let raw_bgd_tbl =
             raw_block_group_descriptor.as_ptr() as *const BlockGroupDescriptor;
+        let mut read_only = false;
         Ext2 {
             version: (superblock.version_major, superblock.version_minor),
             required_features: {
@@ -357,6 +386,33 @@ impl Ext2 {
                     BitFlags::new(0)
                 }
             },
+            read_only_features: {
+                if superblock.version_major >= 1 {
+                    let rof = BitFlags::new(
+                        extended_superblock.unwrap().read_only_features,
+                    );
+                    let mut absent = rof;
+
+                    // Supported features.
+                    if absent.has_set(ReadOnlyFeature::FileSize64Bit) {
+                        absent.unset_flag(ReadOnlyFeature::FileSize64Bit);
+                    }
+
+                    // Any unsupported features?
+                    if absent.value != 0 {
+                        // FIXME: mount read only
+                        println!(
+                            "[EXT2] Unsupported read-only features 0x{:02X}. \
+                             File system is read-only.",
+                            absent.value,
+                        );
+                        read_only = true;
+                    }
+                    rof
+                } else {
+                    BitFlags::new(0)
+                }
+            },
 
             total_num_blocks: superblock.total_num_blocks,
             block_size: 1024 * 2usize.pow(superblock.log_block_size_minus_10),
@@ -384,6 +440,8 @@ impl Ext2 {
                 }
                 bgd_table
             },
+
+            read_only,
         }
     }
 
@@ -455,20 +513,7 @@ impl Ext2 {
         };
 
         let block_num = if index < 12 {
-            [
-                inode.direct_block_ptr_0,
-                inode.direct_block_ptr_1,
-                inode.direct_block_ptr_2,
-                inode.direct_block_ptr_3,
-                inode.direct_block_ptr_4,
-                inode.direct_block_ptr_5,
-                inode.direct_block_ptr_6,
-                inode.direct_block_ptr_7,
-                inode.direct_block_ptr_8,
-                inode.direct_block_ptr_9,
-                inode.direct_block_ptr_10,
-                inode.direct_block_ptr_11,
-            ][index] as usize
+            inode.direct_block_ptrs()[index] as usize
         } else if sibs_range.contains(&index) {
             // FIXME block numbers are always 32-bit
             assert_ne!(inode.singly_indirect_block_ptr, 0);
