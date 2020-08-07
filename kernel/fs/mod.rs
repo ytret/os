@@ -72,6 +72,17 @@ impl From<ReadErr> for ReadFileErr {
     }
 }
 
+#[derive(Debug)]
+pub enum FileSizeErr {
+    DiskErr(ReadErr),
+}
+
+impl From<ReadErr> for FileSizeErr {
+    fn from(err: ReadErr) -> Self {
+        FileSizeErr::DiskErr(err)
+    }
+}
+
 pub trait FileSystem {
     fn root_dir(
         &self,
@@ -89,4 +100,16 @@ pub trait FileSystem {
         id: usize,
         rw_interface: &Box<dyn ReadWriteInterface>,
     ) -> Result<Vec<Box<[u8]>>, ReadFileErr>;
+
+    fn file_size_bytes(
+        &self,
+        id: usize,
+        rw_interface: &Box<dyn ReadWriteInterface>,
+    ) -> Result<u64, FileSizeErr>;
+
+    fn file_size_blocks(
+        &self,
+        id: usize,
+        rw_interface: &Box<dyn ReadWriteInterface>,
+    ) -> Result<usize, FileSizeErr>;
 }

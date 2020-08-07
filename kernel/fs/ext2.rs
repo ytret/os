@@ -21,7 +21,10 @@ use core::mem::{align_of, size_of};
 use core::ops::Range;
 use core::slice;
 
-use super::{DirEntryContent, Directory, FileSystem, ReadDirErr, ReadFileErr};
+use super::{
+    DirEntryContent, Directory, FileSizeErr, FileSystem, ReadDirErr,
+    ReadFileErr,
+};
 use crate::bitflags::BitFlags;
 use crate::disk::{ReadErr, ReadWriteInterface};
 
@@ -537,6 +540,27 @@ impl Ext2 {
         }
     }
 
+    fn num_block_entries(
+        &self,
+        block_num: usize,
+        rw_interface: &Box<dyn ReadWriteInterface>,
+    ) -> Result<usize, ReadErr> {
+        let block = self.read_block(block_num, rw_interface)?;
+        let mut i = 0;
+        while i < self.block_size / 4 {
+            let first = i * 4;
+            let entry = block[first] as usize
+                | ((block[first + 1] as usize) << 8)
+                | ((block[first + 2] as usize) << 16)
+                | ((block[first + 3] as usize) << 24);
+            if entry == 0 {
+                break;
+            }
+            i += 1;
+        }
+        Ok(i)
+    }
+
     fn read_block_entry(
         &self,
         block_num: usize,
@@ -708,6 +732,86 @@ impl FileSystem for Ext2 {
             }
         }
         Ok(all_bufs)
+    }
+
+    fn file_size_bytes(
+        &self,
+        id: usize,
+        rw_interface: &Box<dyn ReadWriteInterface>,
+    ) -> Result<u64, FileSizeErr> {
+        assert_ne!(id as u32, 0, "invalid id");
+        let inode = self.read_inode(id as u32, rw_interface)?;
+        let mut size = inode.size as u64;
+        if self
+            .read_only_features
+            .has_set(ReadOnlyFeature::FileSize64Bit)
+        {
+            size |= (inode.file_size_bits_32_63 as u64) << 32;
+        }
+        Ok(size)
+    }
+
+    fn file_size_blocks(
+        &self,
+        id: usize,
+        rw_interface: &Box<dyn ReadWriteInterface>,
+    ) -> Result<usize, FileSizeErr> {
+        // FIXME: compare with inode.count_disk_sectors
+        assert_ne!(id as u32, 0, "invalid id");
+        let inode = self.read_inode(id as u32, rw_interface)?;
+        let mut size = 0;
+        size += inode.direct_block_ptrs().iter().fold(0, |acc, x| match x {
+            0 => acc,
+            _ => acc + 1,
+        });
+        if inode.singly_indirect_block_ptr != 0 {
+            let was = size;
+            size += self.num_block_entries(
+                inode.singly_indirect_block_ptr as usize,
+                rw_interface,
+            )?;
+            let is = size;
+            println!("sibs: {}", is - was);
+        }
+        if inode.doubly_indirect_block_ptr != 0 {
+            let num_dibs = self.num_block_entries(
+                inode.doubly_indirect_block_ptr as usize,
+                rw_interface,
+            )?;
+            println!("num_dibs = {}", num_dibs);
+            let last_dib = self.read_block_entry(
+                inode.doubly_indirect_block_ptr as usize,
+                num_dibs - 1,
+                rw_interface,
+            )?;
+            let num_sibs_in_last_dib =
+                self.num_block_entries(last_dib, rw_interface)?;
+            println!("num_sibs_in_last_dib = {}", num_sibs_in_last_dib);
+            size += (num_dibs - 1) * self.block_size / 4 + num_sibs_in_last_dib;
+        }
+        if inode.triply_indirect_block_ptr != 0 {
+            let num_tibs = self.num_block_entries(
+                inode.triply_indirect_block_ptr as usize,
+                rw_interface,
+            )?;
+            let last_tib = self.read_block_entry(
+                inode.triply_indirect_block_ptr as usize,
+                num_tibs - 1,
+                rw_interface,
+            )?;
+            let num_dibs_in_last_tib =
+                self.num_block_entries(last_tib, rw_interface)?;
+            let last_dib = self.read_block_entry(
+                last_tib,
+                num_dibs_in_last_tib - 1,
+                rw_interface,
+            )?;
+            let num_sibs_in_last_dib =
+                self.num_block_entries(last_dib, rw_interface)?;
+            size +=
+                num_tibs * (self.block_size / 4).pow(2) + num_sibs_in_last_dib;
+        }
+        Ok(size)
     }
 }
 
