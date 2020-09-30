@@ -764,21 +764,23 @@ impl FileSystem for Ext2 {
             0 => acc,
             _ => acc + 1,
         });
+        let mut fs_blocks = 0; // blocks used by the file system for the inode
         if inode.singly_indirect_block_ptr != 0 {
-            let was = size;
+            //let was = size;
             size += self.num_block_entries(
                 inode.singly_indirect_block_ptr as usize,
                 rw_interface,
             )?;
-            let is = size;
-            println!("sibs: {}", is - was);
+            fs_blocks += 1;
+            //let is = size;
+            //println!("sibs: {}", is - was);
         }
         if inode.doubly_indirect_block_ptr != 0 {
             let num_dibs = self.num_block_entries(
                 inode.doubly_indirect_block_ptr as usize,
                 rw_interface,
             )?;
-            println!("num_dibs = {}", num_dibs);
+            //println!("num_dibs = {}", num_dibs);
             let last_dib = self.read_block_entry(
                 inode.doubly_indirect_block_ptr as usize,
                 num_dibs - 1,
@@ -786,8 +788,9 @@ impl FileSystem for Ext2 {
             )?;
             let num_sibs_in_last_dib =
                 self.num_block_entries(last_dib, rw_interface)?;
-            println!("num_sibs_in_last_dib = {}", num_sibs_in_last_dib);
+            //println!("num_sibs_in_last_dib = {}", num_sibs_in_last_dib);
             size += (num_dibs - 1) * self.block_size / 4 + num_sibs_in_last_dib;
+            fs_blocks += 1 + num_dibs;
         }
         if inode.triply_indirect_block_ptr != 0 {
             let num_tibs = self.num_block_entries(
@@ -808,9 +811,17 @@ impl FileSystem for Ext2 {
             )?;
             let num_sibs_in_last_dib =
                 self.num_block_entries(last_dib, rw_interface)?;
-            size +=
-                num_tibs * (self.block_size / 4).pow(2) + num_sibs_in_last_dib;
+            size += (num_tibs - 1) * (self.block_size / 4).pow(2)
+                + num_dibs_in_last_tib * self.block_size / 4
+                + num_sibs_in_last_dib;
+            fs_blocks +=
+                1 + (num_tibs - 1) * self.block_size / 4 + num_dibs_in_last_tib;
         }
+        assert!(self.block_size >= rw_interface.sector_size());
+        assert_eq!(
+            inode.count_disk_sectors as usize,
+            (size + fs_blocks) * (self.block_size / rw_interface.sector_size()),
+        );
         Ok(size)
     }
 }
