@@ -141,20 +141,17 @@ impl Bus {
         }
     }
 
-    fn wait_until_ready(&self) {
+    fn check_for_errors(&self) {
         unsafe {
             let mut status: u8 = self.registers.status.read();
-
             // BSY?
             while (status >> 7) & 1 != 0 {
                 status = self.registers.status.read();
             }
-
             // DF?
             if (status >> 5) & 1 != 0 {
                 panic!("Drive fault error.");
             }
-
             // ERR?
             if (status >> 0) & 1 != 0 {
                 println!("[ATA] ERR of status is set");
@@ -162,7 +159,14 @@ impl Bus {
                 println!("[ATA] Error register: {:08b}", error);
                 panic!();
             }
+        }
+    }
 
+    fn wait_until_ready(&self) {
+        unsafe {
+            let mut status: u8 = self.registers.status.read();
+            // Check the status for errors.
+            self.check_for_errors();
             // Wait for DRQ to be set.
             while (status >> 3) & 1 != 1 {
                 status = self.registers.status.read();
@@ -201,16 +205,7 @@ impl Bus {
     }
 
     fn read(&self, lba: u32, num_sectors: u8) -> Box<[u16]> {
-        let mut status = unsafe { self.registers.status.read::<u8>() };
-        if (status >> 3) & 1 != 0 {
-            println!("[ATA] Waiting for DRQ to be unset. Read from data port:");
-            while (status >> 3) & 1 != 0 {
-                let word: u16 = unsafe { self.registers.data.read() };
-                print!("{:04X} ", word);
-                status = unsafe { self.registers.status.read() };
-            }
-            println!("done");
-        }
+        self.check_for_errors();
 
         unsafe {
             self.registers.sector_count.write(num_sectors);
@@ -218,12 +213,11 @@ impl Bus {
             self.registers.command.write(0x20u8);
         }
 
-        self.wait_until_ready();
-
         let buf_len = 256 * num_sectors as usize;
         let mut buf: Vec<u16> = Vec::with_capacity(buf_len);
 
         for _ in 0..num_sectors {
+            self.wait_until_ready();
             for _ in 0..256 {
                 let word: u16 = unsafe { self.registers.data.read() };
                 buf.push(word);
@@ -235,13 +229,17 @@ impl Bus {
 
     fn write(&self, lba: u32, num_sectors: u8, data: &[u16]) {
         assert_eq!(num_sectors as usize * 256, data.len(), "invalid data size");
+        self.check_for_errors();
         unsafe {
             self.registers.sector_count.write(num_sectors);
             self.set_lba(lba);
             self.registers.command.write(0x30u8);
         }
         self.wait_until_ready();
-        for &word in data {
+        for (i, &word) in data.iter().enumerate() {
+            if i % 256 == 0 {
+                self.wait_until_ready();
+            }
             unsafe {
                 self.registers.data.write(word);
             }
