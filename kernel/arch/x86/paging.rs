@@ -53,7 +53,7 @@ entry_flags! {
     TableEntryFlags {
         Dirty = 1 << 6, // not set: not dirty (not written to)
         // Bit 7 must be zero if PAT is not supported.
-        Global = 1 < 8, // not set: not invalidated on CR3 reset (set CR4)
+        Global = 1 << 8, // not set: not invalidated on CR3 reset (set CR4)
     }
 }
 
@@ -127,7 +127,7 @@ kernel_static! {
 
         kpd.0[1].set_addr(&(&*KERNEL_PAGE_TABLES)[1] as *const _ as u32);
         kpd.0[1].set_flag(DirectoryEntryFlags::Present);
-        kpd.0[0].set_flag(DirectoryEntryFlags::ReadWrite);
+        kpd.0[1].set_flag(DirectoryEntryFlags::ReadWrite);
         kpd.0[1].set_flag(DirectoryEntryFlags::AnyDpl);
 
         kpd
