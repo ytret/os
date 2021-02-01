@@ -44,7 +44,7 @@ dummy_isr_\num:
 	cli
     pusha
     movl %esp, %ebx
-    addl $32, %ebx                  // interrupt stack frame pointer
+    addl $36, %ebx                  // interrupt stack frame pointer
     movl 32(%esp), %eax             // error code
     CALL_HANDLER $\num %eax %ebx
     popa
