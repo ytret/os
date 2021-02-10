@@ -139,6 +139,7 @@ impl crate::scheduler::Scheduler {
 pub static mut TSS: TaskStateSegment = TaskStateSegment::new();
 
 pub fn init() -> ! {
+    /*
     let tss = unsafe { &mut TSS };
     tss.ss0 = gdt::GDT.lock().kernel_data_segment();
 
@@ -158,7 +159,6 @@ pub fn init() -> ! {
             | gdt::EntryFlags::PageGranularity)
             .value,
     );
-
     let entry_for_usermode_data = gdt::Entry::new(
         0x0000_0000,
         0xFFFFF,
@@ -173,7 +173,6 @@ pub fn init() -> ! {
             | gdt::EntryFlags::PageGranularity)
             .value,
     );
-
     let entry_for_tss = gdt::Entry::new(
         tss as *const _ as u32,
         size_of::<TaskStateSegment>() as u32,
@@ -190,14 +189,16 @@ pub fn init() -> ! {
     let usermode_data_seg =
         gdt::GDT.lock().add_segment(entry_for_usermode_data);
     let tss_seg = gdt::GDT.lock().add_segment(entry_for_tss);
+    */
 
     // Create the init process and set up its kernel stack.
     let init_process = Process::new();
     unsafe {
         SCHEDULER.add_process(init_process);
     }
-    tss.esp0 = init_process.esp0;
+    //tss.esp0 = init_process.esp0;
 
+    /*
     unsafe {
         // Load the GDT with the new entries.
         gdt::GDT.lock().load();
@@ -205,17 +206,24 @@ pub fn init() -> ! {
         // Load the TSS.
         asm!("ltr %ax", in("ax") tss_seg, options(att_syntax));
     }
+    */
 
+    println!("[INIT] Enabling the spawner");
+    crate::arch::pit::TEMP_SPAWNER_ON
+        .store(true, core::sync::atomic::Ordering::SeqCst);
+
+    loop {}
+
+    /*
     unsafe {
         // Jump into usermode.
         jump_into_usermode(usermode_code_seg, usermode_data_seg, usermode_init);
     }
+    */
 }
 
 extern "C" fn usermode_init() -> ! {
-    println!("Hello from usermode init!");
-    println!("Enabling the spawner");
-    crate::arch::pit::TEMP_SPAWNER_ON
-        .store(true, core::sync::atomic::Ordering::SeqCst);
+    println!("[INIT] Entered usermode.");
+    println!("[INIT] End of init process reached.");
     loop {}
 }

@@ -60,7 +60,7 @@ jump_into_usermode:
  *            2) to: *const Process
  *            3) tss: *mut TaskStateSegment
  * This function returns when the scheduler decides to run the caller's task.
- * It returns as if it wasn't ever called.
+ * It returns as if it wasn't ever called (i.e. like a normal function).
  * NOTE: one must disable interrupts before calling this function and enable
  * them after it returns (this applies to both the current and the next task's
  * code).
@@ -86,8 +86,8 @@ switch_tasks:
 
     // Load the next task's Process struct.
     movl 0*4(%edi), %ebx        // ebx = cr3
-    movl 1*4(%edi), %ecx        // kernel stack top
-    movl 2*4(%edi), %esp        // kernel stack ptr
+    movl 1*4(%edi), %ecx        // ecx = kernel stack top
+    movl 2*4(%edi), %esp        // esp = ordinary stack ptr
 
     // Update the ESP0 field in the TSS.
     movl %ecx, 4(%eax)
