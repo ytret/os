@@ -25,13 +25,11 @@ struct Allocator;
 
 unsafe impl GlobalAlloc for Allocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        /*
-        println!(
-            "alloc: layout: size: {}, align: {}",
-            layout.size(),
-            layout.align(),
-        );
-        */
+        // println!(
+        //     "alloc: layout: size: {}, align: {}",
+        //     layout.size(),
+        //     layout.align(),
+        // );
 
         let heap = match *KERNEL_HEAP.lock() {
             Some(kernel_heap) => kernel_heap,
@@ -47,18 +45,32 @@ unsafe impl GlobalAlloc for Allocator {
             chunk_start = (possible_tag as *mut Tag).offset(1) as *mut u8;
             needed_size =
                 chunk_start.align_offset(layout.align()) + layout.size();
+            assert_eq!(
+                chunk_start.align_offset(layout.align()) + layout.size(),
+                ((chunk_start as usize + layout.align() - 1)
+                    & !(layout.align() - 1))
+                    - chunk_start as usize
+                    + layout.size(),
+            );
             if chunk_size >= needed_size + size_of::<Tag>() {
                 chosen_tag = possible_tag as *mut Tag;
                 break;
             }
         }
         if chosen_tag.is_null() {
-            panic!("alloc: insufficient free heap");
+            panic!(
+                "alloc: insufficient free heap: {} / {} bytes",
+                heap.total_free(),
+                needed_size + size_of::<Tag>(),
+            );
             //return core::ptr::null_mut();
         }
         //println!(" chosen_tag: 0x{:08X}", chosen_tag as u32);
 
-        if (*chosen_tag).chunk_size() - needed_size < heap.min_chunk_size {
+        // Add +1 byte in case an alignment for the tag is needed.
+        if (*chosen_tag).chunk_size() - needed_size
+            < size_of::<Tag>() + heap.min_chunk_size + 1
+        {
             (*chosen_tag).set_used(true);
         } else {
             // Divide the chunk.
@@ -69,6 +81,10 @@ unsafe impl GlobalAlloc for Allocator {
         }
 
         let aligned = chunk_start.add(chunk_start.align_offset(layout.align()));
+        assert_eq!(
+            aligned as usize,
+            (chunk_start as usize + layout.align() - 1) & !(layout.align() - 1),
+        );
 
         // Place 0xFF's right before the aligned start so that it will be easy
         // to find the tag (Tag::align is never 0xFF).
@@ -76,6 +92,7 @@ unsafe impl GlobalAlloc for Allocator {
         (chunk_start as *mut u8).write_bytes(0xFF, n);
 
         assert_eq!(aligned.align_offset(layout.align()), 0);
+        assert_ne!(aligned as usize, chosen_tag as usize);
         aligned
     }
 
@@ -91,7 +108,7 @@ unsafe impl GlobalAlloc for Allocator {
         assert_eq!(
             ptr.align_offset(layout.align()),
             0,
-            "dealloc: ptr is not properly aligned"
+            "dealloc: ptr is not properly aligned",
         );
 
         let heap = match *KERNEL_HEAP.lock() {
@@ -131,7 +148,7 @@ fn alloc_error_handler(_: Layout) -> ! {
     panic!("alloc_error_handler called");
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 #[repr(C, packed)]
 struct Tag {
     value: usize,
@@ -179,6 +196,7 @@ impl Tag {
         } else {
             let start = self as *const _ as usize + size_of::<Tag>();
             let end = self.next_tag_addr();
+            assert!(end >= start, "start: 0x{:08X}, end: 0x{:08X}", start, end);
             end - start
         }
     }
@@ -284,7 +302,7 @@ impl<'a> Iterator for HeapIter<'a> {
                     return Some(self.current_tag.as_mut().unwrap());
                 } else {
                     // self.only_free && (*self.current_tag).is_used()
-                    // continue
+                    // continue (see below)
                 }
             }
 
@@ -302,7 +320,7 @@ impl<'a> Iterator for HeapIter<'a> {
     }
 }
 
-pub const KERNEL_HEAP_SIZE: usize = 1024 * 1024; // 1 MiB
+pub const KERNEL_HEAP_SIZE: usize = 4 * 1024 * 1024; // 4 MiB
 
 kernel_static! {
     pub static ref KERNEL_HEAP: Mutex<Option<Heap>> = Mutex::new(None);
@@ -313,7 +331,7 @@ pub fn init(kernel_info: &KernelInfo) {
     let heap_size = heap_region.end - heap_region.start;
     assert!(
         heap_size > 2 * size_of::<Tag>(),
-        "heap must be big enough to accomodate at least two tags"
+        "heap must be big enough to accomodate at least two tags",
     );
 
     let heap_start_tag_ptr = heap_region.start as *mut Tag;
@@ -321,12 +339,12 @@ pub fn init(kernel_info: &KernelInfo) {
     assert_eq!(
         heap_start_tag_ptr.align_offset(align_of::<Tag>()),
         0,
-        "heap start must be properly aligned"
+        "heap start must be properly aligned",
     );
     assert_eq!(
         heap_end_tag_ptr.align_offset(align_of::<Tag>()),
         0,
-        "heap end must be properly aligned"
+        "heap end must be properly aligned",
     );
 
     let start_tag = Tag::new(false, 1, heap_end_tag_ptr);
