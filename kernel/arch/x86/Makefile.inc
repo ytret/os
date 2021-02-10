@@ -21,12 +21,11 @@ ARCH_SOURCES := \
 	$(ARCHDIR)/pic.rs \
 	$(ARCHDIR)/pit.rs \
 	$(ARCHDIR)/interrupts.rs \
-	$(ARCHDIR)/paging.rs \
+	$(ARCHDIR)/vas.rs \
 	$(ARCHDIR)/pmm_stack.rs \
 	$(ARCHDIR)/process.rs \
 	$(ARCHDIR)/scheduler.rs \
-	$(ARCHDIR)/pci.rs \
-	$(ARCHDIR)/vas.rs
+	$(ARCHDIR)/pci.rs
 
 ARCH_OBJECTS := \
 	$(ARCHDIR)/boot.o \

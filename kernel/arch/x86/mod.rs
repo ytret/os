@@ -16,7 +16,7 @@
 
 mod gdt;
 pub mod interrupts;
-mod paging;
+pub mod vas;
 pub mod pic;
 mod pit;
 mod pmm_stack;
@@ -27,6 +27,8 @@ pub mod process;
 pub mod scheduler;
 
 pub mod pci;
+
+use core::ptr;
 
 use crate::memory_region::Region;
 use crate::KernelInfo;
@@ -80,15 +82,37 @@ pub fn init(kernel_info: &mut KernelInfo) {
     interrupts::init();
     pit::init();
 
-    paging::init(&aif);
+    // Enable paging.
+    unsafe {
+        vas::KERNEL_VAS.lock().load();
+        asm!("movl %cr0, %eax
+              orl $0x80000001, %eax
+              movl %eax, %cr0",
+             out("eax") _,
+             options(att_syntax));
+    }
+
     pmm_stack::init(kernel_info);
 
     let heap_region = Region {
-        start: kernel_end_addr as usize,
-        end: kernel_end_addr as usize + crate::heap::KERNEL_HEAP_SIZE,
+        start: (kernel_end_addr as usize + 0x400_000 - 1) & !(0x400_000 - 1),
+        end: ((kernel_end_addr as usize + 0x400_000 - 1) & !(0x400_000 - 1))
+            + crate::heap::KERNEL_HEAP_SIZE,
     };
-    paging::allocate_region(heap_region.start as u32, heap_region.end as u32);
     aif.heap_region = heap_region;
+
+    // Map the heap.
+    unsafe {
+        let kvas = vas::KERNEL_VAS.lock();
+        let heap_pgtbl_virt =
+            &mut *vas::KERNEL_HEAP_PGTBL.lock() as *mut vas::Table;
+        kvas.set_pde_addr(heap_region.start as usize >> 22, heap_pgtbl_virt);
+        ptr::write_bytes(heap_pgtbl_virt as *mut u8, 0, 4096);
+        kvas.allocate_pages_from_stack(
+            heap_region.start as u32,
+            heap_region.end as u32,
+        );
+    }
 
     kernel_info.arch_init_info = aif;
 }

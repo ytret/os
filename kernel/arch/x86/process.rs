@@ -16,7 +16,7 @@
 
 use alloc::alloc::{alloc, Layout};
 
-use crate::arch::paging;
+use crate::arch::vas::VirtAddrSpace;
 
 #[derive(Clone, Copy)]
 #[repr(C, packed)]
@@ -24,34 +24,37 @@ pub struct Process {
     // NOTE: when changing the order of these fields, also edit switch_tasks()
     // in scheduler.s.
     pub cr3: u32,
-    pub esp0: u32,
+    pub esp0: u32, // kernel stack bottom
     pub esp: u32,
 }
 
 impl Process {
     pub fn new() -> Self {
-        let stack_top =
-            unsafe { alloc(Layout::from_size_align(4096, 4096).unwrap()) }
-                .wrapping_offset(4096) as *mut u32;
+        let kernel_stack_bottom =
+            unsafe { alloc(Layout::from_size_align(1024, 4096).unwrap()) }
+                .wrapping_offset(1024) as *mut u32;
+        let ordinary_stack_bottom =
+            unsafe { alloc(Layout::from_size_align(1024, 4096).unwrap()) }
+                .wrapping_offset(1024) as *mut u32;
 
         // Make an initial stack frame that will be popped on a task switch (see
         // scheduler.s).
-        let stack_ptr = stack_top.wrapping_sub(7);
+        let ordinary_stack_top = ordinary_stack_bottom.wrapping_sub(7);
         unsafe {
-            *stack_ptr.wrapping_add(0) = 0; // edi
-            *stack_ptr.wrapping_add(1) = 0; // esi
-            *stack_ptr.wrapping_add(2) = 0; // ecx
-            *stack_ptr.wrapping_add(3) = 0; // ebx
-            *stack_ptr.wrapping_add(4) = 0; // eax
-            *stack_ptr.wrapping_add(5) = 0; // ebp
-            *stack_ptr.wrapping_add(6) =
+            *ordinary_stack_top.wrapping_add(0) = 0; // edi
+            *ordinary_stack_top.wrapping_add(1) = 0; // esi
+            *ordinary_stack_top.wrapping_add(2) = 0; // ecx
+            *ordinary_stack_top.wrapping_add(3) = 0; // ebx
+            *ordinary_stack_top.wrapping_add(4) = 0; // eax
+            *ordinary_stack_top.wrapping_add(5) = 0; // ebp
+            *ordinary_stack_top.wrapping_add(6) =
                 default_entry_point as *const () as u32; // eip
         }
 
         Process {
-            cr3: &paging::KERNEL_PAGE_DIR.lock().0 as *const _ as u32,
-            esp0: stack_top as u32,
-            esp: stack_ptr as u32,
+            cr3: crate::arch::vas::KERNEL_VAS.lock().pgdir_phys,
+            esp0: kernel_stack_bottom as u32,
+            esp: ordinary_stack_top as u32,
         }
     }
 }
@@ -63,6 +66,15 @@ fn default_entry_point() -> ! {
     unsafe {
         asm!("sti");
     }
-    println!("Default process entry point reached.");
+    println!("[PROC] Default process entry. Starting initialization.");
+
+    unsafe {
+        println!("[PROC] Creating a new VAS for the process.");
+        let vas = VirtAddrSpace::kvas_copy_on_heap();
+        println!("[PROC] Loading the VAS.");
+        vas.load();
+    }
+
+    println!("[PROC] End of default process entry point reached.");
     loop {}
 }
