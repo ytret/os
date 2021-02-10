@@ -27,7 +27,8 @@ RUST := rustc
 RUSTFMT := rustfmt
 
 RUSTFLAGS := --target $(ARCHDIR)/target.json -L $(LIBDIR)
-RUSTFMTFLAGS := --check --edition 2018 --config max_width=80
+RUSTFMTFLAGS := --check --edition 2018 \
+	--config max_width=80,reorder_modules=false
 
 # kernel/main.rs must be first (e.g. see the $(LIBKERNEL) rule)
 SOURCES := \
