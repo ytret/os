@@ -18,6 +18,7 @@ use alloc::alloc::{alloc, Layout};
 use core::mem::align_of;
 use core::ptr;
 
+use crate::arch::pmm_stack::PMM_STACK;
 use crate::bitflags::BitFlags;
 use crate::kernel_static::Mutex;
 
@@ -51,12 +52,17 @@ bitflags! {
     }
 }
 
+// It is the user's obligation to ensure that the VAS is consistent, meaning
+// that the PDEs and PT pointers point to the same PTs.  Otherwise it is
+// undefined behavior.
 pub struct VirtAddrSpace {
     pgdir_virt: *mut Directory, // relative to the kernel VAS
-    pgdir_phys: u32,
+    pub pgdir_phys: u32,
 
     pgtbls_virt: *mut *mut Table, // same
     pgtbls_phys: *mut u32,
+
+    usermode: bool,
 }
 
 impl VirtAddrSpace {
@@ -89,6 +95,8 @@ impl VirtAddrSpace {
 
             pgtbls_virt: pgtbls_ptrs.0,
             pgtbls_phys: pgtbls_ptrs.1,
+
+            usermode: false,
         }
     }
 
@@ -110,21 +118,23 @@ impl VirtAddrSpace {
         ptr::write_bytes(heap_pgtbls_virt, 0, 4096);
         ptr::write_bytes(heap_pgtbls_phys, 0, 4096);
 
-        let mut vas = VirtAddrSpace {
+        let vas = VirtAddrSpace {
             pgdir_virt: heap_pgdir as *mut Directory,
             pgdir_phys: (*kvas).virt_to_phys(heap_pgdir as u32).unwrap(),
 
             pgtbls_virt: heap_pgtbls_virt as *mut *mut Table,
             pgtbls_phys: heap_pgtbls_phys as *mut u32,
+
+            usermode: true,
         };
 
         // Copy the kernel VAS.
-        let kpd = (*kvas).pgdir_virt.as_mut().unwrap();
+        let pgdir = (*kvas).pgdir_virt.as_mut().unwrap();
         for i in 0..1024 {
-            let kpde = &kpd.0[i];
-            if kpde.flags().has_set(PdeFlags::Present) {
+            let pde = &pgdir.0[i];
+            if pde.flags().has_set(PdeFlags::Present) {
                 // Copy the corresponding page table.
-                let src = kpde.addr() as *mut u8;
+                let src = pde.addr() as *mut u8;
                 let dest = alloc(Layout::from_size_align(4096, 4096).unwrap());
                 ptr::copy_nonoverlapping(src, dest, 4096);
                 *vas.pgtbls_virt.add(i) = dest as *mut Table;
@@ -156,6 +166,79 @@ impl VirtAddrSpace {
 
     pub unsafe fn load(&self) {
         asm!("movl {}, %cr3", in(reg) self.pgdir_phys, options(att_syntax));
+    }
+
+    pub unsafe fn map_page(&self, virt: u32, phys: u32) {
+        assert_eq!(virt & 0xFFF, 0, "virt must be page-aligned");
+        assert_eq!(phys & 0xFFF, 0, "phys must be page-aligned");
+
+        let pgdir = self.pgdir_virt.as_mut().unwrap();
+        let pde_idx = (virt >> 22) as usize;
+        let pte_idx = ((virt >> 12) & 0x3FF) as usize;
+
+        let pgtbl_virt = self.pgtbl_virt_of(virt);
+        assert!(!pgtbl_virt.is_null(), "page table does not exist");
+
+        unsafe {
+            let entry = &mut (*pgtbl_virt).0[pte_idx];
+            entry.set_addr(phys);
+            entry.set_flag(PteFlags::Present);
+            entry.set_flag(PteFlags::ReadWrite);
+            if self.usermode {
+                entry.set_flag(PteFlags::AnyDpl);
+            }
+            asm!("invlpg ({})", in(reg) virt, options(att_syntax));
+        }
+    }
+
+    /// Allocates pages for the specified virtual memory region from the PMM
+    /// stack.
+    pub unsafe fn allocate_pages_from_stack(&self, start: u32, end: u32) {
+        assert_eq!(start & 0xFFF, 0, "start must be page-aligned");
+        assert_eq!(end & 0xFFF, 0, "end must be page-aligned");
+
+        let mut prev_phys: Option<u32> = None;
+        for virt in (start..end).step_by(4096).rev() {
+            // We go downwards because the pages on the PMM stack do so.
+            let phys = PMM_STACK.lock().pop_page();
+            if let Some(prev_phys) = prev_phys {
+                assert_eq!(
+                    phys,
+                    prev_phys - 4096,
+                    "could not map to a consecutive region",
+                );
+            }
+            self.map_page(virt, phys);
+            prev_phys = Some(phys);
+        }
+    }
+
+    pub unsafe fn set_pde_addr(
+        &self,
+        pde_idx: usize,
+        pgtbl_virt: *mut Table,
+    ) -> u32 {
+        let pgdir = self.pgdir_virt.as_mut().unwrap();
+        assert_eq!(
+            pgtbl_virt as usize & 0xFFF,
+            0,
+            "pgtbl_virt must be page-aligned",
+        );
+        assert!(pde_idx < 1024, "pde_idx must be less than 1024");
+
+        let pgtbl_phys = self.virt_to_phys(pgtbl_virt as u32).unwrap();
+
+        *self.pgtbls_virt.add(pde_idx) = pgtbl_virt;
+        *self.pgtbls_phys.add(pde_idx) = pgtbl_phys;
+
+        pgdir.0[pde_idx].set_addr(pgtbl_phys);
+        pgdir.0[pde_idx].set_flag(PdeFlags::Present);
+        pgdir.0[pde_idx].set_flag(PdeFlags::ReadWrite);
+        if self.usermode {
+            pgdir.0[pde_idx].set_flag(PdeFlags::AnyDpl);
+        }
+
+        pgtbl_phys
     }
 
     pub unsafe fn virt_to_phys(&self, virt: u32) -> Option<u32> {
@@ -229,9 +312,11 @@ impl Table {
 
 kernel_static! {
     static ref KERNEL_PGDIR: Mutex<Directory> = Mutex::new(Directory::new());
-    static ref KERNEL_PGTBLS: Mutex<[Table; 3]> = Mutex::new([Table::new(); 3]);
+    static ref KERNEL_PGTBLS: Mutex<[Table; 2]> = Mutex::new([Table::new(); 2]);
     static ref KERNEL_PGTBLS_VIRT: Mutex<[*mut Table; 1024]> = Mutex::new([ptr::null_mut(); 1024]);
     static ref KERNEL_PGTBLS_PHYS: Mutex<[u32; 1024]> = Mutex::new([0; 1024]);
+
+    pub static ref KERNEL_HEAP_PGTBL: Mutex<Table> = Mutex::new(Table::new());
 
     pub static ref KERNEL_VAS: Mutex<VirtAddrSpace> = Mutex::new(unsafe {
         VirtAddrSpace::new_identity_mapped(
