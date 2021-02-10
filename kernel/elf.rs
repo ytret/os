@@ -38,6 +38,16 @@ pub struct ElfHeader {
     shstrndx: u16,
 }
 
+#[derive(Debug)]
+pub enum ElfHeaderErr {
+    NotElf,
+    UnsupportedArch(u8),
+    UnsupportedByteOrder(u8),
+    UnsupportedElfVersion(u8),
+    InvalidType(u16),
+    UnsupportedMachine(u16),
+}
+
 impl ElfHeader {
     fn from_raw_data(data: &Box<[u8]>) -> Result<Self, ElfHeaderErr> {
         let (head, body, _tail) = unsafe { data.align_to::<ElfHeader>() };
@@ -46,9 +56,9 @@ impl ElfHeader {
         let header = body[0];
 
         if header.ident.must_be_0x7f != 0x7f
-            || header.ident.must_be_E != 0x45
-            || header.ident.must_be_L != 0x4C
-            || header.ident.must_be_F != 0x46
+            || header.ident.must_be_0x45 != 0x45
+            || header.ident.must_be_0x4c != 0x4C
+            || header.ident.must_be_0x46 != 0x46
         {
             return Err(ElfHeaderErr::NotElf);
         }
@@ -91,9 +101,9 @@ impl ElfHeader {
 #[derive(Clone, Copy, Debug)]
 struct Ident {
     must_be_0x7f: u8,
-    must_be_E: u8,
-    must_be_L: u8,
-    must_be_F: u8,
+    must_be_0x45: u8, // E
+    must_be_0x4c: u8, // L
+    must_be_0x46: u8, // F
     arch: Arch,
     byte_order: ByteOrder,
     elf_version: u8,
@@ -227,25 +237,36 @@ pub struct ElfInfo {
     program_headers: Vec<ProgInfo>,
 }
 
+#[derive(Debug)]
+pub enum ElfInfoErr {
+    ElfHeaderErr(ElfHeaderErr),
+}
+
+impl From<ElfHeaderErr> for ElfInfoErr {
+    fn from(e: ElfHeaderErr) -> Self {
+        ElfInfoErr::ElfHeaderErr(e)
+    }
+}
+
 impl ElfInfo {
-    pub fn from_raw_data(data: &Box<[u8]>) -> Self {
-        let elf_header = ElfHeader::from_raw_data(data).unwrap();
-        ElfInfo {
+    pub fn from_raw_data(data: &Box<[u8]>) -> Result<Self, ElfInfoErr> {
+        let elf_header = ElfHeader::from_raw_data(data)?;
+        Ok(ElfInfo {
             sections: {
                 let mut vec = Vec::new();
                 for i in 0..elf_header.shnum as usize {
-                    vec.push(SectionInfo::from_raw_data(data, i));
+                    vec.push(SectionInfo::from_raw_data(data, &elf_header, i));
                 }
                 vec
             },
             program_headers: {
                 let mut vec = Vec::new();
                 for i in 0..elf_header.phnum as usize {
-                    vec.push(ProgInfo::from_raw_data(data, i));
+                    vec.push(ProgInfo::from_raw_data(data, &elf_header, i));
                 }
                 vec
             },
-        }
+        })
     }
 }
 
@@ -257,8 +278,11 @@ pub struct SectionInfo {
 }
 
 impl SectionInfo {
-    fn from_raw_data(data: &Box<[u8]>, section_num: usize) -> Self {
-        let elf_header = ElfHeader::from_raw_data(data).unwrap();
+    fn from_raw_data(
+        data: &Box<[u8]>,
+        elf_header: &ElfHeader,
+        section_num: usize,
+    ) -> Self {
         let section =
             SectionHeader::from_raw_data(data, &elf_header, section_num);
         SectionInfo {
@@ -297,8 +321,11 @@ pub struct ProgInfo {
 }
 
 impl ProgInfo {
-    fn from_raw_data(data: &Box<[u8]>, ph_idx: usize) -> Self {
-        let elf_header = ElfHeader::from_raw_data(data).unwrap();
+    fn from_raw_data(
+        data: &Box<[u8]>,
+        elf_header: &ElfHeader,
+        ph_idx: usize,
+    ) -> Self {
         let ph = ProgHeader::from_raw_data(data, &elf_header, ph_idx);
         if ph._type != ProgHeaderType::Load || ph.filesz != ph.memsz {
             unimplemented!();
@@ -309,14 +336,4 @@ impl ProgInfo {
             size: ph.filesz as usize,
         }
     }
-}
-
-#[derive(Debug)]
-pub enum ElfHeaderErr {
-    NotElf,
-    UnsupportedArch(u8),
-    UnsupportedByteOrder(u8),
-    UnsupportedElfVersion(u8),
-    InvalidType(u16),
-    UnsupportedMachine(u16),
 }
