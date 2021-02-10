@@ -284,6 +284,14 @@ pub extern "C" fn dummy_exception_handler(
     let eip = stack_frame.eip;
     println!(" eip: 0x{:08X}", eip);
 
+    if int_num == 14 {
+        unsafe {
+            let cr2: u32;
+            asm!("movl %cr2, %eax", out("eax") cr2, options(att_syntax));
+            println!(" cr2: 0x{:08X}", cr2);
+        }
+    }
+
     panic!("Unhandled exception.");
 }
 
