@@ -22,14 +22,14 @@
 // and the Apache License
 // <https://raw.githubusercontent.com/rust-lang-nursery/lazy-static.rs/master/LICENSE-APACHE>.
 
-use core::cell::Cell;
+use core::cell::UnsafeCell;
 use core::mem::MaybeUninit;
 use core::ops::{Deref, DerefMut, Drop};
 use core::sync::atomic::{spin_loop_hint, AtomicBool, Ordering};
 
 pub struct StaticCell<T> {
-    initialized: AtomicBool, // NB: the kernel is one-threaded
-    data: Cell<MaybeUninit<T>>,
+    initialized: AtomicBool,
+    data: UnsafeCell<MaybeUninit<T>>,
 }
 
 unsafe impl<T: Sync> Sync for StaticCell<T> {}
@@ -37,38 +37,33 @@ unsafe impl<T: Sync> Sync for StaticCell<T> {}
 impl<T> StaticCell<T> {
     pub const UNINITIALIZED: Self = StaticCell {
         initialized: AtomicBool::new(false),
-        data: Cell::new(MaybeUninit::uninit()),
+        data: UnsafeCell::new(MaybeUninit::uninit()),
     };
 
     pub fn call_once<F>(&self, constructor: F) -> &T
     where
         F: FnOnce() -> T,
     {
-        if !self.initialized.load(Ordering::Relaxed) {
+        if !self.initialized.load(Ordering::SeqCst) {
             unsafe {
-                *(*self.data.as_ptr()).as_mut_ptr() = constructor();
+                (*self.data.get()).as_mut_ptr().write(constructor());
             }
-            self.initialized.store(true, Ordering::Relaxed);
+            self.initialized.store(true, Ordering::SeqCst);
         }
-        unsafe { &*(*self.data.as_ptr()).as_ptr() }
+        unsafe { &*(*self.data.get()).as_ptr() }
     }
 }
 
 pub struct Mutex<T> {
     locked: AtomicBool,
-    data: Cell<T>,
-}
-
-pub struct MutexWrapper<'a, T: 'a> {
-    locked: &'a AtomicBool,
-    data: &'a mut T,
+    data: UnsafeCell<T>,
 }
 
 impl<T> Mutex<T> {
     pub fn new(data: T) -> Self {
         Self {
             locked: AtomicBool::new(false),
-            data: Cell::new(data),
+            data: UnsafeCell::new(data),
         }
     }
 
@@ -82,12 +77,17 @@ impl<T> Mutex<T> {
         }
         MutexWrapper {
             locked: &self.locked,
-            data: unsafe { &mut *self.data.as_ptr() },
+            data: unsafe { &mut *self.data.get() },
         }
     }
 }
 
 unsafe impl<T> Sync for Mutex<T> {}
+
+pub struct MutexWrapper<'a, T: 'a> {
+    locked: &'a AtomicBool,
+    data: &'a mut T,
+}
 
 impl<'a, T> Deref for MutexWrapper<'a, T> {
     type Target = T;
