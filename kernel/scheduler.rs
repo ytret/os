@@ -41,10 +41,10 @@ impl Scheduler {
     pub fn schedule(&mut self, add_count: u32) {
         self.counter += add_count as u64;
         if self.processes.len() > 1 {
-            println!("NEXT PROCESS. {}", self.processes.len());
+            // println!("[SCHED] Next process, total: {}", self.processes.len());
             self.next_process();
         } else {
-            println!("Too few processes: {}", self.processes.len());
+            println!("[SCHED] Too few processes: {}.", self.processes.len());
         }
     }
 
@@ -64,11 +64,11 @@ impl Scheduler {
         let to = &self.processes[self.current_idx];
         let to_idx = self.current_idx;
 
-        println!(" switching from {} to {}", from_idx, to_idx);
-        println!(" to Process struct addr: 0x{:08X}", to as *const _ as u32);
-        println!("  to.cr3 = 0x{:08X}", to.cr3);
-        println!("  to.esp0 = 0x{:08X}", to.esp0);
-        println!("  to.esp = 0x{:08X}", to.esp);
+        // println!(" switching from {} to {}", from_idx, to_idx);
+        // println!(" to Process struct addr: 0x{:08X}", to as *const _ as u32);
+        // println!("  to.cr3 = 0x{:08X}", to.cr3);
+        // println!("  to.esp0 = 0x{:08X}", to.esp0);
+        // println!("  to.esp = 0x{:08X}", to.esp);
 
         assert!(from as *const _ != to, "from and to point to the same task");
         self.switch_tasks(from, to);
@@ -77,6 +77,6 @@ impl Scheduler {
 
 pub static mut SCHEDULER: Scheduler = Scheduler::new();
 
-pub fn init() {
+pub fn init() -> ! {
     arch::scheduler::init();
 }

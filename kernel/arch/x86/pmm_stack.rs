@@ -81,7 +81,7 @@ impl PmmStack {
                     unreachable!();
                 }
                 OverlappingWith::IsIn => {
-                    println!("Ignoring a region above 4 GiB");
+                    println!("[PMM] Ignoring a region above 4 GiB.");
                     continue;
                 }
                 OverlappingWith::EndsIn => {
@@ -140,6 +140,6 @@ pub fn init(kernel_info: &mut KernelInfo) {
         stack.pointer as u32,
         stack.bottom as u32,
         num_entries,
-        num_entries as f64 * 4096.0 / 1024.0 / 1024.0
+        num_entries as f64 * 4096.0 / 1024.0 / 1024.0,
     );
 }

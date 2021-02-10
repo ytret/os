@@ -16,6 +16,10 @@
 
 #![allow(dead_code)]
 
+use core::fmt;
+use core::slice;
+use core::str;
+
 use crate::memory_region;
 use crate::KernelInfo;
 
@@ -36,8 +40,8 @@ macro_rules! type_enum {
             }
         }
 
-        impl core::fmt::Display for $N {
-            fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        impl fmt::Display for $N {
+            fn fmt(&self, f: &mut fmt::Formatter) -> core::fmt::Result {
                 write!(
                     f,
                     "{}",
@@ -296,17 +300,14 @@ struct ImageLoadBasePhysicalAddress {
 
 fn str_from_ascii(ptr: &[u8], size: u32) -> &str {
     let slice = unsafe {
-        core::slice::from_raw_parts(
-            ptr as *const _ as *const u8,
-            size as usize - 1,
-        )
+        slice::from_raw_parts(ptr as *const _ as *const u8, size as usize - 1)
     };
     for (pos, ch) in slice.iter().enumerate() {
         if ch & (1 << 7) != 0 {
             panic!("str_from_ascii: non-ASCII character at {}", pos);
         }
     }
-    core::str::from_utf8(slice).unwrap()
+    str::from_utf8(slice).unwrap()
 }
 
 pub unsafe fn parse(boot_info: *const BootInfo, kernel_info: &mut KernelInfo) {
