@@ -117,7 +117,11 @@ pub fn init(kernel_info: &mut KernelInfo) {
     kernel_info.arch_init_info = aif;
 }
 
+#[inline(always)]
 pub fn panic() {
+    unsafe {
+        asm!("cli");
+    }
     let trace = stack_trace::StackTrace::walk_and_get();
     println!(" stack trace:");
     for (i, addr) in trace.iter().enumerate() {
