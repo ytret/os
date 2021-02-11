@@ -104,5 +104,7 @@ switch_tasks:
     popl %ebx
     popl %eax
     popl %ebp
+
+    // Load the next task's %eip from its stack.
     ret
 .size switch_tasks, . - switch_tasks

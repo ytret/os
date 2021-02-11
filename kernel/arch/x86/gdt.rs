@@ -94,6 +94,94 @@ impl Default for Entry {
     }
 }
 
+#[allow(dead_code)]
+#[repr(C, packed)]
+pub struct TaskStateSegment {
+    link: u16,
+    _reserved_link: u16,
+    pub esp0: u32,
+    pub ss0: u16,
+    _reserved_ss0: u16,
+    esp1: u32,
+    ss1: u16,
+    _reserved_ss1: u16,
+    esp2: u16,
+    ss2: u16,
+    _reserved_ss2: u16,
+    cr3: u32,
+    eip: u32,
+    eflags: u32,
+    eax: u32,
+    ecx: u32,
+    edx: u32,
+    ebx: u32,
+    esp: u32,
+    ebp: u32,
+    esi: u32,
+    edi: u32,
+    es: u16,
+    _reserved_es: u16,
+    cs: u16,
+    _reserved_cs: u16,
+    ss: u16,
+    _reserved_ss: u16,
+    ds: u16,
+    _reserved_ds: u16,
+    fs: u16,
+    _reserved_fs: u16,
+    gs: u16,
+    _reserved_gs: u16,
+    ldtr: u16,
+    _reserved_ldtr: u16,
+    _reserved_iopb_offset: u16,
+    iobp_offset: u16,
+}
+
+impl TaskStateSegment {
+    pub const fn new() -> Self {
+        TaskStateSegment {
+            link: 0,
+            _reserved_link: 0,
+            esp0: 0,
+            ss0: 0,
+            _reserved_ss0: 0,
+            esp1: 0,
+            ss1: 0,
+            _reserved_ss1: 0,
+            esp2: 0,
+            ss2: 0,
+            _reserved_ss2: 0,
+            cr3: 0,
+            eip: 0,
+            eflags: 0,
+            eax: 0,
+            ecx: 0,
+            edx: 0,
+            ebx: 0,
+            esp: 0,
+            ebp: 0,
+            esi: 0,
+            edi: 0,
+            es: 0,
+            _reserved_es: 0,
+            cs: 0,
+            _reserved_cs: 0,
+            ss: 0,
+            _reserved_ss: 0,
+            ds: 0,
+            _reserved_ds: 0,
+            fs: 0,
+            _reserved_fs: 0,
+            gs: 0,
+            _reserved_gs: 0,
+            ldtr: 0,
+            _reserved_ldtr: 0,
+            _reserved_iopb_offset: 0,
+            iobp_offset: size_of::<Self>() as u16,
+        }
+    }
+}
+
 #[repr(C, packed)]
 pub struct GlobalDescriptorTable([Entry; 32]);
 
@@ -130,6 +218,18 @@ impl GlobalDescriptorTable {
         0x10
     }
 
+    pub fn usermode_code_segment(&self) -> u16 {
+        0x18
+    }
+
+    pub fn usermode_data_segment(&self) -> u16 {
+        0x20
+    }
+
+    pub fn tss_segment(&self) -> u16 {
+        0x28
+    }
+
     fn num_segments(&self) -> usize {
         let mut num_segments = 0;
         for (i, segment) in self.0.iter().enumerate() {
@@ -140,7 +240,11 @@ impl GlobalDescriptorTable {
                 num_segments = i;
             }
         }
-        assert_ne!(num_segments, 0, "no null entries in the end of GDT");
+        assert_ne!(
+            num_segments,
+            0,
+            "there are no null entries at the end of the GDT",
+        );
         num_segments
     }
 }
@@ -164,11 +268,14 @@ impl Into<Entry> for GdtDescriptor {
     }
 }
 
+// This is not a mutex due to the way the task switching works.
+pub static mut TSS: TaskStateSegment = TaskStateSegment::new();
+
 kernel_static! {
     pub static ref GDT: Mutex<GlobalDescriptorTable> = Mutex::new({
         let mut gdt = GlobalDescriptorTable::new();
 
-        // Code segment
+        // Code segment.
         gdt.0[1] = Entry::new(
             0x0000_0000,
             0xFFFFF,
@@ -184,7 +291,7 @@ kernel_static! {
             ).value,
         );
 
-        // Data segment
+        // Data segment.
         gdt.0[2] = Entry::new(
             0x0000_0000,
             0xFFFFF,
@@ -197,6 +304,51 @@ kernel_static! {
              | EntryFlags::ProtectedMode32Bit
              | EntryFlags::PageGranularity
             ).value,
+        );
+
+        // Usermode code segment.
+        gdt.0[3] = Entry::new(
+            0x0000_0000,
+            0xFFFFF,
+            (BitFlags::new(0)
+                | AccessByte::Present
+                | AccessByte::Usermode
+                | AccessByte::NotTaskStateSegment
+                | AccessByte::Executable
+                | AccessByte::ReadableWritable)
+                .value,
+            (BitFlags::new(0)
+                | EntryFlags::ProtectedMode32Bit
+                | EntryFlags::PageGranularity)
+                .value,
+        );
+
+        // Usermode data segment.
+        gdt.0[4] = Entry::new(
+            0x0000_0000,
+            0xFFFFF,
+            (BitFlags::new(0)
+                | AccessByte::Present
+                | AccessByte::Usermode
+                | AccessByte::NotTaskStateSegment
+                | AccessByte::ReadableWritable)
+                .value,
+            (BitFlags::new(0)
+                | EntryFlags::ProtectedMode32Bit
+                | EntryFlags::PageGranularity)
+                .value,
+        );
+
+        // Task state segment.
+        gdt.0[5] = Entry::new(
+            unsafe { &TSS as *const _ as u32 },
+            size_of::<TaskStateSegment>() as u32,
+            (BitFlags::new(0)
+                | AccessByte::Present
+                | AccessByte::Executable
+                | AccessByte::Accessed)
+                .value,
+            (BitFlags::new(0) | EntryFlags::PageGranularity).value,
         );
 
         gdt

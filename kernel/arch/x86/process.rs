@@ -66,6 +66,7 @@ fn default_entry_point() -> ! {
     unsafe {
         asm!("sti");
     }
+
     println!("[PROC] Default process entry. Starting initialization.");
 
     unsafe {
@@ -75,6 +76,7 @@ fn default_entry_point() -> ! {
         vas.load();
     }
 
-    println!("[PROC] End of default process entry point reached.");
+    println!("[PROC] End of default process entry.");
+
     loop {}
 }
