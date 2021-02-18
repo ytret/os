@@ -48,6 +48,20 @@ bitflags! {
     }
 }
 
+bitflags! {
+    #[repr(u8)]
+    enum OpControlWord3 {
+        // Bit 7 must be zero.
+        ResetSpecialMask = 0b10 << 5,   // not set: no action
+        SetSpecialMask = 0b11 << 5,     // not set: no action
+        // Bit 4 must be zero.
+        MustBeSet = 1 << 3,
+        PollCommand = 1 << 2,           // not set: no poll command
+        ReadIrr = 10,                   // not set: no action
+        ReadIsr = 11,                   // not set: no action
+    }
+}
+
 const EOI: u8 = 1 << 5;
 
 pub struct Pic {
@@ -63,7 +77,8 @@ impl Pic {
         let icw1: BitFlags<u8, InitCommandWord1> = BitFlags::new(0)
             | InitCommandWord1::Icw1
             | InitCommandWord1::Icw4Needed;
-        self.send_command(icw1.value);
+        self.send_master_command(icw1.value);
+        self.send_slave_command(icw1.value);
 
         // ICW2: Tell PICs their vector offsets.
         self.send_master_data(self.master_vector_offset);
@@ -76,7 +91,8 @@ impl Pic {
         // ICW4: Set 8086/8088 mode.
         let icw4: BitFlags<u8, InitCommandWord4> =
             BitFlags::new(0) | InitCommandWord4::Mode8086;
-        self.send_data(icw4.value);
+        self.send_master_data(icw4.value);
+        self.send_slave_data(icw4.value);
 
         // Mask IRQs.
         self.mask_irqs();
@@ -115,16 +131,6 @@ impl Pic {
         self.send_master_command(EOI);
     }
 
-    fn send_command(&self, cmd: u8) {
-        self.send_master_command(cmd);
-        self.send_slave_command(cmd);
-    }
-
-    fn send_data(&self, data: u8) {
-        self.send_master_data(data);
-        self.send_slave_data(data);
-    }
-
     fn send_master_command(&self, cmd: u8) {
         unsafe {
             port_io::outb(Port::MasterCommand as u16, cmd);
@@ -142,14 +148,29 @@ impl Pic {
             port_io::outb(Port::MasterData as u16, data);
         }
     }
+
     fn send_slave_data(&self, data: u8) {
         unsafe {
             port_io::outb(Port::SlaveData as u16, data);
         }
     }
+
+    pub fn get_isr(&self) -> u16 {
+        let ocw3: BitFlags<u8, OpControlWord3> = BitFlags::new(0)
+            | OpControlWord3::MustBeSet
+            | OpControlWord3::ReadIsr;
+        self.send_master_command(ocw3.value);
+        self.send_slave_command(ocw3.value);
+        unsafe {
+            let master_isr = port_io::inb(Port::MasterCommand as u16) as u16;
+            let slave_isr = port_io::inb(Port::SlaveCommand as u16) as u16;
+            (slave_isr << 8) | master_isr
+        }
+    }
 }
 
 kernel_static! {
+    // FIXME: use static mut, there's no much sense in this.
     pub static ref PIC: Pic = Pic {
         master_vector_offset: 32,
         slave_vector_offset: 40,
