@@ -134,7 +134,7 @@ pub fn init(kernel_info: &mut KernelInfo) {
     stack.fill(kernel_info);
     let num_entries = (stack.top as u32 - stack.pointer as u32) / 4;
     println!(
-        "PMM: stack: top: 0x{:08X}, ptr: 0x{:08X}, bottom: 0x{:08X}, \
+        "[PMM] Stack: top: 0x{:08X}, ptr: 0x{:08X}, bottom: 0x{:08X}, \
          {} entries, free memory: {:.1} MiB",
         stack.top as u32,
         stack.pointer as u32,

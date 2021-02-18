@@ -214,22 +214,6 @@ impl GlobalDescriptorTable {
         load_gdt(descriptor);
     }
 
-    pub fn kernel_data_segment(&self) -> u16 {
-        0x10
-    }
-
-    pub fn usermode_code_segment(&self) -> u16 {
-        0x18
-    }
-
-    pub fn usermode_data_segment(&self) -> u16 {
-        0x20
-    }
-
-    pub fn tss_segment(&self) -> u16 {
-        0x28
-    }
-
     fn num_segments(&self) -> usize {
         let mut num_segments = 0;
         for (i, segment) in self.0.iter().enumerate() {
@@ -241,8 +225,7 @@ impl GlobalDescriptorTable {
             }
         }
         assert_ne!(
-            num_segments,
-            0,
+            num_segments, 0,
             "there are no null entries at the end of the GDT",
         );
         num_segments
@@ -271,12 +254,24 @@ impl Into<Entry> for GdtDescriptor {
 // This is not a mutex due to the way the task switching works.
 pub static mut TSS: TaskStateSegment = TaskStateSegment::new();
 
+pub const KERNEL_CODE_IDX: usize = 1;
+pub const KERNEL_DATA_IDX: usize = 2;
+pub const USERMODE_CODE_IDX: usize = 3;
+pub const USERMODE_DATA_IDX: usize = 4;
+pub const TSS_IDX: usize = 5;
+
+pub const KERNEL_CODE_SEG: u16 = 8 * KERNEL_CODE_IDX as u16;
+pub const KERNEL_DATA_SEG: u16 = 8 * KERNEL_DATA_IDX as u16;
+pub const USERMODE_CODE_SEG: u16 = 8 * USERMODE_CODE_IDX as u16;
+pub const USERMODE_DATA_SEG: u16 = 8 * USERMODE_DATA_IDX as u16;
+pub const TSS_SEG: u16 = 8 * TSS_IDX as u16;
+
 kernel_static! {
     pub static ref GDT: Mutex<GlobalDescriptorTable> = Mutex::new({
         let mut gdt = GlobalDescriptorTable::new();
 
         // Code segment.
-        gdt.0[1] = Entry::new(
+        gdt.0[KERNEL_CODE_IDX] = Entry::new(
             0x0000_0000,
             0xFFFFF,
             (BitFlags::new(0)
@@ -292,7 +287,7 @@ kernel_static! {
         );
 
         // Data segment.
-        gdt.0[2] = Entry::new(
+        gdt.0[KERNEL_DATA_IDX] = Entry::new(
             0x0000_0000,
             0xFFFFF,
             (BitFlags::new(0)
@@ -307,7 +302,7 @@ kernel_static! {
         );
 
         // Usermode code segment.
-        gdt.0[3] = Entry::new(
+        gdt.0[USERMODE_CODE_IDX] = Entry::new(
             0x0000_0000,
             0xFFFFF,
             (BitFlags::new(0)
@@ -324,7 +319,7 @@ kernel_static! {
         );
 
         // Usermode data segment.
-        gdt.0[4] = Entry::new(
+        gdt.0[USERMODE_DATA_IDX] = Entry::new(
             0x0000_0000,
             0xFFFFF,
             (BitFlags::new(0)
@@ -340,7 +335,7 @@ kernel_static! {
         );
 
         // Task state segment.
-        gdt.0[5] = Entry::new(
+        gdt.0[TSS_IDX] = Entry::new(
             unsafe { &TSS as *const _ as u32 },
             size_of::<TaskStateSegment>() as u32,
             (BitFlags::new(0)

@@ -22,7 +22,7 @@ use crate::bitflags::BitFlags;
 use crate::scheduler::SCHEDULER;
 
 extern "C" {
-    fn jump_into_usermode(
+    pub fn jump_into_usermode(
         code_seg: u16,
         data_seg: u16,
         jump_to: extern "C" fn() -> !,
@@ -47,13 +47,8 @@ impl crate::scheduler::Scheduler {
 }
 
 pub fn init() -> ! {
-    let mut gdt = gdt::GDT.lock();
-    let usermode_code_seg = gdt.usermode_code_segment();
-    let usermode_data_seg = gdt.usermode_data_segment();
-    let tss_seg = gdt.tss_segment();
-
     let mut tss = unsafe { &mut gdt::TSS };
-    tss.ss0 = gdt.kernel_data_segment();
+    tss.ss0 = gdt::KERNEL_DATA_SEG;
 
     // This process has no entry point like an ordinary one, as it is simply
     // the code that is executing now.  The first task switch that happens
@@ -64,26 +59,21 @@ pub fn init() -> ! {
 
     unsafe {
         // Load the GDT with the new entries.
-        gdt.load();
+        gdt::GDT.lock().load();
 
         // Load the TSS.
-        asm!("ltr %ax", in("ax") tss_seg, options(att_syntax));
+        asm!("ltr %ax", in("ax") gdt::TSS_SEG, options(att_syntax));
     }
 
     unsafe {
         SCHEDULER.add_process(init_process);
     }
 
-    println!("[SCHED] Enabling the spawner");
+    println!("[SCHED] Enabling the spawner.");
     crate::arch::pit::TEMP_SPAWNER_ON
         .store(true, core::sync::atomic::Ordering::SeqCst);
 
     init_entry_point();
-
-    // unsafe {
-    //     // Jump into usermode.
-    //     jump_into_usermode(usermode_code_seg, usermode_data_seg, usermode_init);
-    // }
 }
 
 fn init_entry_point() -> ! {
