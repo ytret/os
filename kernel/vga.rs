@@ -15,7 +15,14 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use crate::kernel_static::Mutex;
+use crate::scheduler::SCHEDULER;
+
 use core::fmt;
+use core::fmt::Write;
+
+extern "C" {
+    fn get_eflags() -> u32;
+}
 
 pub struct CursorPos {
     row: usize,
@@ -171,6 +178,27 @@ pub fn init() {
 }
 
 pub fn _print(args: fmt::Arguments) {
-    use core::fmt::Write;
-    WRITER.lock().write_fmt(args).unwrap();
+    // The interrupts should be disabled when printing to the screen to prevent
+    // a context switch from happening while WRITER is locked.  But using
+    // SCHEDULER.stop_scheduling() here is a bit difficult, so we do a slightly
+    // different thing.
+    let do_sti = unsafe {
+        // Check IF and disable it temporarily if it has not been already.
+        match get_eflags() & (1 << 9) {
+            0 => false,
+            _ => {
+                asm!("cli");
+                true
+            }
+        }
+    };
+    {
+        WRITER.lock().write_fmt(args).unwrap();
+    }
+    unsafe {
+        // SCHEDULER.keep_scheduling();
+        if do_sti {
+            asm!("sti");
+        }
+    }
 }

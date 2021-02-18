@@ -71,3 +71,11 @@ halt:
 1:  hlt
     jmp 1b
 .size halt, . - halt
+
+.global get_eflags
+.type get_eflags, @function
+get_eflags:
+    pushf
+    popl %eax
+    ret
+.size get_eflags, . - get_eflags
