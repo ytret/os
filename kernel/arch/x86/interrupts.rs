@@ -16,6 +16,7 @@
 
 use core::mem::size_of;
 
+use crate::arch::pic::PIC;
 use crate::kernel_static::Mutex;
 
 // See interrupts.s
@@ -57,6 +58,10 @@ extern "C" {
     // For all other interrupts.
     fn common_isr(stack_frame: &InterruptStackFrame);
     fn common_isr_ec(stack_frame: &InterruptStackFrame, err_code: u32);
+
+    // Probably spurious IRQs.
+    fn irq7_handler(stack_frame: &InterruptStackFrame);
+    fn irq15_handler(stack_frame: &InterruptStackFrame);
 }
 
 #[allow(dead_code)]
@@ -260,6 +265,12 @@ kernel_static! {
         idt.reserved_2[7].set_handler(dummy_isr_29);
         idt.reserved_2[8].set_handler(dummy_isr_30);
         idt.reserved_2[9].set_handler(dummy_isr_31);
+
+        // Spurios interrupts (probably).  Those may happen because the kernel
+        // sends an EOI to the PIT before iret so that it can switch tasks.
+        idt.interrupts[7].set_handler(irq7_handler);
+        idt.interrupts[15].set_handler(irq15_handler);
+
         idt
     });
 }
@@ -295,14 +306,6 @@ pub extern "C" fn dummy_exception_handler(
     panic!("Unhandled exception.");
 }
 
-#[no_mangle]
-pub extern "C" fn common_interrupt_handler(stack_frame: &InterruptStackFrame) {
-    println!("Common interrupt handler called.");
-    let eip = stack_frame.eip;
-    println!(" eip: 0x{:08X}", eip);
-    panic!("Unhandled interrupt.");
-}
-
 pub fn init() {
     let idt_descriptor = IdtDescriptor {
         size: (size_of::<InterruptDescriptorTable>() - 1) as u16,
@@ -311,5 +314,56 @@ pub fn init() {
     unsafe {
         asm!("lidt ({})", in(reg) &idt_descriptor, options(att_syntax));
         asm!("sti");
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn common_interrupt_handler(stack_frame: &InterruptStackFrame) {
+    println!("Common interrupt handler called.");
+    let eip = stack_frame.eip;
+    println!(" eip: 0x{:08X}", eip);
+    panic!("Unhandled interrupt.");
+}
+
+pub static mut STAGE2_IRQ7_HANDLER: Option<fn(&InterruptStackFrame)> = None;
+pub static mut STAGE2_IRQ15_HANDLER: Option<fn(&InterruptStackFrame)> = None;
+
+#[no_mangle]
+pub extern "C" fn stage1_irq7_handler(stack_frame: &InterruptStackFrame) {
+    if PIC.get_isr() & (1 << 7) == 0 {
+        println!("Ignoring IRQ 7: a spurious interrupt.");
+        let eip = stack_frame.eip;
+        println!(" eip: 0x{:08X}", eip);
+    } else if let Some(handler) = unsafe { STAGE2_IRQ7_HANDLER } {
+        println!(
+            "IRQ 7 has the stage 2 handler at 0x{:08X}, calling it.",
+            handler as *const () as usize,
+        );
+        handler(stack_frame);
+    } else {
+        println!("IRQ 7: the stage 2 handler is not set.");
+        let eip = stack_frame.eip;
+        println!(" eip: 0x{:08X}", eip);
+        panic!("Unhandled interrupt.");
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn stage1_irq15_handler(stack_frame: &InterruptStackFrame) {
+    if PIC.get_isr() & (1 << 15) == 0 {
+        println!("Ignoring IRQ 15: a spurious interrupt.");
+        let eip = stack_frame.eip;
+        println!(" eip: 0x{:08X}", eip);
+    } else if let Some(handler) = unsafe { STAGE2_IRQ15_HANDLER } {
+        println!(
+            "IRQ 15 has the stage 2 handler at 0x{:08X}, calling it.",
+            handler as *const () as usize,
+        );
+        handler(stack_frame);
+    } else {
+        println!("IRQ 15: the stage 2 handler is not set.");
+        let eip = stack_frame.eip;
+        println!(" eip: 0x{:08X}", eip);
+        panic!("Unhandled interrupt.");
     }
 }

@@ -139,13 +139,35 @@ irq14_handler:
     iret
 .size irq14_handler, . - irq14_handler
 
+// IRQ 7 may be either a spurious IRQ or an ATA IRQ. stage1_irq7_handler()
+// figures out which one it is.
+.global irq7_handler
+.type irq7_handler, @function
+irq7_handler:
+    cli
+    pusha
+    movl %esp, %eax
+    addl $32, %eax
+    cld
+    pushl %eax
+    call stage1_irq7_handler
+    addl $4, %esp
+    popa
+    iret
+.size irq7_handler, . - irq7_handler
+
+// Same as IRQ 7.
 .global irq15_handler
 .type irq15_handler, @function
 irq15_handler:
     cli
     pusha
+    movl %esp, %eax
+    addl $32, %eax
     cld
-    call ata_irq15_handler
+    pushl %eax
+    call stage1_irq15_handler
+    addl $4, %esp
     popa
     iret
 .size irq15_handler, . - irq15_handler

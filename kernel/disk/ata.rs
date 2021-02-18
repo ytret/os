@@ -19,7 +19,7 @@ use alloc::vec::Vec;
 use core::mem::align_of;
 use core::slice;
 
-use crate::arch::interrupts::{InterruptStackFrame, IDT};
+use crate::arch::interrupts::{InterruptStackFrame, IDT, STAGE2_IRQ15_HANDLER};
 use crate::arch::pic::PIC;
 use crate::disk::{ReadErr, ReadWriteInterface, WriteErr};
 use crate::port::{Port, PortBuilder};
@@ -485,7 +485,13 @@ pub unsafe fn init() -> Vec<Bus> {
     // somewhere else or that there is no IDE controller.
 
     IDT.lock().interrupts[14].set_handler(irq14_handler);
+
+    // IRQ 15 also can be a spurious IRQ sent from the slave PIC, so it has a
+    // two-stage handler.  Set the second stage handler now.
+    STAGE2_IRQ15_HANDLER = Some(ata_irq15_handler);
+
     IDT.lock().interrupts[15].set_handler(irq15_handler);
+
     PIC.set_irq_mask(14, false);
     PIC.set_irq_mask(15, false);
 
@@ -501,8 +507,7 @@ pub extern "C" fn ata_irq14_handler() {
     PIC.send_eoi(14);
 }
 
-#[no_mangle]
-pub extern "C" fn ata_irq15_handler() {
+pub fn ata_irq15_handler(_: &InterruptStackFrame) {
     println!("[ATA] IRQ 15");
     PIC.send_eoi(15);
 }
