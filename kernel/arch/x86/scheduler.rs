@@ -90,6 +90,7 @@ pub fn init() -> ! {
     crate::arch::pit::TEMP_SPAWNER_ON
         .store(true, core::sync::atomic::Ordering::SeqCst);
 
+    crate::arch::pic::PIC.set_irq_mask(crate::arch::pit::IRQ, false);
     init_entry_point();
 }
 
