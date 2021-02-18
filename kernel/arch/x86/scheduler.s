@@ -86,8 +86,8 @@ switch_tasks:
 
     // Load the next task's Process struct.
     movl 0*4(%edi), %ebx        // ebx = cr3
-    movl 1*4(%edi), %ecx        // ecx = kernel stack top
-    movl 2*4(%edi), %esp        // esp = ordinary stack ptr
+    movl 1*4(%edi), %ecx        // ecx = kernel stack bottom
+    movl 2*4(%edi), %esp        // esp = kernel stack top
 
     // Update the ESP0 field in the TSS.
     movl %ecx, 4(%eax)

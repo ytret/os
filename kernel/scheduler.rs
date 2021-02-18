@@ -18,6 +18,11 @@ use crate::arch;
 use crate::arch::process::Process;
 
 use alloc::vec::Vec;
+use core::sync::atomic::{AtomicU32, Ordering};
+
+/// A counter used by the scheduler to count the number of tasks that want
+/// the interrupts to be disabled in order to perform their critical stuff.
+pub static NO_SCHED_COUNTER: AtomicU32 = AtomicU32::new(0);
 
 pub struct Scheduler {
     counter: u64, // ms
@@ -40,11 +45,16 @@ impl Scheduler {
 
     pub fn schedule(&mut self, add_count: u32) {
         self.counter += add_count as u64;
-        if self.processes.len() > 1 {
+        if NO_SCHED_COUNTER.load(Ordering::SeqCst) == 0
+            && self.processes.len() > 1
+        {
             // println!("[SCHED] Next process, total: {}", self.processes.len());
             self.next_process();
         } else {
-            println!("[SCHED] Too few processes: {}.", self.processes.len());
+            println!(
+                "[SCHED] Not scheduling. (There are {} processes.)",
+                self.processes.len(),
+            );
         }
     }
 
@@ -64,7 +74,7 @@ impl Scheduler {
         let to = &self.processes[self.current_idx];
         let to_idx = self.current_idx;
 
-        // println!(" switching from {} to {}", from_idx, to_idx);
+        println!(" switching from {} to {}", from_idx, to_idx);
         // println!(" to Process struct addr: 0x{:08X}", to as *const _ as u32);
         // println!("  to.cr3 = 0x{:08X}", to.cr3);
         // println!("  to.esp0 = 0x{:08X}", to.esp0);

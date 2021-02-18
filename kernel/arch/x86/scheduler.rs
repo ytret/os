@@ -15,11 +15,12 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use core::mem::size_of;
+use core::sync::atomic::{AtomicU32, Ordering};
 
 use crate::arch::gdt;
 use crate::arch::process::Process;
 use crate::bitflags::BitFlags;
-use crate::scheduler::SCHEDULER;
+use crate::scheduler::{NO_SCHED_COUNTER, SCHEDULER};
 
 extern "C" {
     pub fn jump_into_usermode(
@@ -42,6 +43,22 @@ impl crate::scheduler::Scheduler {
         unsafe {
             let tss = &mut gdt::TSS as *mut gdt::TaskStateSegment;
             switch_tasks(from, to, tss);
+        }
+    }
+
+    pub fn stop_scheduling(&self) {
+        unsafe {
+            asm!("cli");
+        }
+        NO_SCHED_COUNTER.fetch_add(1, Ordering::SeqCst);
+    }
+
+    pub fn keep_scheduling(&self) {
+        NO_SCHED_COUNTER.fetch_sub(1, Ordering::SeqCst);
+        if NO_SCHED_COUNTER.load(Ordering::SeqCst) == 0 {
+            unsafe {
+                asm!("sti");
+            }
         }
     }
 }

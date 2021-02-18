@@ -45,6 +45,8 @@ pub mod disk;
 
 pub mod fs;
 
+pub mod elf;
+
 use core::panic::PanicInfo;
 use memory_region::Region;
 
@@ -91,8 +93,29 @@ pub extern "C" fn main(magic_num: u32, boot_info: *const mbi::BootInfo) {
 
     arch::pci::init();
 
-    //scheduler::init();
+    scheduler::init();
 
+    /*
+    let data: Box<[u8]> = Box::new([
+        0x7f, 101, 108, 102, 1, 1, 1, 7, 8, 9,
+        2, 0,
+        1, 0,
+        2, 0, 0, 0,
+        3, 0, 0, 0,
+        4, 0, 0, 0,
+        5, 0, 0, 0,
+        6, 0, 0, 0,
+        7, 0,
+        8, 0,
+        9, 0,
+        10, 0,
+        11, 0,
+        12, 0,
+    ]);
+    elf::read_elf_header(data).unwrap();
+    */
+
+    /*
     use alloc::boxed::Box;
     let disk = &mut disk::DISKS.lock()[0];
     let superblock: Box<[u8]> = disk.rw_interface.read_sectors(2, 2).unwrap();
@@ -110,11 +133,17 @@ pub extern "C" fn main(magic_num: u32, boot_info: *const mbi::BootInfo) {
     }));
     match &disk.file_system {
         Some(fs) => {
-            let root_dir = fs.root_dir(&disk.rw_interface);
-            println!("{:#?}", root_dir);
+            println!("{:#?}", fs.root_dir(&disk.rw_interface).unwrap());
+            let data = fs.read_file(15, &disk.rw_interface).unwrap();
+            println!("{:?}", elf::ElfInfo::from_raw_data(&data[0]));
         }
         None => panic!(),
     }
+    */
+
+    loop {}
+
+    // println!("Reached the end of main.");
 }
 
 #[panic_handler]
