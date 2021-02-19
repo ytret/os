@@ -71,7 +71,7 @@ pub extern "C" fn main(magic_num: u32, boot_info: *const mbi::BootInfo) {
     vga::init();
 
     if magic_num == 0x36D76289 {
-        println!("Booted by Multiboot2-compatible bootloader");
+        println!("Booted by a Multiboot2-compliant bootloader.");
         unsafe {
             mbi::parse(boot_info, &mut kernel_info);
         }
