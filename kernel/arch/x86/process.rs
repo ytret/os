@@ -38,16 +38,22 @@ impl Process {
 
         // Make an initial stack frame that will be popped on a task switch (see
         // scheduler.s).
-        let kernel_stack_top = kernel_stack_bottom.wrapping_sub(7);
+        let kernel_stack_top = kernel_stack_bottom.wrapping_sub(8);
         unsafe {
             *kernel_stack_top.wrapping_add(0) = 0; // edi
             *kernel_stack_top.wrapping_add(1) = 0; // esi
             *kernel_stack_top.wrapping_add(2) = 0; // ecx
             *kernel_stack_top.wrapping_add(3) = 0; // ebx
             *kernel_stack_top.wrapping_add(4) = 0; // eax
-            *kernel_stack_top.wrapping_add(5) = 0; // ebp
+            *kernel_stack_top.wrapping_add(5) = 0x00000000;
+            // ebp = 0x00000000 is a magic value making the stack tracer to
+            // stop.  It is used here the same way as in boot.s.
             *kernel_stack_top.wrapping_add(6) =
                 default_entry_point as *const () as u32; // eip
+            *kernel_stack_top.wrapping_add(7) = 0x00000000;
+            // Here 0x00000000 is just some value for the stack tracer to print
+            // out as EIP instead of the heap garbage after the the stack.  Also
+            // it may serve as a return address for default_entry_point().
         }
 
         Process {

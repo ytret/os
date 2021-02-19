@@ -42,7 +42,7 @@ walk_stack:
 1:  // Walk backwards through the %ebp-linked list, storing return addresses in
     // the %edi-array.
     testl %ebx, %ebx
-    jz 2f                   // ebp is set to 0 by _entry in boot.s
+    jz 2f                   // ebp is set to 0 in boot.s and Process::new()
     movl 4(%ebx), %edx      // previous stack frame's eip => edx
     movl 0(%ebx), %ebx      // previous stack frame's ebp => ebx
     movl %edx, (%edi)       // push eip to the array
