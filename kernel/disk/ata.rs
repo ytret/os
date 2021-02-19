@@ -455,6 +455,7 @@ enum BusDrive {
     Slave,
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Copy)]
 struct Drive {
     supports_lba48: bool,

@@ -14,12 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use core::mem::size_of;
-use core::sync::atomic::{AtomicU32, Ordering};
+use core::sync::atomic::Ordering;
 
 use crate::arch::gdt;
 use crate::arch::process::Process;
-use crate::bitflags::BitFlags;
 use crate::scheduler::{NO_SCHED_COUNTER, SCHEDULER};
 
 extern "C" {

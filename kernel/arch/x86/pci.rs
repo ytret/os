@@ -251,7 +251,7 @@ impl Function {
                         0x01 => DeviceClass::MassStorageController(MassStorageControllerSubclass::SerialAta(SerialAtaInterface::Ahci1_0)),
                         _ => DeviceClass::MassStorageController(MassStorageControllerSubclass::SerialAta(SerialAtaInterface::Unknown)),
                     }
-                    _ => DeviceClass::MassStorageController(MassStorageControllerSubclass::Other),
+                    // _ => DeviceClass::MassStorageController(MassStorageControllerSubclass::Other),
                     _ => DeviceClass::MassStorageController(MassStorageControllerSubclass::Unknown),
                 }
 
@@ -357,7 +357,7 @@ enum MassStorageControllerSubclass {
     Unknown,
     IdeController(IdeControllerInterface),
     SerialAta(SerialAtaInterface),
-    Other,
+    // Other,
 }
 
 #[derive(Clone, Debug)]
@@ -766,7 +766,7 @@ fn print_bus(offset: usize, bus: &Bus) {
                         // FIXME: can a function be a PCI-to-PCI bridge?
                         println!("PCI to PCI bridge not in a right place");
                     }
-                    _ => println!("unreachable"),
+                    _ => unreachable!(),
                 }
             } else {
                 /*

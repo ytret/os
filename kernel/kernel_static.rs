@@ -23,9 +23,10 @@
 // <https://raw.githubusercontent.com/rust-lang-nursery/lazy-static.rs/master/LICENSE-APACHE>.
 
 use core::cell::UnsafeCell;
+use core::hint::spin_loop;
 use core::mem::MaybeUninit;
 use core::ops::{Deref, DerefMut, Drop};
-use core::sync::atomic::{spin_loop_hint, AtomicBool, Ordering};
+use core::sync::atomic::{AtomicBool, Ordering};
 
 pub struct StaticCell<T> {
     initialized: AtomicBool,
@@ -68,11 +69,14 @@ impl<T> Mutex<T> {
     }
 
     pub fn lock(&self) -> MutexWrapper<T> {
-        while self.locked.compare_and_swap(false, true, Ordering::Acquire)
-            != false
-        {
+        while let Err(_) = self.locked.compare_exchange(
+            false,
+            true,
+            Ordering::Acquire,
+            Ordering::Relaxed,
+        ) {
             while self.locked.load(Ordering::Relaxed) {
-                spin_loop_hint();
+                spin_loop();
             }
         }
         MutexWrapper {

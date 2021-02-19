@@ -289,6 +289,7 @@ const DIR_ENTRY_TYPE_DIR: u8 = 2;
 // const DIR_ENTRY_TYPE_SOCKET: u8 = 6;
 // const DIR_ENTRY_TYPE_SYMBOLIC_LINK: u8 = 7;
 
+#[allow(dead_code)]
 pub struct Ext2 {
     version: (u32, u16), // major, minor
     //optional_features: BitFlags<u32, OptionalFeature>,
@@ -519,7 +520,7 @@ impl Ext2 {
             inode.direct_block_ptrs()[index] as usize
         } else if sibs_range.contains(&index) {
             // FIXME block numbers are always 32-bit
-            assert_ne!(inode.singly_indirect_block_ptr, 0);
+            assert_ne!({ inode.singly_indirect_block_ptr }, 0);
             let idx_in_sibs = index - sibs_range.start;
             self.read_block_entry(
                 inode.singly_indirect_block_ptr as usize,

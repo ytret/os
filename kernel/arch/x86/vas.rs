@@ -172,23 +172,19 @@ impl VirtAddrSpace {
         assert_eq!(virt & 0xFFF, 0, "virt must be page-aligned");
         assert_eq!(phys & 0xFFF, 0, "phys must be page-aligned");
 
-        let pgdir = self.pgdir_virt.as_mut().unwrap();
-        let pde_idx = (virt >> 22) as usize;
         let pte_idx = ((virt >> 12) & 0x3FF) as usize;
 
         let pgtbl_virt = self.pgtbl_virt_of(virt);
         assert!(!pgtbl_virt.is_null(), "page table does not exist");
 
-        unsafe {
-            let entry = &mut (*pgtbl_virt).0[pte_idx];
-            entry.set_addr(phys);
-            entry.set_flag(PteFlags::Present);
-            entry.set_flag(PteFlags::ReadWrite);
-            if self.usermode {
-                entry.set_flag(PteFlags::AnyDpl);
-            }
-            asm!("invlpg ({})", in(reg) virt, options(att_syntax));
+        let entry = &mut (*pgtbl_virt).0[pte_idx];
+        entry.set_addr(phys);
+        entry.set_flag(PteFlags::Present);
+        entry.set_flag(PteFlags::ReadWrite);
+        if self.usermode {
+            entry.set_flag(PteFlags::AnyDpl);
         }
+        asm!("invlpg ({})", in(reg) virt, options(att_syntax));
     }
 
     /// Allocates pages for the specified virtual memory region from the PMM

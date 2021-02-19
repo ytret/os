@@ -15,7 +15,6 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use crate::kernel_static::Mutex;
-use crate::scheduler::SCHEDULER;
 
 use core::fmt;
 use core::fmt::Write;

@@ -197,13 +197,6 @@ impl GlobalDescriptorTable {
         }
     }
 
-    pub fn add_segment(&mut self, entry: Entry) -> u16 {
-        let idx = self.num_segments();
-        assert_ne!(idx, self.0.len(), "no place in the GDT for a new entry");
-        self.0[idx] = entry;
-        idx as u16 * 8
-    }
-
     pub unsafe fn load(&mut self) {
         // Place the GDT descriptor in the null segment.
         let null_segment = &mut self.0[0] as *mut Entry;

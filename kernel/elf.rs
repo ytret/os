@@ -76,10 +76,10 @@ impl ElfHeader {
             ));
         }
 
-        if header._type != Type::ExecutableFile {
+        if { header._type } != Type::ExecutableFile {
             return Err(ElfHeaderErr::InvalidType(header._type as u16));
         }
-        if header.machine != Machine::X86 {
+        if { header.machine } != Machine::X86 {
             return Err(ElfHeaderErr::UnsupportedMachine(
                 header.machine as u16,
             ));
@@ -112,6 +112,7 @@ struct Ident {
     padding: [u8; 7],
 }
 
+#[allow(dead_code)]
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Arch {
@@ -127,6 +128,7 @@ enum ByteOrder {
 
 const ELF_VERSION: u8 = 1;
 
+#[allow(dead_code)]
 #[repr(u16)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Type {
@@ -171,6 +173,7 @@ impl SectionHeader {
     }
 }
 
+#[allow(dead_code)]
 #[repr(u32)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum SectionType {
@@ -219,6 +222,7 @@ impl ProgHeader {
     }
 }
 
+#[allow(dead_code)]
 #[repr(u32)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum ProgHeaderType {
@@ -327,7 +331,7 @@ impl ProgInfo {
         ph_idx: usize,
     ) -> Self {
         let ph = ProgHeader::from_raw_data(data, &elf_header, ph_idx);
-        if ph._type != ProgHeaderType::Load || ph.filesz != ph.memsz {
+        if { ph._type } != ProgHeaderType::Load || ph.filesz != ph.memsz {
             unimplemented!();
         }
         ProgInfo {
