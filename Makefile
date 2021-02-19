@@ -54,6 +54,7 @@ LIBKERNEL := $(LIBDIR)/libkernel.a
 LIBCORE := $(LIBDIR)/libcore.rlib
 LIBCOMP := $(LIBDIR)/libcompiler_builtins.rlib
 LIBALLOC := $(LIBDIR)/liballoc.rlib
+RUSTLIBS := $$(rustc --print sysroot)/lib/rustlib/src/rust/library
 
 LINKLIST := \
 	$(OBJECTS) \
@@ -79,7 +80,7 @@ $(LIBKERNEL): $(SOURCES) $(LIBCORE) $(LIBCOMP) $(LIBALLOC)
 
 $(LIBCORE):
 	$(RUST) -O $(RUSTFLAGS) --edition 2018 --out-dir $(LIBDIR) \
-	--crate-name core --crate-type rlib $(LIBDIR)/libcore/lib.rs
+	--crate-name core --crate-type rlib $(LIBDIR)/core/src/lib.rs
 
 # Note: --edition 2018 causes build failures for this library.
 $(LIBCOMP): $(LIBCORE)
@@ -90,10 +91,11 @@ $(LIBCOMP): $(LIBCORE)
 
 $(LIBALLOC): $(LIBCORE) $(LIBCOMP)
 	$(RUST) -O $(RUSTFLAGS) --edition 2018 --out-dir $(LIBDIR) \
-	--crate-name alloc --crate-type rlib $(LIBDIR)/liballoc/lib.rs
+	--crate-name alloc --crate-type rlib $(LIBDIR)/alloc/src/lib.rs
 
 get-libs:
-	cp -R $$(rustc --print sysroot)/lib/rustlib/src/rust/src $(LIBDIR)
+	mkdir -p $(LIBDIR)
+	cp -R $(RUSTLIBS)/core $(RUSTLIBS)/stdarch $(RUSTLIBS)/alloc $(LIBDIR)/
 	cd $(LIBDIR) && git clone "https://github.com/rust-lang/compiler-builtins"
 
 iso: $(ISOFILE)
