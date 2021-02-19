@@ -34,15 +34,15 @@ walk_stack:
     movl %ebx, -8(%ebp)
 
     // Set up local registers.
-	xorl %eax, %eax         // eax = return value
+    xorl %eax, %eax         // eax = return value
     movl 8(%esp), %ebx      // old ebp => ebx
     movl 16(%esp), %edi     // destination array pointer => edi
     movl 20(%esp), %ecx     // max. array size => ecx
 
-1:  // Walk backwards through %ebp-linked list, storing return addresses in the
-    // %edi-array.
+1:  // Walk backwards through the %ebp-linked list, storing return addresses in
+    // the %edi-array.
     testl %ebx, %ebx
-    jz 2f                   // ebp is set to 0 by _entry before calling main()
+    jz 2f                   // ebp is set to 0 by _entry in boot.s
     movl 4(%ebx), %edx      // previous stack frame's eip => edx
     movl 0(%ebx), %ebx      // previous stack frame's ebp => ebx
     movl %edx, (%edi)       // push eip to the array
@@ -50,7 +50,8 @@ walk_stack:
     incl %eax
     loop 1b
 
-2:  // Restore caller's edi and ebx, leave stack frame and return eax.
+2:  // Restore the caller's %edi and %ebx and leave the stack frame.  %eax holds
+    // the return value.
     movl -4(%ebp), %edi
     movl -8(%ebp), %ebx
     leave

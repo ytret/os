@@ -15,8 +15,8 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 .macro CALL_HANDLER int_num err_code frame_ptr
-	pushl \frame_ptr
-	pushl \err_code                 // error code
+    pushl \frame_ptr
+    pushl \err_code                 // error code
     pushl \int_num                  // interrupt number
     cld
     call dummy_exception_handler
@@ -27,12 +27,15 @@
 .global dummy_isr_\num
 .type dummy_isr_\num, @function
 dummy_isr_\num:
-	cli
+    cli
+    pushl %ebp
+    movl %esp, %ebp
     pusha
-    movl %esp, %ebx
-    addl $32, %ebx                  // interrupt stack frame pointer
+    movl %ebp, %ebx
+    addl $4, %ebx                   // interrupt stack frame pointer
     CALL_HANDLER $\num $0 %ebx
     popa
+    addl $4, %esp
     iret
 .size dummy_isr_\num, . - dummy_isr_\num
 .endm
@@ -41,14 +44,23 @@ dummy_isr_\num:
 .global dummy_isr_\num
 .type dummy_isr_\num, @function
 dummy_isr_\num:
-	cli
+    cli
+    pushl %ebp
+    movl %esp, %ebp
+
+    // We need to place the caller's %eip at 4(%ebp) so that the System V ABI is
+    // respected and the stack tracer shows the saved %eip and not the error
+    // code.
     pusha
-    movl %esp, %ebx
-    addl $36, %ebx                  // interrupt stack frame pointer
-    movl 32(%esp), %eax             // error code
-    CALL_HANDLER $\num %eax %ebx
+    movl 8(%ebp), %ebx              // saved eip => ebx
+    movl 4(%ebp), %ecx              // error code => ecx
+    movl %ebx, 4(%ebp)
+    movl %ebp, %ebx
+    addl $8, %ebx                   // interrupt stack frame pointer
+    CALL_HANDLER $\num %ecx %ebx
     popa
-    addl $4, %esp                   // the error code must be consumed
+
+    addl $8, %esp                   // consume the saved %ebp and error code
     iret
 .size dummy_isr_\num, . - dummy_isr_\num
 .endm
@@ -90,14 +102,19 @@ DUMMY_EXCEPTION_ISR 31
 .type common_isr, @function
 common_isr:
     cli
+    pushl %ebp
+    movl %esp, %ebp
+
     pusha
-    movl %esp, %eax
-    addl $32, %eax
+    movl %ebp, %ebx
+    addl $4, %ebx
     cld
-    pushl %eax
+    pushl %ebx
     call common_interrupt_handler
     addl $4, %esp
     popa
+
+    addl $4, %esp
     iret
 .size common_isr, . - common_isr
 
@@ -105,15 +122,22 @@ common_isr:
 .type common_isr_ec, @function
 common_isr_ec:
     cli
+    pushl %ebp
+    movl %esp, %ebp
+
+    // Respect the System V ABI as in DUMMY_EXCEPTION_ISR_EC.
     pusha
-    movl %esp, %eax
-    addl $32, %eax
+    movl 8(%ebp), %ebx
+    movl %ebx, 4(%ebp)
+    movl %ebp, %ebx
+    addl $8, %ebx
     cld
-    pushl %eax
+    pushl %ebx
     call common_interrupt_handler
     addl $4, %esp
     popa
-    addl $4, %esp
+
+    addl $8, %esp                   // consume the saved %ebp and error code
     iret
 .size common_isr, . - common_isr
 
@@ -121,10 +145,15 @@ common_isr_ec:
 .type irq0_handler, @function
 irq0_handler:
     cli
+    pushl %ebp
+    movl %esp, %ebp
+
     pusha
     cld
     call pit_irq0_handler
     popa
+
+    addl $4, %esp
     iret
 .size irq0_handler, . - irq0_handler
 
@@ -132,10 +161,15 @@ irq0_handler:
 .type irq14_handler, @function
 irq14_handler:
     cli
+    pushl %ebp
+    movl %esp, %ebp
+
     pusha
     cld
     call ata_irq14_handler
     popa
+
+    addl $4, %esp
     iret
 .size irq14_handler, . - irq14_handler
 
@@ -145,14 +179,19 @@ irq14_handler:
 .type irq7_handler, @function
 irq7_handler:
     cli
+    pushl %ebp
+    movl %esp, %ebp
+
     pusha
-    movl %esp, %eax
-    addl $32, %eax
+    movl %ebp, %ebx
+    addl $4, %ebx
     cld
-    pushl %eax
+    pushl %ebx
     call stage1_irq7_handler
     addl $4, %esp
     popa
+
+    addl $4, %esp
     iret
 .size irq7_handler, . - irq7_handler
 
@@ -161,13 +200,18 @@ irq7_handler:
 .type irq15_handler, @function
 irq15_handler:
     cli
+    pushl %ebp
+    movl %esp, %ebp
+
     pusha
-    movl %esp, %eax
-    addl $32, %eax
+    movl %ebp, %ebx
+    addl $4, %ebx
     cld
-    pushl %eax
+    pushl %ebx
     call stage1_irq15_handler
     addl $4, %esp
     popa
+
+    addl $4, %esp
     iret
 .size irq15_handler, . - irq15_handler
