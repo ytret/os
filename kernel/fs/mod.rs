@@ -20,7 +20,7 @@ use alloc::boxed::Box;
 use alloc::string::{FromUtf8Error, String};
 use alloc::vec::Vec;
 
-use crate::disk::{ReadErr, ReadWriteInterface};
+use crate::disk;
 
 #[derive(Debug)]
 pub struct Directory {
@@ -45,14 +45,9 @@ enum DirEntryContent {
 
 #[derive(Debug)]
 pub enum ReadDirErr {
-    DiskErr(ReadErr),
+    NoRwInterface,
+    DiskErr(disk::ReadErr),
     InvalidName(FromUtf8Error),
-}
-
-impl From<ReadErr> for ReadDirErr {
-    fn from(err: ReadErr) -> Self {
-        ReadDirErr::DiskErr(err)
-    }
 }
 
 impl From<FromUtf8Error> for ReadDirErr {
@@ -63,53 +58,22 @@ impl From<FromUtf8Error> for ReadDirErr {
 
 #[derive(Debug)]
 pub enum ReadFileErr {
-    DiskErr(ReadErr),
-}
-
-impl From<ReadErr> for ReadFileErr {
-    fn from(err: ReadErr) -> Self {
-        ReadFileErr::DiskErr(err)
-    }
+    NoRwInterface,
+    DiskErr(disk::ReadErr),
+    Other(&'static str),
 }
 
 #[derive(Debug)]
 pub enum FileSizeErr {
-    DiskErr(ReadErr),
-}
-
-impl From<ReadErr> for FileSizeErr {
-    fn from(err: ReadErr) -> Self {
-        FileSizeErr::DiskErr(err)
-    }
+    NoRwInterface,
+    DiskErr(disk::ReadErr),
+    Other(&'static str),
 }
 
 pub trait FileSystem {
-    fn root_dir(
-        &self,
-        rw_interface: &Box<dyn ReadWriteInterface>,
-    ) -> Result<Directory, ReadDirErr>;
-
-    fn read_dir(
-        &self,
-        id: usize,
-        rw_interface: &Box<dyn ReadWriteInterface>,
-    ) -> Result<Directory, ReadDirErr>;
-
-    fn read_file(
-        &self,
-        id: usize,
-        rw_interface: &Box<dyn ReadWriteInterface>,
-    ) -> Result<Vec<Box<[u8]>>, ReadFileErr>;
-
-    fn file_size_bytes(
-        &self,
-        id: usize,
-        rw_interface: &Box<dyn ReadWriteInterface>,
-    ) -> Result<u64, FileSizeErr>;
-
-    fn file_size_blocks(
-        &self,
-        id: usize,
-        rw_interface: &Box<dyn ReadWriteInterface>,
-    ) -> Result<usize, FileSizeErr>;
+    fn root_dir(&self) -> Result<Directory, ReadDirErr>;
+    fn read_dir(&self, id: usize) -> Result<Directory, ReadDirErr>;
+    fn read_file(&self, id: usize) -> Result<Vec<Box<[u8]>>, ReadFileErr>;
+    fn file_size_bytes(&self, id: usize) -> Result<u64, FileSizeErr>;
+    fn file_size_blocks(&self, id: usize) -> Result<usize, FileSizeErr>;
 }

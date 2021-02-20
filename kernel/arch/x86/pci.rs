@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use alloc::boxed::Box;
+use alloc::rc::Rc;
 use alloc::vec::Vec;
 use core::marker::PhantomData;
 
@@ -709,7 +710,7 @@ pub fn init() {
                         let buses = disk::ata::init();
                         for bus in buses {
                             let disk = disk::Disk {
-                                rw_interface: Box::new(bus),
+                                rw_interface: Rc::new(Box::new(bus)),
                                 file_system: None,
                             };
                             disk::DISKS.lock().push(disk);

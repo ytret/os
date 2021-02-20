@@ -127,7 +127,13 @@ pub extern "C" fn main(magic_num: u32, boot_info: *const mbi::BootInfo) {
     // 4: 2048-2559
     // 5: 2560-3071
     // 6: 3072-3583
-    match unsafe { fs::ext2::Ext2::from_raw(&superblock, &bgd_tbl) } {
+    match unsafe {
+        fs::ext2::Ext2::from_raw(
+            &superblock,
+            &bgd_tbl,
+            alloc::rc::Rc::downgrade(&disk.rw_interface),
+        )
+    } {
         Ok(ext) => disk.file_system = Some(Box::new(ext)),
         Err(e) => match e {
             fs::ext2::FromRawErr::NoRequiredFeatures(rf) => {
@@ -140,8 +146,8 @@ pub extern "C" fn main(magic_num: u32, boot_info: *const mbi::BootInfo) {
     }
     match &disk.file_system {
         Some(fs) => {
-            println!("{:?}", fs.root_dir(&disk.rw_interface).unwrap());
-            let data = fs.read_file(15, &disk.rw_interface).unwrap();
+            println!("{:?}", fs.root_dir().unwrap());
+            let data = fs.read_file(15).unwrap();
             println!("{:?}", elf::ElfInfo::from_raw_data(&data[0]));
         }
         None => panic!(),

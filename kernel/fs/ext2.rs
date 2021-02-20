@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use alloc::boxed::Box;
+use alloc::rc::Weak;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::convert::TryFrom;
@@ -27,7 +28,7 @@ use super::{
     ReadFileErr,
 };
 use crate::bitflags::BitFlags;
-use crate::disk::{ReadErr, ReadWriteInterface};
+use crate::disk;
 
 #[allow(dead_code)]
 #[repr(C, packed)]
@@ -325,8 +326,10 @@ impl TryFrom<u8> for DirEntryType {
     }
 }
 
-// #[allow(dead_code)]
+#[allow(dead_code)]
 pub struct Ext2 {
+    rw_interface: Weak<Box<dyn disk::ReadWriteInterface>>,
+
     version: (u32, u16), // major, minor
     optional_features: BitFlags<u32, OptionalFeature>,
     required_features: BitFlags<u32, RequiredFeature>,
@@ -353,6 +356,7 @@ impl Ext2 {
     pub unsafe fn from_raw(
         raw_superblock: &[u8],
         raw_block_group_descriptor: &[u8],
+        rw_interface: Weak<Box<dyn disk::ReadWriteInterface>>,
     ) -> Result<Self, FromRawErr> {
         assert_eq!(raw_superblock.len(), 1024, "invalid raw superblock size");
         assert!(
@@ -383,6 +387,8 @@ impl Ext2 {
         let mut read_only = false;
 
         Ok(Ext2 {
+            rw_interface,
+
             version: (superblock.version_major, superblock.version_minor),
             optional_features: {
                 if superblock.version_major >= 1 {
@@ -523,11 +529,12 @@ impl Ext2 {
         inode_addr as usize
     }
 
-    fn read_inode(
-        &self,
-        inode_idx: u32,
-        rw_interface: &Box<dyn ReadWriteInterface>,
-    ) -> Result<Box<Inode>, ReadErr> {
+    fn read_inode(&self, inode_idx: u32) -> Result<Box<Inode>, ReadInodeErr> {
+        let rw_interface = self
+            .rw_interface
+            .upgrade()
+            .ok_or(ReadInodeErr::NoRwInterface)
+            .unwrap();
         let inode_addr = self.inode_addr(inode_idx);
         let first_sector_idx = inode_addr / rw_interface.sector_size();
         let num_sectors = size_of::<Inode>() / rw_interface.sector_size() + 1;
@@ -540,7 +547,7 @@ impl Ext2 {
                     Ok(Box::new((*raw).clone()))
                 }
             }
-            Err(err) => Err(err),
+            Err(err) => Err(ReadInodeErr::DiskErr(err)),
         }
     }
 
@@ -553,7 +560,6 @@ impl Ext2 {
         &self,
         inode: &Inode,
         index: usize,
-        rw_interface: &Box<dyn ReadWriteInterface>,
     ) -> Result<Box<[u8]>, ReadInodeBlockErr> {
         let sibs_range = Range {
             start: 12,
@@ -571,13 +577,12 @@ impl Ext2 {
         let block_num = if index < 12 {
             inode.direct_block_ptrs()[index] as usize
         } else if sibs_range.contains(&index) {
-            // FIXME block numbers are always 32-bit
+            // FIXME: block numbers are always 32-bit.
             assert_ne!({ inode.singly_indirect_block_ptr }, 0);
             let idx_in_sibs = index - sibs_range.start;
             self.read_block_entry(
                 inode.singly_indirect_block_ptr as usize,
                 idx_in_sibs,
-                rw_interface,
             )?
         } else if dibs_range.contains(&index) {
             unimplemented!();
@@ -587,7 +592,7 @@ impl Ext2 {
             panic!("Too big index.");
         };
         if block_num != 0 {
-            Ok(self.read_block(block_num, rw_interface)?)
+            Ok(self.read_block(block_num)?)
         } else {
             Err(ReadInodeBlockErr::BlockNotFound)
         }
@@ -596,9 +601,8 @@ impl Ext2 {
     fn num_block_entries(
         &self,
         block_num: usize,
-        rw_interface: &Box<dyn ReadWriteInterface>,
-    ) -> Result<usize, ReadErr> {
-        let block = self.read_block(block_num, rw_interface)?;
+    ) -> Result<usize, ReadBlockErr> {
+        let block = self.read_block(block_num)?;
         let mut i = 0;
         while i < self.block_size / 4 {
             let first = i * 4;
@@ -618,9 +622,8 @@ impl Ext2 {
         &self,
         block_num: usize,
         entry_idx: usize,
-        rw_interface: &Box<dyn ReadWriteInterface>,
-    ) -> Result<usize, ReadErr> {
-        let block = self.read_block(block_num, rw_interface)?;
+    ) -> Result<usize, ReadBlockErr> {
+        let block = self.read_block(block_num)?;
         assert!(entry_idx * 4 <= block.len() - 4);
         let first = entry_idx * 4;
         Ok(block[first] as usize
@@ -629,13 +632,14 @@ impl Ext2 {
             | ((block[first + 3] as usize) << 24))
     }
 
-    fn read_block(
-        &self,
-        block_num: usize,
-        rw_interface: &Box<dyn ReadWriteInterface>,
-    ) -> Result<Box<[u8]>, ReadErr> {
+    fn read_block(&self, block_num: usize) -> Result<Box<[u8]>, ReadBlockErr> {
+        let rw_interface = self
+            .rw_interface
+            .upgrade()
+            .ok_or(ReadBlockErr::NoRwInterface)
+            .unwrap();
         if block_num >= self.total_num_blocks as usize {
-            return Err(ReadErr::Other("invalid block num"));
+            return Err(ReadBlockErr::InvalidBlockNum);
         }
         let addr = block_num * self.block_size;
         assert_eq!(
@@ -650,7 +654,7 @@ impl Ext2 {
             "cannot convert block size to num of sectors",
         );
         let num_sectors = self.block_size / rw_interface.sector_size();
-        rw_interface.read_sectors(sector_idx, num_sectors)
+        Ok(rw_interface.read_sectors(sector_idx, num_sectors)?)
     }
 
     fn iter_dir(
@@ -670,21 +674,104 @@ pub enum FromRawErr {
     NoRequiredFeatures(BitFlags<u32, RequiredFeature>),
 }
 
+#[derive(Debug)]
+enum ReadInodeErr {
+    NoRwInterface,
+    DiskErr(disk::ReadErr),
+}
+
+impl From<disk::ReadErr> for ReadInodeErr {
+    fn from(err: disk::ReadErr) -> Self {
+        ReadInodeErr::DiskErr(err)
+    }
+}
+
+impl From<ReadInodeErr> for super::ReadDirErr {
+    fn from(err: ReadInodeErr) -> Self {
+        match err {
+            ReadInodeErr::NoRwInterface => Self::NoRwInterface,
+            ReadInodeErr::DiskErr(e) => Self::DiskErr(e),
+        }
+    }
+}
+
+impl From<ReadInodeErr> for super::ReadFileErr {
+    fn from(err: ReadInodeErr) -> Self {
+        match err {
+            ReadInodeErr::NoRwInterface => Self::NoRwInterface,
+            ReadInodeErr::DiskErr(e) => Self::DiskErr(e),
+        }
+    }
+}
+
+impl From<ReadInodeErr> for super::FileSizeErr {
+    fn from(err: ReadInodeErr) -> Self {
+        match err {
+            ReadInodeErr::NoRwInterface => Self::NoRwInterface,
+            ReadInodeErr::DiskErr(e) => Self::DiskErr(e),
+        }
+    }
+}
+
+#[derive(Debug)]
+enum ReadInodeBlockErr {
+    BlockNotFound,
+    ReadBlockErr(ReadBlockErr),
+}
+
+// impl From<disk::ReadErr> for ReadInodeBlockErr {
+//     fn from(err: disk::ReadErr) -> Self {
+//         ReadInodeBlockErr::DiskErr(err)
+//     }
+// }
+
+impl From<ReadBlockErr> for ReadInodeBlockErr {
+    fn from(err: ReadBlockErr) -> Self {
+        ReadInodeBlockErr::ReadBlockErr(err)
+    }
+}
+
+#[derive(Debug)]
+enum ReadBlockErr {
+    NoRwInterface,
+    DiskErr(disk::ReadErr),
+    InvalidBlockNum,
+}
+
+impl From<disk::ReadErr> for ReadBlockErr {
+    fn from(err: disk::ReadErr) -> Self {
+        ReadBlockErr::DiskErr(err)
+    }
+}
+
+impl From<ReadBlockErr> for super::ReadFileErr {
+    fn from(err: ReadBlockErr) -> Self {
+        match err {
+            ReadBlockErr::NoRwInterface => Self::NoRwInterface,
+            ReadBlockErr::DiskErr(e) => Self::DiskErr(e),
+            ReadBlockErr::InvalidBlockNum => Self::Other("invalid block num"),
+        }
+    }
+}
+
+impl From<ReadBlockErr> for super::FileSizeErr {
+    fn from(err: ReadBlockErr) -> Self {
+        match err {
+            ReadBlockErr::NoRwInterface => Self::NoRwInterface,
+            ReadBlockErr::DiskErr(e) => Self::DiskErr(e),
+            ReadBlockErr::InvalidBlockNum => Self::Other("invalid block num"),
+        }
+    }
+}
+
 impl FileSystem for Ext2 {
-    fn root_dir(
-        &self,
-        rw_interface: &Box<dyn ReadWriteInterface>,
-    ) -> Result<Directory, ReadDirErr> {
-        self.read_dir(2, rw_interface)
+    fn root_dir(&self) -> Result<Directory, ReadDirErr> {
+        self.read_dir(2)
     }
 
-    fn read_dir(
-        &self,
-        id: usize,
-        rw_interface: &Box<dyn ReadWriteInterface>,
-    ) -> Result<Directory, ReadDirErr> {
+    fn read_dir(&self, id: usize) -> Result<Directory, ReadDirErr> {
         assert_ne!(id as u32, 0, "invalid id");
-        let dir_inode = self.read_inode(id as u32, rw_interface)?;
+        let dir_inode = self.read_inode(id as u32)?;
         let mut dir = Directory {
             id,
             name: String::new(),
@@ -692,7 +779,7 @@ impl FileSystem for Ext2 {
         };
 
         // Traverse the directory.
-        let dbp0 = self.read_inode_block(&dir_inode, 0, rw_interface).unwrap();
+        let dbp0 = self.read_inode_block(&dir_inode, 0).unwrap();
         let first_entry = dbp0.as_ptr() as *const DirEntry;
         let total_size = self.inode_size(&dir_inode);
         if total_size > self.block_size {
@@ -717,7 +804,7 @@ impl FileSystem for Ext2 {
                     )
                 } else {
                     name_len |= (entry.type_or_name_len_8_16 as usize) << 8;
-                    let inode = self.read_inode(inode_idx, rw_interface)?;
+                    let inode = self.read_inode(inode_idx)?;
                     DirEntryContent::from(inode._type())
                 }
             };
@@ -745,7 +832,7 @@ impl FileSystem for Ext2 {
             dir.name = String::from("/");
         } else {
             let parent_dir_id = dir.entries[0].id;
-            let parent_dir = self.read_dir(parent_dir_id, rw_interface)?;
+            let parent_dir = self.read_dir(parent_dir_id)?;
             match parent_dir.entries.iter().find(|&e| e.id == id) {
                 Some(itself) => dir.name = itself.name.clone(),
                 None => {
@@ -758,25 +845,21 @@ impl FileSystem for Ext2 {
         Ok(dir)
     }
 
-    fn read_file(
-        &self,
-        id: usize,
-        rw_interface: &Box<dyn ReadWriteInterface>,
-    ) -> Result<Vec<Box<[u8]>>, ReadFileErr> {
+    fn read_file(&self, id: usize) -> Result<Vec<Box<[u8]>>, ReadFileErr> {
         assert_ne!(id as u32, 0, "invalid id");
-        let inode = self.read_inode(id as u32, rw_interface)?;
+        let inode = self.read_inode(id as u32)?;
         let mut i: usize = 0;
         let mut all_bufs = Vec::new();
         loop {
-            match self.read_inode_block(&inode, i, rw_interface) {
+            match self.read_inode_block(&inode, i) {
                 Ok(buf) => {
                     all_bufs.push(buf);
                     i += 1;
                 }
                 Err(err) => match err {
                     ReadInodeBlockErr::BlockNotFound => break,
-                    ReadInodeBlockErr::DiskErr(disk_err) => {
-                        return Err(ReadFileErr::DiskErr(disk_err))
+                    ReadInodeBlockErr::ReadBlockErr(e) => {
+                        return Err(From::from(e))
                     }
                 },
             }
@@ -784,13 +867,9 @@ impl FileSystem for Ext2 {
         Ok(all_bufs)
     }
 
-    fn file_size_bytes(
-        &self,
-        id: usize,
-        rw_interface: &Box<dyn ReadWriteInterface>,
-    ) -> Result<u64, FileSizeErr> {
+    fn file_size_bytes(&self, id: usize) -> Result<u64, FileSizeErr> {
         assert_ne!(id as u32, 0, "invalid id");
-        let inode = self.read_inode(id as u32, rw_interface)?;
+        let inode = self.read_inode(id as u32)?;
         let mut size = inode.size as u64;
         if self
             .read_only_features
@@ -801,14 +880,15 @@ impl FileSystem for Ext2 {
         Ok(size)
     }
 
-    fn file_size_blocks(
-        &self,
-        id: usize,
-        rw_interface: &Box<dyn ReadWriteInterface>,
-    ) -> Result<usize, FileSizeErr> {
+    fn file_size_blocks(&self, id: usize) -> Result<usize, FileSizeErr> {
         // FIXME: compare with inode.count_disk_sectors
         assert_ne!(id as u32, 0, "invalid id");
-        let inode = self.read_inode(id as u32, rw_interface)?;
+        let rw_interface = self
+            .rw_interface
+            .upgrade()
+            .ok_or(FileSizeErr::NoRwInterface)
+            .unwrap();
+        let inode = self.read_inode(id as u32)?;
         let mut size = 0;
         size += inode.direct_block_ptrs().iter().fold(0, |acc, x| match x {
             0 => acc,
@@ -817,50 +897,36 @@ impl FileSystem for Ext2 {
         let mut fs_blocks = 0; // blocks used by the file system for the inode
         if inode.singly_indirect_block_ptr != 0 {
             //let was = size;
-            size += self.num_block_entries(
-                inode.singly_indirect_block_ptr as usize,
-                rw_interface,
-            )?;
+            size += self
+                .num_block_entries(inode.singly_indirect_block_ptr as usize)?;
             fs_blocks += 1;
             //let is = size;
             //println!("sibs: {}", is - was);
         }
         if inode.doubly_indirect_block_ptr != 0 {
-            let num_dibs = self.num_block_entries(
-                inode.doubly_indirect_block_ptr as usize,
-                rw_interface,
-            )?;
+            let num_dibs = self
+                .num_block_entries(inode.doubly_indirect_block_ptr as usize)?;
             //println!("num_dibs = {}", num_dibs);
             let last_dib = self.read_block_entry(
                 inode.doubly_indirect_block_ptr as usize,
                 num_dibs - 1,
-                rw_interface,
             )?;
-            let num_sibs_in_last_dib =
-                self.num_block_entries(last_dib, rw_interface)?;
+            let num_sibs_in_last_dib = self.num_block_entries(last_dib)?;
             //println!("num_sibs_in_last_dib = {}", num_sibs_in_last_dib);
             size += (num_dibs - 1) * self.block_size / 4 + num_sibs_in_last_dib;
             fs_blocks += 1 + num_dibs;
         }
         if inode.triply_indirect_block_ptr != 0 {
-            let num_tibs = self.num_block_entries(
-                inode.triply_indirect_block_ptr as usize,
-                rw_interface,
-            )?;
+            let num_tibs = self
+                .num_block_entries(inode.triply_indirect_block_ptr as usize)?;
             let last_tib = self.read_block_entry(
                 inode.triply_indirect_block_ptr as usize,
                 num_tibs - 1,
-                rw_interface,
             )?;
-            let num_dibs_in_last_tib =
-                self.num_block_entries(last_tib, rw_interface)?;
-            let last_dib = self.read_block_entry(
-                last_tib,
-                num_dibs_in_last_tib - 1,
-                rw_interface,
-            )?;
-            let num_sibs_in_last_dib =
-                self.num_block_entries(last_dib, rw_interface)?;
+            let num_dibs_in_last_tib = self.num_block_entries(last_tib)?;
+            let last_dib =
+                self.read_block_entry(last_tib, num_dibs_in_last_tib - 1)?;
+            let num_sibs_in_last_dib = self.num_block_entries(last_dib)?;
             size += (num_tibs - 1) * (self.block_size / 4).pow(2)
                 + num_dibs_in_last_tib * self.block_size / 4
                 + num_sibs_in_last_dib;
@@ -920,17 +986,5 @@ impl Iterator for DirEntryIter {
                 None
             }
         }
-    }
-}
-
-#[derive(Debug)]
-enum ReadInodeBlockErr {
-    BlockNotFound,
-    DiskErr(ReadErr),
-}
-
-impl From<ReadErr> for ReadInodeBlockErr {
-    fn from(err: ReadErr) -> Self {
-        ReadInodeBlockErr::DiskErr(err)
     }
 }

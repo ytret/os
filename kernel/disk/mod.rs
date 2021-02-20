@@ -17,6 +17,7 @@
 pub mod ata;
 
 use alloc::boxed::Box;
+use alloc::rc::Rc;
 use alloc::vec::Vec;
 
 use crate::fs::FileSystem;
@@ -64,7 +65,7 @@ pub enum WriteErr {
 }
 
 pub struct Disk {
-    pub rw_interface: Box<dyn ReadWriteInterface>,
+    pub rw_interface: Rc<Box<dyn ReadWriteInterface>>,
     pub file_system: Option<Box<dyn FileSystem>>,
 }
 
