@@ -60,20 +60,13 @@ impl From<FromUtf8Error> for ReadDirErr {
 pub enum ReadFileErr {
     NoRwInterface,
     DiskErr(disk::ReadErr),
-    Other(&'static str),
-}
-
-#[derive(Debug)]
-pub enum FileSizeErr {
-    NoRwInterface,
-    DiskErr(disk::ReadErr),
-    Other(&'static str),
+    InvalidBlockNum, // FIXME: is this ext2-specific?
 }
 
 pub trait FileSystem {
     fn root_dir(&self) -> Result<Directory, ReadDirErr>;
     fn read_dir(&self, id: usize) -> Result<Directory, ReadDirErr>;
     fn read_file(&self, id: usize) -> Result<Vec<Box<[u8]>>, ReadFileErr>;
-    fn file_size_bytes(&self, id: usize) -> Result<u64, FileSizeErr>;
-    fn file_size_blocks(&self, id: usize) -> Result<usize, FileSizeErr>;
+    fn file_size_bytes(&self, id: usize) -> Result<u64, ReadFileErr>;
+    fn file_size_blocks(&self, id: usize) -> Result<usize, ReadFileErr>;
 }

@@ -23,10 +23,7 @@ use core::mem::{align_of, size_of};
 use core::ops::Range;
 use core::slice;
 
-use super::{
-    DirEntryContent, Directory, FileSizeErr, FileSystem, ReadDirErr,
-    ReadFileErr,
-};
+use super::{DirEntryContent, Directory, FileSystem, ReadDirErr, ReadFileErr};
 use crate::bitflags::BitFlags;
 use crate::disk;
 
@@ -704,15 +701,6 @@ impl From<ReadInodeErr> for super::ReadFileErr {
     }
 }
 
-impl From<ReadInodeErr> for super::FileSizeErr {
-    fn from(err: ReadInodeErr) -> Self {
-        match err {
-            ReadInodeErr::NoRwInterface => Self::NoRwInterface,
-            ReadInodeErr::DiskErr(e) => Self::DiskErr(e),
-        }
-    }
-}
-
 #[derive(Debug)]
 enum ReadInodeBlockErr {
     BlockNotFound,
@@ -749,17 +737,7 @@ impl From<ReadBlockErr> for super::ReadFileErr {
         match err {
             ReadBlockErr::NoRwInterface => Self::NoRwInterface,
             ReadBlockErr::DiskErr(e) => Self::DiskErr(e),
-            ReadBlockErr::InvalidBlockNum => Self::Other("invalid block num"),
-        }
-    }
-}
-
-impl From<ReadBlockErr> for super::FileSizeErr {
-    fn from(err: ReadBlockErr) -> Self {
-        match err {
-            ReadBlockErr::NoRwInterface => Self::NoRwInterface,
-            ReadBlockErr::DiskErr(e) => Self::DiskErr(e),
-            ReadBlockErr::InvalidBlockNum => Self::Other("invalid block num"),
+            ReadBlockErr::InvalidBlockNum => Self::InvalidBlockNum,
         }
     }
 }
@@ -867,7 +845,7 @@ impl FileSystem for Ext2 {
         Ok(all_bufs)
     }
 
-    fn file_size_bytes(&self, id: usize) -> Result<u64, FileSizeErr> {
+    fn file_size_bytes(&self, id: usize) -> Result<u64, ReadFileErr> {
         assert_ne!(id as u32, 0, "invalid id");
         let inode = self.read_inode(id as u32)?;
         let mut size = inode.size as u64;
@@ -880,13 +858,13 @@ impl FileSystem for Ext2 {
         Ok(size)
     }
 
-    fn file_size_blocks(&self, id: usize) -> Result<usize, FileSizeErr> {
+    fn file_size_blocks(&self, id: usize) -> Result<usize, ReadFileErr> {
         // FIXME: compare with inode.count_disk_sectors
         assert_ne!(id as u32, 0, "invalid id");
         let rw_interface = self
             .rw_interface
             .upgrade()
-            .ok_or(FileSizeErr::NoRwInterface)
+            .ok_or(ReadFileErr::NoRwInterface)
             .unwrap();
         let inode = self.read_inode(id as u32)?;
         let mut size = 0;
