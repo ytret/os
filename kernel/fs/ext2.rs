@@ -99,7 +99,7 @@ struct ExtendedSuperblock {
     compression_algorithms_used: u32,
     num_prealloc_blocks_for_file: u8,
     num_prealloc_blocks_for_dir: u8,
-    unused: u16,
+    _unused: u16,
     journal_id: [u8; 16], // C-style string
     journal_inode: u32,
     journal_device: u32,
@@ -159,7 +159,7 @@ struct BlockGroupDescriptor {
 pub struct Inode {
     type_and_permissions: u16,
     user_id: u16,
-    size: u32, // if FEATURE_OR_READ_ONLY_64BIT_FILE_SIZE, these are bits 0..31
+    size: u32, // if ReadOnlyFeature::FileSize64Bit, these are the bits 0..31
     last_access_time: u32,
     creation_time: u32,
     last_modification_time: u32,
@@ -186,7 +186,7 @@ pub struct Inode {
     triply_indirect_block_ptr: u32,
     generation_number: u32,
     extended_attr_block: u32,  // if major version >= 1
-    file_size_bits_32_63: u32, // if FEATURE_OR_READ_ONLY_64BIT_FILE_SIZE
+    file_size_bits_32_63: u32, // if ReadOnlyFeature::FileSize64Bit
     fragment_block_addr: u32,
     os_specific_2: [u8; 12],
 }
@@ -215,7 +215,7 @@ impl Inode {
     }
 }
 
-// See also DirEntryType.
+// See also DirEntryType below.
 #[derive(Clone, Copy, Debug)]
 #[repr(u16)]
 enum InodeType {
@@ -278,13 +278,13 @@ impl TryFrom<u16> for InodeType {
 #[repr(C, packed(4))]
 struct DirEntry {
     inode: u32,
-    total_size: u16, // including subfields
+    total_size: u16, // including the subfields
     name_len_0_7: u8,
     type_or_name_len_8_16: u8, // type if RequiredFeature::DirsWithType
     name: [u8; 0],
 }
 
-// See also InodeType.
+// See also InodeType above.
 #[derive(Clone, Copy, Debug)]
 #[repr(u8)]
 enum DirEntryType {
@@ -474,7 +474,11 @@ impl Ext2 {
             },
 
             total_num_blocks: superblock.total_num_blocks,
-            block_size: 1024 * 2usize.pow(superblock.log_block_size_minus_10),
+            block_size: {
+                let bs = 1024 * 2usize.pow(superblock.log_block_size_minus_10);
+                println!("[EXT2] Block size: {} bytes.", bs);
+                bs
+            },
             inode_size: {
                 if superblock.version_major >= 1 {
                     let extended = &*((superblock as *const Superblock).add(1)
@@ -558,6 +562,10 @@ impl Ext2 {
         inode: &Inode,
         index: usize,
     ) -> Result<Box<[u8]>, ReadInodeBlockErr> {
+        // Divide all the possible blocks into SIBs, DIBs and TIBs.  The SIBs
+        // are those blocks which are accessed using the singly indirect block
+        // pointer, the DIBs are accessed using the doubly indirect block
+        // pointer, etc.
         let sibs_range = Range {
             start: 12,
             end: 12 + self.block_size / 4,
@@ -575,18 +583,59 @@ impl Ext2 {
             inode.direct_block_ptrs()[index] as usize
         } else if sibs_range.contains(&index) {
             // FIXME: block numbers are always 32-bit.
-            assert_ne!({ inode.singly_indirect_block_ptr }, 0);
-            let idx_in_sibs = index - sibs_range.start;
+            if { inode.singly_indirect_block_ptr } == 0 {
+                return Err(ReadInodeBlockErr::BlockNotFound);
+            }
+            let sib_ptr_idx = index - sibs_range.start;
             self.read_block_entry(
                 inode.singly_indirect_block_ptr as usize,
-                idx_in_sibs,
+                sib_ptr_idx,
             )?
         } else if dibs_range.contains(&index) {
-            unimplemented!();
+            if { inode.doubly_indirect_block_ptr } == 0 {
+                return Err(ReadInodeBlockErr::BlockNotFound);
+            }
+            let dib_ptr_idx = (index - dibs_range.start) / sibs_range.len();
+            let sib_ptr_idx = (index - dibs_range.start) % sibs_range.len();
+            println!(
+                "  DIB ptr idx {} SIB ptr idx {}",
+                dib_ptr_idx, sib_ptr_idx,
+            );
+            let sib_ptr = self.read_block_entry(
+                inode.doubly_indirect_block_ptr as usize,
+                dib_ptr_idx,
+            )?;
+            if sib_ptr == 0 {
+                return Err(ReadInodeBlockErr::BlockNotFound);
+            }
+            self.read_block_entry(sib_ptr, sib_ptr_idx)?
         } else if tibs_range.contains(&index) {
-            unimplemented!();
+            if { inode.triply_indirect_block_ptr } == 0 {
+                return Err(ReadInodeBlockErr::BlockNotFound);
+            }
+            let tib_ptr_idx = (index - tibs_range.start) / dibs_range.len();
+            let dib_ptr_idx = ((index - tibs_range.start) % dibs_range.len())
+                / sibs_range.len();
+            let sib_ptr_idx = ((index - tibs_range.start) % dibs_range.len())
+                % sibs_range.len();
+            println!(
+                "  TIB ptr idx {} DIB ptr idx {} SIB ptr idx {}",
+                tib_ptr_idx, dib_ptr_idx, sib_ptr_idx,
+            );
+            let dib_ptr = self.read_block_entry(
+                inode.triply_indirect_block_ptr as usize,
+                tib_ptr_idx,
+            )?;
+            if dib_ptr == 0 {
+                return Err(ReadInodeBlockErr::BlockNotFound);
+            }
+            let sib_ptr = self.read_block_entry(dib_ptr, dib_ptr_idx)?;
+            if sib_ptr == 0 {
+                return Err(ReadInodeBlockErr::BlockNotFound);
+            }
+            self.read_block_entry(sib_ptr, sib_ptr_idx)?
         } else {
-            panic!("Too big index.");
+            return Err(ReadInodeBlockErr::TooBigBlockIndex);
         };
         if block_num != 0 {
             Ok(self.read_block(block_num)?)
@@ -704,14 +753,9 @@ impl From<ReadInodeErr> for super::ReadFileErr {
 #[derive(Debug)]
 enum ReadInodeBlockErr {
     BlockNotFound,
+    TooBigBlockIndex,
     ReadBlockErr(ReadBlockErr),
 }
-
-// impl From<disk::ReadErr> for ReadInodeBlockErr {
-//     fn from(err: disk::ReadErr) -> Self {
-//         ReadInodeBlockErr::DiskErr(err)
-//     }
-// }
 
 impl From<ReadBlockErr> for ReadInodeBlockErr {
     fn from(err: ReadBlockErr) -> Self {
@@ -835,7 +879,8 @@ impl FileSystem for Ext2 {
                     i += 1;
                 }
                 Err(err) => match err {
-                    ReadInodeBlockErr::BlockNotFound => break,
+                    ReadInodeBlockErr::BlockNotFound
+                    | ReadInodeBlockErr::TooBigBlockIndex => break,
                     ReadInodeBlockErr::ReadBlockErr(e) => {
                         return Err(From::from(e))
                     }
