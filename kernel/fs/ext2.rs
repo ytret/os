@@ -17,6 +17,7 @@
 use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
+use core::convert::TryFrom;
 use core::mem::{align_of, size_of};
 use core::ops::Range;
 use core::slice;
@@ -107,31 +108,27 @@ struct ExtendedSuperblock {
     orphan_inode_list_head: u32,
 }
 
-// const OPTIONAL_FEATURE_PREALLOC_FOR_DIR: u32 = 0x01;
-// const OPTIONAL_FEATURE_AFS_SERVER_INODES_EXIST: u32 = 0x02;
-// const OPTIONAL_FEATURE_FS_HAS_JOURNAL: u32 = 0x04;
-// const OPTIONAL_FEATURE_INODES_WITH_EXTENDED_ATTR: u32 = 0x08;
-// const OPTIONAL_FEATURE_FS_CAN_RESIZE: u32 = 0x10;
-// const OPTIONAL_FEATURE_DIRS_USE_HASH_INDEX: u32 = 0x20;
-
-// const REQUIRED_FEATURE_COMPRESSION: u32 = 0x01;
-// const REQUIRED_FEATURE_DIRS_WITH_TYPE: u32 = 0x02;
-// const REQUIRED_FEATURE_FS_NEEDS_TO_REPLAY_JOURNAL: u32 = 0x04;
-// const REQUIRED_FEATURE_FS_USES_JOURNAL_DEVICE: u32 = 0x08;
+bitflags! {
+    #[repr(u32)]
+    enum OptionalFeature {
+        PreallocForDir = 0x01,
+        AfsServerInodesExist = 0x02,
+        FsHasJournal = 0x04,
+        InodesWithExtAttr = 0x08,
+        FsCanResize = 0x10,
+        DirsUseHashIdx = 0x20,
+    }
+}
 
 bitflags! {
     #[repr(u32)]
-    enum RequiredFeature {
+    pub enum RequiredFeature {
         Compression = 0x01,
         DirsWithType = 0x02,
         FsNeedsToReplayJournal = 0x04,
         FsUsesJournalDevice = 0x08,
     }
 }
-
-// const FEATURE_OR_READ_ONLY_SPARSE: u32 = 0x01;
-// const FEATURE_OR_READ_ONLY_64BIT_FILE_SIZE: u32 = 0x02;
-// const FEATURE_OR_READ_ONLY_DIR_CONTENTS_BIN_TREE: u32 = 0x04;
 
 bitflags! {
     #[repr(u32)]
@@ -198,15 +195,8 @@ pub struct Inode {
 
 impl Inode {
     fn _type(&self) -> InodeType {
-        let _type = (self.type_and_permissions >> 12) & 0b1111;
-        let raw_enum = &_type as *const _ as *const InodeType;
-        // FIXME: make sure that there is a right value written?
-        assert_eq!(
-            raw_enum as usize % align_of::<InodeType>(),
-            0,
-            "invalid align",
-        );
-        unsafe { *raw_enum }
+        let raw = (self.type_and_permissions >> 12) & 0b1111;
+        InodeType::try_from(raw).unwrap()
     }
 
     fn direct_block_ptrs(&self) -> [u32; 12] {
@@ -227,15 +217,7 @@ impl Inode {
     }
 }
 
-// const INODE_TYPE_FIFO: u16 = 0x1000;
-// const INODE_TYPE_CHAR_DEVICE: u16 = 0x2000;
-// const INODE_TYPE_DIR: u16 = 0x4000;
-// const INODE_TYPE_BLOCK_DEVICE: u16 = 0x6000;
-// const INODE_TYPE_REGULAR_FILE: u16 = 0x8000;
-// const INODE_TYPE_SYMBOLIC_LINK: u16 = 0xA000;
-// const INODE_TYPE_UNIX_SOCKET: u16 = 0xC000;
-
-#[allow(dead_code)]
+// See also DirEntryType.
 #[derive(Clone, Copy, Debug)]
 #[repr(u16)]
 enum InodeType {
@@ -246,6 +228,30 @@ enum InodeType {
     RegularFile = 0x8000 >> 12,
     SymbolicLink = 0xA000 >> 12,
     UnixSocket = 0xC000 >> 12,
+}
+
+impl TryFrom<u16> for InodeType {
+    type Error = ();
+    fn try_from(raw: u16) -> Result<Self, ()> {
+        match raw {
+            x if x == InodeType::Fifo as u16
+                || x == InodeType::CharDevice as u16
+                || x == InodeType::Dir as u16
+                || x == InodeType::BlockDevice as u16
+                || x == InodeType::RegularFile as u16
+                || x == InodeType::SymbolicLink as u16
+                || x == InodeType::UnixSocket as u16 =>
+            {
+                let ptr = &raw as *const _ as *const InodeType;
+                unsafe {
+                    // SAFETY: `raw` is valid for reads and is properly
+                    // initialized.
+                    Ok(ptr.read_unaligned().clone())
+                }
+            }
+            _ => Err(()),
+        }
+    }
 }
 
 // const INODE_PERMIT_OTHER_EXEC: u16 = 0x001;
@@ -276,23 +282,53 @@ struct DirEntry {
     inode: u32,
     total_size: u16, // including subfields
     name_len_0_7: u8,
-    type_or_name_len_8_16: u8, // type if REQUIRED_FEATURE_DIRS_WITH_TYPE
+    type_or_name_len_8_16: u8, // type if RequiredFeature::DirsWithType
     name: [u8; 0],
 }
 
-// const DIR_ENTRY_TYPE_UNKNOWN: u8 = 0;
-const DIR_ENTRY_TYPE_REGULAR_FILE: u8 = 1;
-const DIR_ENTRY_TYPE_DIR: u8 = 2;
-// const DIR_ENTRY_TYPE_CHAR_DEVICE: u8 = 3;
-// const DIR_ENTRY_TYPE_BLOCK_DEVICE: u8 = 4;
-// const DIR_ENTRY_TYPE_FIFO: u8 = 5;
-// const DIR_ENTRY_TYPE_SOCKET: u8 = 6;
-// const DIR_ENTRY_TYPE_SYMBOLIC_LINK: u8 = 7;
+// See also InodeType.
+#[derive(Clone, Copy, Debug)]
+#[repr(u8)]
+enum DirEntryType {
+    Unknown = 0,
+    RegularFile = 1,
+    Dir = 2,
+    CharDevice = 3,
+    BlockDevice = 4,
+    Fifo = 5,
+    Socket = 6,
+    SymbolicLink = 7,
+}
 
-#[allow(dead_code)]
+impl TryFrom<u8> for DirEntryType {
+    type Error = ();
+    fn try_from(raw: u8) -> Result<Self, ()> {
+        match raw {
+            x if x == DirEntryType::Unknown as u8
+                || x == DirEntryType::RegularFile as u8
+                || x == DirEntryType::Dir as u8
+                || x == DirEntryType::CharDevice as u8
+                || x == DirEntryType::BlockDevice as u8
+                || x == DirEntryType::Fifo as u8
+                || x == DirEntryType::Socket as u8
+                || x == DirEntryType::SymbolicLink as u8 =>
+            {
+                let ptr = &raw as *const _ as *const DirEntryType;
+                unsafe {
+                    // SAFETY: `raw` is valid for reads and is properly
+                    // initialized.
+                    Ok(ptr.read_unaligned().clone())
+                }
+            }
+            _ => Err(()),
+        }
+    }
+}
+
+// #[allow(dead_code)]
 pub struct Ext2 {
     version: (u32, u16), // major, minor
-    //optional_features: BitFlags<u32, OptionalFeature>,
+    optional_features: BitFlags<u32, OptionalFeature>,
     required_features: BitFlags<u32, RequiredFeature>,
     read_only_features: BitFlags<u32, ReadOnlyFeature>,
 
@@ -317,7 +353,7 @@ impl Ext2 {
     pub unsafe fn from_raw(
         raw_superblock: &[u8],
         raw_block_group_descriptor: &[u8],
-    ) -> Self {
+    ) -> Result<Self, FromRawErr> {
         assert_eq!(raw_superblock.len(), 1024, "invalid raw superblock size");
         assert!(
             (raw_block_group_descriptor.len()
@@ -326,11 +362,13 @@ impl Ext2 {
                 && raw_block_group_descriptor.len() != 0,
             "invalid raw block group descriptor table size",
         );
+
         let superblock = &*(raw_superblock.as_ptr() as *const Superblock);
         assert_eq!(
             superblock.ext2_signature, EXT2_SIGNATURE,
             "not ext2: invalid signature",
         );
+
         let extended_superblock = {
             if superblock.version_major >= 1 {
                 let mut ptr = raw_superblock.as_ptr() as usize;
@@ -343,8 +381,45 @@ impl Ext2 {
         let raw_bgd_tbl =
             raw_block_group_descriptor.as_ptr() as *const BlockGroupDescriptor;
         let mut read_only = false;
-        Ext2 {
+
+        Ok(Ext2 {
             version: (superblock.version_major, superblock.version_minor),
+            optional_features: {
+                if superblock.version_major >= 1 {
+                    let of = BitFlags::new(
+                        extended_superblock.unwrap().optional_features,
+                    );
+                    let absent = of;
+
+                    let mut names = Vec::new();
+                    if absent.has_set(OptionalFeature::PreallocForDir) {
+                        names.push("PreallocForDir");
+                    }
+                    if absent.has_set(OptionalFeature::AfsServerInodesExist) {
+                        names.push("AfsServerInodesExist");
+                    }
+                    if absent.has_set(OptionalFeature::FsHasJournal) {
+                        names.push("FsHasJournal");
+                    }
+                    if absent.has_set(OptionalFeature::InodesWithExtAttr) {
+                        names.push("InodesWithExtAttr");
+                    }
+                    if absent.has_set(OptionalFeature::FsCanResize) {
+                        names.push("FsCanResize");
+                    }
+                    if absent.has_set(OptionalFeature::DirsUseHashIdx) {
+                        names.push("DirsUseHashIdx");
+                    }
+                    println!(
+                        "[EXT2] Unsupported optional features: {}.",
+                        names.join(", "),
+                    );
+
+                    of
+                } else {
+                    BitFlags::new(0)
+                }
+            },
             required_features: {
                 if superblock.version_major >= 1 {
                     let rf = BitFlags::new(
@@ -357,34 +432,11 @@ impl Ext2 {
                         absent.unset_flag(RequiredFeature::DirsWithType);
                     }
 
-                    // Unsupported features.
-                    // FIXME: return error instead of panic
-                    if absent.has_set(RequiredFeature::Compression) {
-                        panic!(
-                            "Required feature Compression is not \
-                             supported.",
-                        );
-                    }
-                    if absent.has_set(RequiredFeature::FsNeedsToReplayJournal) {
-                        panic!(
-                            "Required feature FsNeedsToReplayJournal is not \
-                             supported.",
-                        );
-                    }
-                    if absent.has_set(RequiredFeature::FsUsesJournalDevice) {
-                        panic!(
-                            "Required feature FsUsesJournalDevice is not \
-                             supported.",
-                        );
-                    }
-
                     // Any unsupported features?
                     if absent.value != 0 {
-                        panic!(
-                            "Required features 0x{:X} are not supported",
-                            rf.value,
-                        );
+                        return Err(FromRawErr::NoRequiredFeatures(absent));
                     }
+
                     rf
                 } else {
                     BitFlags::new(0)
@@ -404,7 +456,6 @@ impl Ext2 {
 
                     // Any unsupported features?
                     if absent.value != 0 {
-                        // FIXME: mount read only
                         println!(
                             "[EXT2] Unsupported read-only features 0x{:02X}. \
                              File system is read-only.",
@@ -412,6 +463,7 @@ impl Ext2 {
                         );
                         read_only = true;
                     }
+
                     rof
                 } else {
                     BitFlags::new(0)
@@ -446,7 +498,7 @@ impl Ext2 {
             },
 
             read_only,
-        }
+        })
     }
 
     fn inode_addr(&self, inode_idx: u32) -> usize {
@@ -614,6 +666,10 @@ impl Ext2 {
     }
 }
 
+pub enum FromRawErr {
+    NoRequiredFeatures(BitFlags<u32, RequiredFeature>),
+}
+
 impl FileSystem for Ext2 {
     fn root_dir(
         &self,
@@ -655,21 +711,14 @@ impl FileSystem for Ext2 {
                     .required_features
                     .has_set(RequiredFeature::DirsWithType)
                 {
-                    match entry.type_or_name_len_8_16 {
-                        DIR_ENTRY_TYPE_REGULAR_FILE => {
-                            DirEntryContent::RegularFile
-                        }
-                        DIR_ENTRY_TYPE_DIR => DirEntryContent::Directory,
-                        _ => DirEntryContent::Unknown,
-                    }
+                    DirEntryContent::from(
+                        DirEntryType::try_from(entry.type_or_name_len_8_16)
+                            .unwrap(),
+                    )
                 } else {
                     name_len |= (entry.type_or_name_len_8_16 as usize) << 8;
                     let inode = self.read_inode(inode_idx, rw_interface)?;
-                    match inode._type() {
-                        InodeType::RegularFile => DirEntryContent::RegularFile,
-                        InodeType::Dir => DirEntryContent::Directory,
-                        _ => DirEntryContent::Unknown,
-                    }
+                    DirEntryContent::from(inode._type())
                 }
             };
 
@@ -824,6 +873,26 @@ impl FileSystem for Ext2 {
             (size + fs_blocks) * (self.block_size / rw_interface.sector_size()),
         );
         Ok(size)
+    }
+}
+
+impl From<InodeType> for DirEntryContent {
+    fn from(inode_type: InodeType) -> Self {
+        match inode_type {
+            InodeType::RegularFile => DirEntryContent::RegularFile,
+            InodeType::Dir => DirEntryContent::Directory,
+            _ => DirEntryContent::Unknown,
+        }
+    }
+}
+
+impl From<DirEntryType> for DirEntryContent {
+    fn from(entry_type: DirEntryType) -> Self {
+        match entry_type {
+            DirEntryType::RegularFile => DirEntryContent::RegularFile,
+            DirEntryType::Dir => DirEntryContent::Directory,
+            _ => DirEntryContent::Unknown,
+        }
     }
 }
 

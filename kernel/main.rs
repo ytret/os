@@ -93,7 +93,7 @@ pub extern "C" fn main(magic_num: u32, boot_info: *const mbi::BootInfo) {
 
     arch::pci::init();
 
-    scheduler::init();
+    // scheduler::init();
 
     /*
     let data: Box<[u8]> = Box::new([
@@ -115,7 +115,6 @@ pub extern "C" fn main(magic_num: u32, boot_info: *const mbi::BootInfo) {
     elf::read_elf_header(data).unwrap();
     */
 
-    /*
     use alloc::boxed::Box;
     let disk = &mut disk::DISKS.lock()[0];
     let superblock: Box<[u8]> = disk.rw_interface.read_sectors(2, 2).unwrap();
@@ -128,18 +127,25 @@ pub extern "C" fn main(magic_num: u32, boot_info: *const mbi::BootInfo) {
     // 4: 2048-2559
     // 5: 2560-3071
     // 6: 3072-3583
-    disk.file_system = Some(Box::new(unsafe {
-        fs::ext2::Ext2::from_raw(&superblock, &bgd_tbl)
-    }));
+    match unsafe { fs::ext2::Ext2::from_raw(&superblock, &bgd_tbl) } {
+        Ok(ext) => disk.file_system = Some(Box::new(ext)),
+        Err(e) => match e {
+            fs::ext2::FromRawErr::NoRequiredFeatures(rf) => {
+                panic!(
+                    "Ext2 required features are not supported: 0x{:X}.",
+                    rf.value,
+                );
+            }
+        },
+    }
     match &disk.file_system {
         Some(fs) => {
-            println!("{:#?}", fs.root_dir(&disk.rw_interface).unwrap());
+            println!("{:?}", fs.root_dir(&disk.rw_interface).unwrap());
             let data = fs.read_file(15, &disk.rw_interface).unwrap();
             println!("{:?}", elf::ElfInfo::from_raw_data(&data[0]));
         }
         None => panic!(),
     }
-    */
 
     loop {}
 
