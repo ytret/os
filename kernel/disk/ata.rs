@@ -38,21 +38,23 @@ pub struct Bus {
 
 impl Bus {
     fn new(port_io_base: u16, port_control_base: u16) -> Self {
-        let mut bus = Bus {
+        Bus {
             registers: Registers::new(port_io_base, port_control_base),
             selected_drive: BusDrive::Master,
             drives: [None, None],
-        };
+        }
+    }
 
-        bus.enable_lba();
-        bus.disable_interrupts();
+    fn init(&mut self) {
+        self.enable_lba();
+        self.disable_interrupts();
 
         // Master drive.
-        match bus.identify() {
+        match self.identify() {
             Some(data) => {
                 let master = Drive::from_identify_data(&data);
                 if master.num_sectors_lba28 != 0 {
-                    bus.drives[0] = Some(master);
+                    self.drives[0] = Some(master);
                 } else {
                     println!(
                         "[ATA] Ignoring a master drive without LBA28 support."
@@ -63,12 +65,12 @@ impl Bus {
         }
 
         // Slave drive.
-        bus.select_drive(BusDrive::Slave);
-        match bus.identify() {
+        self.select_drive(BusDrive::Slave);
+        match self.identify() {
             Some(data) => {
                 let slave = Drive::from_identify_data(&data);
                 if slave.num_sectors_lba28 != 0 {
-                    bus.drives[1] = Some(slave);
+                    self.drives[1] = Some(slave);
                 } else {
                     println!(
                         "[ATA] Ignoring a slave drive without LBA28 support."
@@ -77,8 +79,6 @@ impl Bus {
             }
             None => println!("[ATA] No slave drive found."),
         }
-
-        bus
     }
 
     fn selected_drive(&self) -> Option<Drive> {
@@ -124,7 +124,7 @@ impl Bus {
                     );
                     panic!();
                 } else {
-                    println!("[ATA] Ignoring ATAPI or SATA drive.");
+                    println!("[ATA] Ignoring an ATAPI or SATA drive.");
                     return None;
                 }
             }
@@ -175,7 +175,8 @@ impl Bus {
     }
 
     fn enable_lba(&self) {
-        // NOTE: This does not check if the bus supports LBA addressing mode.
+        // FIXME: this does not check if the bus supports the LBA addressing
+        // mode.
         unsafe {
             let mut drive: u8 = self.registers.drive.read();
             drive |= 1 << 6; // LBA
@@ -475,6 +476,9 @@ pub unsafe fn init() -> Vec<Bus> {
     // SAFETY: This function does not check if there are any actual ATA ports at
     // the standard places.  If they are not there, it means either that they
     // are somewhere else or that there is no IDE controller.
+
+    let mut bus = Bus::new(ATA0_PORT_IO_BASE, ATA0_PORT_CONTROL_BASE);
+    bus.init();
 
     IDT.lock().interrupts[14].set_handler(irq14_handler);
 
