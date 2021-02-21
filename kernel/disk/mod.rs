@@ -24,24 +24,24 @@ use crate::fs::FileSystem;
 use crate::kernel_static::Mutex;
 
 pub trait ReadWriteInterface {
-    fn sector_size(&self) -> usize;
-    fn has_sector(&self, sector_idx: usize) -> bool;
+    fn block_size(&self) -> usize;
+    fn has_block(&self, block_idx: usize) -> bool;
 
-    fn read_sector(&self, sector_idx: usize) -> Result<Box<[u8]>, ReadErr>;
-    fn read_sectors(
+    fn read_block(&self, block_idx: usize) -> Result<Box<[u8]>, ReadErr>;
+    fn read_blocks(
         &self,
-        first_sector_idx: usize,
-        num_sectors: usize,
+        first_block_idx: usize,
+        num_blocks: usize,
     ) -> Result<Box<[u8]>, ReadErr>;
 
-    fn write_sector(
+    fn write_block(
         &self,
-        sector_idx: usize,
+        block_idx: usize,
         data: [u8; 512],
     ) -> Result<(), WriteErr>;
-    fn write_sectors(
+    fn write_blocks(
         &self,
-        first_sector_idx: usize,
+        first_block_idx: usize,
         data: &[u8],
     ) -> Result<(), WriteErr>;
 }
@@ -49,17 +49,17 @@ pub trait ReadWriteInterface {
 #[derive(Debug)]
 pub enum ReadErr {
     DiskUnavailable,
-    NoSuchSector,
-    TooMuchSectors,
-    ZeroNumSectors,
+    NoSuchBlock,
+    TooMuchBlocks,
+    ZeroNumBlocks,
     Other(&'static str),
 }
 
 #[derive(Debug)]
 pub enum WriteErr {
     DiskUnavailable,
-    NoSuchSector,
-    TooMuchSectors,
+    NoSuchBlock,
+    TooMuchBlocks,
     EmptyDataPassed,
     Other(&'static str),
 }

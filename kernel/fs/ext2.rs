@@ -537,14 +537,14 @@ impl Ext2 {
             .ok_or(ReadInodeErr::NoRwInterface)
             .unwrap();
         let inode_addr = self.inode_addr(inode_idx);
-        let first_sector_idx = inode_addr / rw_interface.sector_size();
-        let num_sectors = size_of::<Inode>() / rw_interface.sector_size() + 1;
-        let offset_in_sectors = inode_addr % rw_interface.sector_size();
-        match rw_interface.read_sectors(first_sector_idx, num_sectors) {
-            Ok(sectors) => {
-                let base = sectors.as_ptr();
+        let first_block_idx = inode_addr / rw_interface.block_size();
+        let num_blocks = size_of::<Inode>() / rw_interface.block_size() + 1;
+        let offset_in_blocks = inode_addr % rw_interface.block_size();
+        match rw_interface.read_blocks(first_block_idx, num_blocks) {
+            Ok(blocks) => {
+                let base = blocks.as_ptr();
                 unsafe {
-                    let raw = base.add(offset_in_sectors) as *const Inode;
+                    let raw = base.add(offset_in_blocks) as *const Inode;
                     Ok(Box::new((*raw).clone()))
                 }
             }
@@ -689,18 +689,18 @@ impl Ext2 {
         }
         let addr = block_num * self.block_size;
         assert_eq!(
-            addr % rw_interface.sector_size(),
+            addr % rw_interface.block_size(),
             0,
-            "cannot convert block address to sector idx",
+            "cannot convert the block address to a block index",
         );
-        let sector_idx = addr / rw_interface.sector_size();
+        let block_idx = addr / rw_interface.block_size();
         assert_eq!(
-            self.block_size % rw_interface.sector_size(),
+            self.block_size % rw_interface.block_size(),
             0,
-            "cannot convert block size to num of sectors",
+            "cannot convert the ext2 block size to a number of system blocks",
         );
-        let num_sectors = self.block_size / rw_interface.sector_size();
-        Ok(rw_interface.read_sectors(sector_idx, num_sectors)?)
+        let num_blocks = self.block_size / rw_interface.block_size();
+        Ok(rw_interface.read_blocks(block_idx, num_blocks)?)
     }
 
     fn iter_dir(
@@ -956,10 +956,10 @@ impl FileSystem for Ext2 {
             fs_blocks +=
                 1 + (num_tibs - 1) * self.block_size / 4 + num_dibs_in_last_tib;
         }
-        assert!(self.block_size >= rw_interface.sector_size());
+        assert!(self.block_size >= rw_interface.block_size());
         assert_eq!(
             inode.count_disk_sectors as usize,
-            (size + fs_blocks) * (self.block_size / rw_interface.sector_size()),
+            (size + fs_blocks) * (self.block_size / rw_interface.block_size()),
         );
         Ok(size)
     }

@@ -55,7 +55,7 @@ impl Bus {
                     bus.drives[0] = Some(master);
                 } else {
                     println!(
-                        "[ATA] Ignoring master drive without LBA28 support."
+                        "[ATA] Ignoring a master drive without LBA28 support."
                     );
                 }
             }
@@ -71,7 +71,7 @@ impl Bus {
                     bus.drives[1] = Some(slave);
                 } else {
                     println!(
-                        "[ATA] Ignoring slave drive without LBA28 support."
+                        "[ATA] Ignoring a slave drive without LBA28 support."
                     );
                 }
             }
@@ -228,7 +228,7 @@ impl Bus {
     }
 
     fn write(&self, lba: u32, num_sectors: u8, data: &[u16]) {
-        assert_eq!(num_sectors as usize * 256, data.len(), "invalid data size");
+        assert_eq!(data.len(), num_sectors as usize * 256, "invalid data size");
         self.check_for_errors();
         unsafe {
             self.registers.sector_count.write(num_sectors);
@@ -250,7 +250,7 @@ impl Bus {
 #[inline(always)]
 fn boxed_slice_u16_to_u8(from: Box<[u16]>) -> Box<[u8]> {
     unsafe {
-        // FIXME: endiannes?
+        // FIXME: endianness?
         let slice_u16_len = from.len();
         let raw_u16: *mut u16 = Box::into_raw(from).cast();
         let slice_u8: &mut [u8] =
@@ -263,7 +263,7 @@ fn boxed_slice_u16_to_u8(from: Box<[u16]>) -> Box<[u8]> {
 fn slice_u8_to_u16(from: &[u8]) -> &[u16] {
     assert_eq!(from.len() % 2, 0, "invalid size of slice `from`");
     unsafe {
-        // FIXME: endiannes?
+        // FIXME: endianness?
         let raw_u8: *const u8 = from.as_ptr();
         assert_eq!(raw_u8 as usize, align_of::<&[u16]>(), "alignment error");
         slice::from_raw_parts(raw_u8 as *const u16, from.len() / 2)
@@ -271,35 +271,30 @@ fn slice_u8_to_u16(from: &[u8]) -> &[u16] {
 }
 
 impl ReadWriteInterface for Bus {
-    fn sector_size(&self) -> usize {
-        // If changing, see also the argument `data` of fn self.write_sector().
+    fn block_size(&self) -> usize {
+        // If changing, see also the argument `data` of self.write_block().
         512
     }
 
-    fn has_sector(&self, sector_idx: usize) -> bool {
+    fn has_block(&self, block_idx: usize) -> bool {
         let maybe_drive = self.selected_drive();
         match maybe_drive {
             Some(drive) => {
-                !((sector_idx != 0 && sector_idx as u32 == 0)
-                    || sector_idx as u32 >= drive.num_sectors_lba28)
+                !((block_idx != 0 && block_idx as u32 == 0)
+                    || block_idx as u32 >= drive.num_sectors_lba28)
             }
             None => false,
         }
     }
 
-    fn read_sector(&self, sector_idx: usize) -> Result<Box<[u8]>, ReadErr> {
+    fn read_block(&self, block_idx: usize) -> Result<Box<[u8]>, ReadErr> {
         let maybe_drive = self.selected_drive();
         match maybe_drive {
             Some(_) => {
-                if !self.has_sector(sector_idx) {
-                    Err(ReadErr::NoSuchSector)
+                if !self.has_block(block_idx) {
+                    Err(ReadErr::NoSuchBlock)
                 } else {
-                    let data = self.read(sector_idx as u32, 1);
-                    if sector_idx == 4 {
-                        for i in 0..data.len() / 2 {
-                            print!("{:04X} ", data[i]);
-                        }
-                    }
+                    let data = self.read(block_idx as u32, 1);
                     let boxed = boxed_slice_u16_to_u8(data);
                     // Ok(boxed_slice_u16_to_u8(data))
                     Ok(boxed)
@@ -309,28 +304,28 @@ impl ReadWriteInterface for Bus {
         }
     }
 
-    fn read_sectors(
+    fn read_blocks(
         &self,
-        first_sector_idx: usize,
-        num_sectors: usize,
+        first_block_idx: usize,
+        num_blocks: usize,
     ) -> Result<Box<[u8]>, ReadErr> {
-        if num_sectors == 0 {
-            return Err(ReadErr::ZeroNumSectors);
+        if num_blocks == 0 {
+            return Err(ReadErr::ZeroNumBlocks);
         }
 
         let maybe_drive = self.selected_drive();
         match maybe_drive {
             Some(_) => {
-                let last_sector_idx = first_sector_idx + num_sectors - 1;
-                if !self.has_sector(first_sector_idx) {
-                    Err(ReadErr::NoSuchSector)
-                } else if !self.has_sector(last_sector_idx)
-                    || (num_sectors != 0 && num_sectors as u8 == 0)
+                let last_block_idx = first_block_idx + num_blocks - 1;
+                if !self.has_block(first_block_idx) {
+                    Err(ReadErr::NoSuchBlock)
+                } else if !self.has_block(last_block_idx)
+                    || (num_blocks != 0 && num_blocks as u8 == 0)
                 {
-                    Err(ReadErr::TooMuchSectors)
+                    Err(ReadErr::TooMuchBlocks)
                 } else {
                     let data =
-                        self.read(first_sector_idx as u32, num_sectors as u8);
+                        self.read(first_block_idx as u32, num_blocks as u8);
                     Ok(boxed_slice_u16_to_u8(data))
                 }
             }
@@ -338,19 +333,19 @@ impl ReadWriteInterface for Bus {
         }
     }
 
-    fn write_sector(
+    fn write_block(
         &self,
-        sector_idx: usize,
+        block_idx: usize,
         data: [u8; 512],
     ) -> Result<(), WriteErr> {
         let maybe_drive = self.selected_drive();
         match maybe_drive {
             Some(_) => {
-                if !self.has_sector(sector_idx) {
-                    Err(WriteErr::NoSuchSector)
+                if !self.has_block(block_idx) {
+                    Err(WriteErr::NoSuchBlock)
                 } else {
                     let data: &[u16] = slice_u8_to_u16(&data);
-                    self.write(sector_idx as u32, 1, data);
+                    self.write(block_idx as u32, 1, data);
                     Ok(())
                 }
             }
@@ -358,35 +353,31 @@ impl ReadWriteInterface for Bus {
         }
     }
 
-    fn write_sectors(
+    fn write_blocks(
         &self,
-        first_sector_idx: usize,
+        first_block_idx: usize,
         data: &[u8],
     ) -> Result<(), WriteErr> {
         if data.len() == 0 {
             return Err(WriteErr::EmptyDataPassed);
         }
 
-        assert_eq!(data.len() % self.sector_size(), 0, "invalid data size");
-        let num_sectors = data.len() / self.sector_size();
+        assert_eq!(data.len() % self.block_size(), 0, "invalid data size");
+        let num_blocks = data.len() / self.block_size();
 
         let maybe_drive = self.selected_drive();
         match maybe_drive {
             Some(_) => {
-                let last_sector_idx = first_sector_idx + num_sectors - 1;
-                if !self.has_sector(first_sector_idx) {
-                    Err(WriteErr::NoSuchSector)
-                } else if !self.has_sector(last_sector_idx)
-                    || (num_sectors != 0 && num_sectors as u8 == 0)
+                let last_block_idx = first_block_idx + num_blocks - 1;
+                if !self.has_block(first_block_idx) {
+                    Err(WriteErr::NoSuchBlock)
+                } else if !self.has_block(last_block_idx)
+                    || (num_blocks != 0 && num_blocks as u8 == 0)
                 {
-                    Err(WriteErr::TooMuchSectors)
+                    Err(WriteErr::TooMuchBlocks)
                 } else {
                     let data = slice_u8_to_u16(data);
-                    self.write(
-                        first_sector_idx as u32,
-                        num_sectors as u8,
-                        data,
-                    );
+                    self.write(first_block_idx as u32, num_blocks as u8, data);
                     Ok(())
                 }
             }
@@ -481,9 +472,9 @@ const ATA0_PORT_IO_BASE: u16 = 0x1F0;
 const ATA0_PORT_CONTROL_BASE: u16 = 0x3F6;
 
 pub unsafe fn init() -> Vec<Bus> {
-    // SAFETY: This does not check if there are actually ATA ports at the
-    // standard places.  If they are not there, it means either that they are
-    // somewhere else or that there is no IDE controller.
+    // SAFETY: This function does not check if there are any actual ATA ports at
+    // the standard places.  If they are not there, it means either that they
+    // are somewhere else or that there is no IDE controller.
 
     IDT.lock().interrupts[14].set_handler(irq14_handler);
 
