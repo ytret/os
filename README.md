@@ -1,7 +1,7 @@
 ## Compilation
 
-_Assuming you have installed
-[the GNU binutils to be able to cross-compile][gcc_cross_comp]._
+_This assumes you have installed [the GNU binutils for
+cross-compiling][gcc_cross_comp]._
 
 If you are building the kernel for the first time, you have to compile
 `libcore`, `liballoc` and their dependency `libcompiler_builtins` for the
@@ -41,4 +41,5 @@ Alternatively, you can run the kernel in Bochs:
 
 See `.bochsrc` for the configuration options.
 
-[multiboot2_spec]: https://www.gnu.org/software/grub/manual/multiboot2/multiboot.html
+[multiboot2_spec]:
+https://www.gnu.org/software/grub/manual/multiboot2/multiboot.html
