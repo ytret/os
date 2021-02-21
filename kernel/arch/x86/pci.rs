@@ -706,8 +706,9 @@ pub fn init() {
         for function in device.functions.iter().filter(|x| x.exists()) {
             match &function.class {
                 DeviceClass::MassStorageController(MassStorageControllerSubclass::IdeController(IdeControllerInterface::IsaCompatibilityModeOnlyWithBusMastering)) => {
+                    println!("[PCI] Initializing an ATA bus.");
                     unsafe {
-                        let buses = disk::ata::init();
+                        let buses = disk::ata::init().unwrap();
                         for bus in buses {
                             let disk = disk::Disk {
                                 rw_interface: Rc::new(Box::new(bus)),

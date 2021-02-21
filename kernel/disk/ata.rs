@@ -472,17 +472,31 @@ impl Drive {
 const ATA0_PORT_IO_BASE: u16 = 0x1F0;
 const ATA0_PORT_CONTROL_BASE: u16 = 0x3F6;
 
-pub unsafe fn init() -> Vec<Bus> {
+#[derive(Debug)]
+pub enum InitErr {
+    FloatingBus,
+}
+
+pub unsafe fn init() -> Result<Vec<Bus>, InitErr> {
     // SAFETY: This function does not check if there are any actual ATA ports at
     // the standard places.  If they are not there, it means either that they
     // are somewhere else or that there is no IDE controller.
 
+    // TODO: check the secondary bus too.
+
     let mut bus = Bus::new(ATA0_PORT_IO_BASE, ATA0_PORT_CONTROL_BASE);
-    bus.init();
+
+    // Check for a floating bus.
+    if bus.registers.status.read::<u8>() == 0xFF {
+        println!("[ATA] Detected a floating bus. Aborting initialization.");
+        return Err(InitErr::FloatingBus);
+    } else {
+        bus.init();
+    }
 
     IDT.lock().interrupts[14].set_handler(irq14_handler);
 
-    // IRQ 15 also can be a spurious IRQ sent from the slave PIC, so it has a
+    // IRQ 15 can also be a spurious IRQ sent from the slave PIC, so it has a
     // two-stage handler.  Set the second stage handler now.
     STAGE2_IRQ15_HANDLER = Some(ata_irq15_handler);
 
@@ -491,10 +505,8 @@ pub unsafe fn init() -> Vec<Bus> {
     PIC.set_irq_mask(14, false);
     PIC.set_irq_mask(15, false);
 
-    let mut bus = Bus::new(ATA0_PORT_IO_BASE, ATA0_PORT_CONTROL_BASE);
     bus.select_drive(BusDrive::Slave);
-
-    vec![bus]
+    Ok(vec![bus])
 }
 
 #[no_mangle]
