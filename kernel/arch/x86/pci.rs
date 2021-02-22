@@ -708,10 +708,10 @@ pub fn init() {
                 DeviceClass::MassStorageController(MassStorageControllerSubclass::IdeController(IdeControllerInterface::IsaCompatibilityModeOnlyWithBusMastering)) => {
                     println!("[PCI] Initializing an ATA bus.");
                     unsafe {
-                        let buses = disk::ata::init().unwrap();
-                        for bus in buses {
+                        let drives = disk::ata::init().unwrap();
+                        for drive in drives {
                             let disk = disk::Disk {
-                                rw_interface: Rc::new(Box::new(bus)),
+                                rw_interface: Rc::new(Box::new(drive)),
                                 file_system: None,
                             };
                             disk::DISKS.lock().push(disk);
@@ -722,6 +722,8 @@ pub fn init() {
             }
         }
     }
+
+    println!("[PCI] Init end.");
 }
 
 fn print_bus(offset: usize, bus: &Bus) {

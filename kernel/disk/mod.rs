@@ -48,7 +48,7 @@ pub trait ReadWriteInterface {
 
 #[derive(Debug)]
 pub enum ReadErr {
-    DiskUnavailable,
+    BusUnavailable,
     NoSuchBlock,
     TooMuchBlocks,
     ZeroNumBlocks,
@@ -57,7 +57,7 @@ pub enum ReadErr {
 
 #[derive(Debug)]
 pub enum WriteErr {
-    DiskUnavailable,
+    BusUnavailable,
     NoSuchBlock,
     TooMuchBlocks,
     EmptyDataPassed,
@@ -68,8 +68,6 @@ pub struct Disk {
     pub rw_interface: Rc<Box<dyn ReadWriteInterface>>,
     pub file_system: Option<Box<dyn FileSystem>>,
 }
-
-impl Disk {}
 
 kernel_static! {
     pub static ref DISKS: Mutex<Vec<Disk>> = Mutex::new(Vec::new());

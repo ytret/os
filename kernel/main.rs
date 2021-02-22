@@ -117,8 +117,8 @@ pub extern "C" fn main(magic_num: u32, boot_info: *const mbi::BootInfo) {
 
     use alloc::boxed::Box;
     let disk = &mut disk::DISKS.lock()[0];
-    let superblock: Box<[u8]> = disk.rw_interface.read_sectors(2, 2).unwrap();
-    let bgd_tbl: Box<[u8]> = disk.rw_interface.read_sector(4).unwrap();
+    let superblock: Box<[u8]> = disk.rw_interface.read_blocks(2, 2).unwrap();
+    let bgd_tbl: Box<[u8]> = disk.rw_interface.read_block(4).unwrap();
     // FIXME: The BGD Table is not always at ext2-block 2.
     // 0: 0-511
     // 1: 512-1023
