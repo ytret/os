@@ -56,6 +56,7 @@ impl Bus {
                 let master = Drive::from_identify_data(BusDrive::Master, &data);
                 if master.num_sectors_lba28 != 0 {
                     drives[0] = Some(master);
+                    println!("[ATA] Found a master drive.");
                 } else {
                     println!(
                         "[ATA] Ignoring a master drive without LBA28 support."
@@ -72,6 +73,7 @@ impl Bus {
                 let slave = Drive::from_identify_data(BusDrive::Slave, &data);
                 if slave.num_sectors_lba28 != 0 {
                     drives[1] = Some(slave);
+                    println!("[ATA] Found a slave drive.");
                 } else {
                     println!(
                         "[ATA] Ignoring a slave drive without LBA28 support."
@@ -288,7 +290,7 @@ pub struct Drive {
     //    without the Drive itself being mutable, otherwise the
     //    ReadWriteInterface methods would need to be mutable as well, and that
     //    would make things even harder; using compile-time checks seemed
-    //    impossible to me.
+    //    impossible to me for a similar reason.
     bus: Option<Rc<RefCell<Bus>>>,
     _type: BusDrive,
     supports_lba48: bool,
@@ -467,12 +469,7 @@ const ATA0_PORT_CONTROL_BASE: u16 = 0x3F6;
 const ATA1_PORT_IO_BASE: u16 = 0x170;
 const ATA1_PORT_CONTROL_BASE: u16 = 0x376;
 
-#[derive(Debug)]
-pub enum InitErr {
-    FloatingBus,
-}
-
-pub unsafe fn init() -> Result<Vec<Drive>, InitErr> {
+pub unsafe fn init() -> Vec<Drive> {
     // SAFETY: This function does not check if there are any actual ATA ports at
     // the standard places.  If they are not there, it means either that they
     // are somewhere else or that there is no IDE controller.
@@ -489,30 +486,36 @@ pub unsafe fn init() -> Result<Vec<Drive>, InitErr> {
     PIC.set_irq_mask(14, false);
     PIC.set_irq_mask(15, false);
 
-    // 2. Check for the drives.
-    // TODO: check the secondary bus too.
-    let bus = Bus::new(ATA0_PORT_IO_BASE, ATA0_PORT_CONTROL_BASE);
-    let rc_bus = Rc::new(RefCell::new(bus));
+    // 2. Prepare shared pointers to the buses.
+    let primary = Bus::new(ATA0_PORT_IO_BASE, ATA0_PORT_CONTROL_BASE);
+    let secondary = Bus::new(ATA1_PORT_IO_BASE, ATA1_PORT_CONTROL_BASE);
+    let rc_buses = [
+        Rc::new(RefCell::new(primary)),
+        Rc::new(RefCell::new(secondary)),
+    ];
 
-    if rc_bus.borrow().registers.status.read::<u8>() == 0xFF {
-        println!("[ATA] Detected a floating bus. Aborting initialization.");
-        return Err(InitErr::FloatingBus);
-    }
+    // 3. Check for the drives.
+    let mut all_drives = Vec::new();
+    for (i, rc_bus) in rc_buses.iter().enumerate() {
+        println!("[ATA] Initializing bus {}.", i);
+        if rc_bus.borrow().registers.status.read::<u8>() == 0xFF {
+            println!("[ATA] Ignoring a floating bus.");
+            continue;
+        }
 
-    // 3. Connect each Drive to its Bus.  This is not done in Bus::init_etc.
-    //    because I've found that somewhat difficult.
-    let mut drives = rc_bus.borrow_mut().init_and_get_drives();
-    if let Some(master) = &mut drives[0] {
-        master.bus = Some(Rc::clone(&rc_bus));
+        // 4. Connect each Drive to its Bus.  This is not done in Bus::init_etc.
+        //    because I've found that somewhat difficult.
+        let mut drives = rc_bus.borrow_mut().init_and_get_drives();
+        if let Some(master) = &mut drives[0] {
+            master.bus = Some(Rc::clone(&rc_bus));
+            all_drives.push(master.clone())
+        }
+        if let Some(slave) = &mut drives[1] {
+            slave.bus = Some(Rc::clone(&rc_bus));
+            all_drives.push(slave.clone())
+        }
     }
-    if let Some(slave) = &mut drives[1] {
-        slave.bus = Some(Rc::clone(&rc_bus));
-    }
-    Ok(drives
-        .iter()
-        .filter(|x| x.is_some())
-        .map(|x| x.clone().unwrap())
-        .collect())
+    all_drives
 }
 
 #[no_mangle]
