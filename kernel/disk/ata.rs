@@ -35,14 +35,14 @@ extern "C" {
 
 pub struct Bus {
     registers: Registers,
-    selected_drive: BusDrive,
+    selected_drive: DriveId,
 }
 
 impl Bus {
     fn new(port_io_base: u16, port_control_base: u16) -> Self {
         Bus {
             registers: Registers::new(port_io_base, port_control_base),
-            selected_drive: BusDrive::Master,
+            selected_drive: DriveId::Master,
         }
     }
 
@@ -54,7 +54,7 @@ impl Bus {
         // Master drive.
         match self.identify() {
             Some(data) => {
-                let master = Drive::from_identify_data(BusDrive::Master, &data);
+                let master = Drive::from_identify_data(DriveId::Master, &data);
                 if master.num_sectors_lba28 != 0 {
                     drives[0] = Some(master);
                     println!("[ATA] Found a master drive.");
@@ -68,10 +68,10 @@ impl Bus {
         }
 
         // Slave drive.
-        self.select_drive(BusDrive::Slave);
+        self.select_drive(DriveId::Slave);
         match self.identify() {
             Some(data) => {
-                let slave = Drive::from_identify_data(BusDrive::Slave, &data);
+                let slave = Drive::from_identify_data(DriveId::Slave, &data);
                 if slave.num_sectors_lba28 != 0 {
                     drives[1] = Some(slave);
                     println!("[ATA] Found a slave drive.");
@@ -87,13 +87,14 @@ impl Bus {
         drives
     }
 
-    fn select_drive(&mut self, drive: BusDrive) {
+    fn select_drive(&mut self, drive: DriveId) {
         if drive != self.selected_drive {
             unsafe {
                 let mut val: u8 = self.registers.drive.read();
                 val &= !(1 << 4); // DRV
-                val |= (matches!(drive, BusDrive::Slave) as u8) << 4;
+                val |= (matches!(drive, DriveId::Slave) as u8) << 4;
                 self.registers.drive.write(val);
+                // FIXME: 400ns delay?
             }
             self.selected_drive = drive;
         }
@@ -273,7 +274,7 @@ fn slice_u8_to_u16(from: &[u8]) -> &[u16] {
 }
 
 #[derive(Clone, Copy, PartialEq)]
-enum BusDrive {
+enum DriveId {
     Master,
     Slave,
 }
@@ -293,18 +294,18 @@ pub struct Drive {
     //    would make things even harder; using compile-time checks seemed
     //    impossible to me for a similar reason.
     bus: Option<Rc<RefCell<Bus>>>,
-    _type: BusDrive,
+    id: DriveId,
     supports_lba48: bool,
     num_sectors_lba28: u32,
     num_sectors_lba48: u64,
 }
 
 impl Drive {
-    fn from_identify_data(_type: BusDrive, data: &[u16]) -> Self {
+    fn from_identify_data(id: DriveId, data: &[u16]) -> Self {
         assert_eq!(data.len(), 256, "invalid identify data");
         Drive {
             bus: None,
-            _type,
+            id,
             supports_lba48: data[83] & (1 << 10) != 0,
             num_sectors_lba28: ((data[61] as u32) << 16) | data[60] as u32,
             num_sectors_lba48: ((data[103] as u64) << 48)
@@ -329,7 +330,7 @@ impl ReadWriteInterface for Drive {
 
     fn read_block(&self, block_idx: usize) -> Result<Box<[u8]>, ReadErr> {
         let mut bus = self.bus.as_ref().unwrap().borrow_mut();
-        bus.select_drive(self._type);
+        bus.select_drive(self.id);
         if !self.has_block(block_idx) {
             Err(ReadErr::NoSuchBlock)
         } else {
@@ -348,7 +349,7 @@ impl ReadWriteInterface for Drive {
         }
 
         let mut bus = self.bus.as_ref().unwrap().borrow_mut();
-        bus.select_drive(self._type);
+        bus.select_drive(self.id);
 
         let last_block_idx = first_block_idx + num_blocks - 1;
         if !self.has_block(first_block_idx) {
@@ -391,7 +392,7 @@ impl ReadWriteInterface for Drive {
         data: [u8; 512],
     ) -> Result<(), WriteErr> {
         let mut bus = self.bus.as_ref().unwrap().borrow_mut();
-        bus.select_drive(self._type);
+        bus.select_drive(self.id);
         if !self.has_block(block_idx) {
             Err(WriteErr::NoSuchBlock)
         } else {
@@ -413,7 +414,7 @@ impl ReadWriteInterface for Drive {
         let num_blocks = data.len() / self.block_size();
 
         let mut bus = self.bus.as_ref().unwrap().borrow_mut();
-        bus.select_drive(self._type);
+        bus.select_drive(self.id);
 
         let last_block_idx = first_block_idx + num_blocks - 1;
         if !self.has_block(first_block_idx) {
