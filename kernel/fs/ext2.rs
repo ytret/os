@@ -19,6 +19,7 @@ use alloc::rc::Weak;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::convert::TryFrom;
+use core::fmt;
 use core::mem::{align_of, size_of};
 use core::ops::Range;
 use core::slice;
@@ -36,7 +37,7 @@ pub struct Superblock {
     total_num_unallocated_blocks: u32,
     total_num_unallocated_inodes: u32,
     block_num_of_superblock: u32,
-    log_block_size_minus_10: u32,
+    pub log_block_size_minus_10: u32,
     log_fragment_size_minus_10: u32,
     block_group_num_blocks: u32,
     block_group_num_fragments: u32,
@@ -140,7 +141,7 @@ bitflags! {
 #[allow(dead_code)]
 #[derive(Clone, Copy, Debug)]
 #[repr(C, packed)]
-struct BlockGroupDescriptor {
+pub struct BlockGroupDescriptor {
     block_usage_bitmap_block_addr: u32,
     inode_usage_bitmap_block_addr: u32,
     inode_table_start_block_addr: u32,
@@ -355,12 +356,12 @@ impl Ext2 {
         raw_block_group_descriptor: &[u8],
         rw_interface: Weak<Box<dyn disk::ReadWriteInterface>>,
     ) -> Result<Self, FromRawErr> {
+        // SAFETY: argument alignment is not checked.
+        // FIXME: add else.
+
         assert_eq!(raw_superblock.len(), 1024, "invalid raw superblock size");
         assert!(
-            (raw_block_group_descriptor.len()
-                % align_of::<BlockGroupDescriptor>()
-                == 0)
-                && raw_block_group_descriptor.len() != 0,
+            raw_block_group_descriptor.len() != 0,
             "invalid raw block group descriptor table size",
         );
 
@@ -718,6 +719,17 @@ impl Ext2 {
 
 pub enum FromRawErr {
     NoRequiredFeatures(BitFlags<u32, RequiredFeature>),
+}
+
+impl fmt::Debug for FromRawErr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FromRawErr::NoRequiredFeatures(rf) => f.write_fmt(format_args!(
+                "NoRequiredFeatures(0x{:0X})",
+                rf.value,
+            )),
+        }
+    }
 }
 
 #[derive(Debug)]

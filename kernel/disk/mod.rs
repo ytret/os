@@ -89,6 +89,37 @@ impl Disk {
         println!("[DISK] Unknown file system.");
         Err(ProbeFsErr::UnknownFs)
     }
+
+    pub fn try_init_fs(&mut self) -> Result<(), TryInitFsErr> {
+        match self.probe_fs()? {
+            KnownFs::Ext2 => {
+                let rwif = &self.rw_interface;
+                let sb_offset = 1024;
+                let raw_sb = rwif.read(sb_offset, 1024)?;
+                let raw_bgd = unsafe {
+                    // SAFETY?
+                    let sb = (raw_sb.as_ptr() as *const ext2::Superblock)
+                        .read_unaligned();
+                    let bs = 1024 * 2usize.pow(sb.log_block_size_minus_10);
+                    let bgd_offset = bs * (sb_offset / bs + 1);
+                    rwif.read(
+                        bgd_offset,
+                        size_of::<ext2::BlockGroupDescriptor>(),
+                    )?
+                };
+                let ext2 = unsafe {
+                    // SAFETY?
+                    ext2::Ext2::from_raw(
+                        &raw_sb,
+                        &raw_bgd,
+                        Rc::downgrade(&rwif),
+                    )?
+                };
+                self.file_system = Some(Box::new(ext2));
+                Ok(())
+            }
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -105,6 +136,31 @@ pub enum ProbeFsErr {
 impl From<ReadErr> for ProbeFsErr {
     fn from(err: ReadErr) -> Self {
         ProbeFsErr::ReadErr(err)
+    }
+}
+
+#[derive(Debug)]
+pub enum TryInitFsErr {
+    ProbeFsErr(ProbeFsErr),
+    InitExt2Err(ext2::FromRawErr),
+    ReadErr(ReadErr),
+}
+
+impl From<ProbeFsErr> for TryInitFsErr {
+    fn from(err: ProbeFsErr) -> Self {
+        TryInitFsErr::ProbeFsErr(err)
+    }
+}
+
+impl From<ext2::FromRawErr> for TryInitFsErr {
+    fn from(err: ext2::FromRawErr) -> Self {
+        TryInitFsErr::InitExt2Err(err)
+    }
+}
+
+impl From<ReadErr> for TryInitFsErr {
+    fn from(err: ReadErr) -> Self {
+        TryInitFsErr::ReadErr(err)
     }
 }
 

@@ -710,12 +710,12 @@ pub fn init() {
                     unsafe {
                         let drives = disk::ata::init();
                         for drive in drives {
-                            let disk = disk::Disk {
+                            let mut disk = disk::Disk {
                                 rw_interface: Rc::new(Box::new(drive)),
                                 file_system: None,
                             };
                             println!("[PCI] Probing a file system on the detected disk.");
-                            println!("[PCI] Result: {:?}", disk.probe_fs());
+                            println!("[PCI] Result: {:?}", disk.try_init_fs());
                             disk::DISKS.lock().push(disk);
                         }
                     }
