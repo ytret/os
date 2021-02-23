@@ -20,7 +20,6 @@ use alloc::boxed::Box;
 use alloc::rc::Rc;
 use alloc::vec::Vec;
 use core::mem::size_of;
-use core::ops::Range;
 
 use crate::fs::{ext2, FileSystem};
 use crate::kernel_static::Mutex;
@@ -35,6 +34,7 @@ pub trait ReadWriteInterface {
         first_block_idx: usize,
         num_blocks: usize,
     ) -> Result<Box<[u8]>, ReadErr>;
+    fn read(&self, from_byte: usize, len: usize) -> Result<Box<[u8]>, ReadErr>;
 
     fn write_block(
         &self,
@@ -72,25 +72,14 @@ pub struct Disk {
 }
 
 impl Disk {
-    pub fn probe_fs(&self) -> Result<KnownFs, ProbeErr> {
-        let rwif = self.rw_interface.as_ref();
-        let block_size = rwif.block_size();
-
+    pub fn probe_fs(&self) -> Result<KnownFs, ProbeFsErr> {
         // Ext2?  Read the superblock and check the signature.
-        let sb_start = 1024;
-        let sb_size = size_of::<ext2::Superblock>();
-        let blocks_to_read = Range {
-            start: sb_start / block_size,
-            end: (sb_start + sb_size) / block_size + 1,
-        };
-        let raw_sb =
-            rwif.read_blocks(blocks_to_read.start, blocks_to_read.len())?;
-        let offset_in_raw = sb_start % block_size;
-        assert!(offset_in_raw + sb_size <= raw_sb.len());
+        let raw_sb = self
+            .rw_interface
+            .read(1024, size_of::<ext2::Superblock>())?;
         let sb = unsafe {
             // SAFETY?
-            (raw_sb.as_ptr().add(offset_in_raw) as *const ext2::Superblock)
-                .read_unaligned()
+            (raw_sb.as_ptr() as *const ext2::Superblock).read_unaligned()
         };
         if sb.ext2_signature == ext2::EXT2_SIGNATURE {
             println!("[DISK] Found an ext2 signature.");
@@ -98,7 +87,7 @@ impl Disk {
         }
 
         println!("[DISK] Unknown file system.");
-        Err(ProbeErr::UnknownFs)
+        Err(ProbeFsErr::UnknownFs)
     }
 }
 
@@ -108,14 +97,14 @@ pub enum KnownFs {
 }
 
 #[derive(Debug)]
-pub enum ProbeErr {
+pub enum ProbeFsErr {
     UnknownFs,
     ReadErr(ReadErr),
 }
 
-impl From<ReadErr> for ProbeErr {
+impl From<ReadErr> for ProbeFsErr {
     fn from(err: ReadErr) -> Self {
-        ProbeErr::ReadErr(err)
+        ProbeFsErr::ReadErr(err)
     }
 }
 

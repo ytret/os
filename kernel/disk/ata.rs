@@ -19,6 +19,7 @@ use alloc::rc::Rc;
 use alloc::vec::Vec;
 use core::cell::RefCell;
 use core::mem::align_of;
+use core::ops::Range;
 use core::slice;
 
 use crate::arch::interrupts::{InterruptStackFrame, IDT, STAGE2_IRQ15_HANDLER};
@@ -360,6 +361,28 @@ impl ReadWriteInterface for Drive {
             let data = bus.read(first_block_idx as u32, num_blocks as u8);
             Ok(boxed_slice_u16_to_u8(data))
         }
+    }
+
+    fn read(&self, from_byte: usize, len: usize) -> Result<Box<[u8]>, ReadErr> {
+        let block_sz = self.block_size();
+        let blocks_to_read = Range {
+            start: from_byte / block_sz,
+            end: (from_byte + len) / block_sz + 1,
+        };
+        let raw =
+            self.read_blocks(blocks_to_read.start, blocks_to_read.len())?;
+        let offset_in_raw = from_byte % block_sz;
+        assert!(offset_in_raw + len <= raw.len());
+
+        // Truncate the slice if needed.
+        let mut nothing_extra = if offset_in_raw == 0 {
+            raw.into_vec()
+        } else {
+            // FIXME: this allocates a new Vec, is there a more efficient way?
+            raw.into_vec().split_off(offset_in_raw)
+        };
+        nothing_extra.truncate(len);
+        Ok(nothing_extra.into_boxed_slice())
     }
 
     fn write_block(
