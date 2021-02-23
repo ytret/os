@@ -29,7 +29,7 @@ use crate::disk;
 
 #[allow(dead_code)]
 #[repr(C, packed)]
-struct Superblock {
+pub struct Superblock {
     total_num_inodes: u32,
     total_num_blocks: u32,
     num_reserved_blocks: u32,
@@ -45,7 +45,7 @@ struct Superblock {
     last_written_time: u32,
     num_mounts_since_consistency_check: u16,
     allowed_num_mounts_since_consistency_check: u16,
-    ext2_signature: u16,
+    pub ext2_signature: u16,
     fs_state: FsState,
     error_handling_method: ErrorHandlingMethod,
     version_minor: u16,
@@ -57,7 +57,7 @@ struct Superblock {
     group_id_can_use_reserved_blocks: u16,
 }
 
-const EXT2_SIGNATURE: u16 = 0xEF53;
+pub const EXT2_SIGNATURE: u16 = 0xEF53;
 
 #[allow(dead_code)]
 #[repr(u16)]

@@ -714,6 +714,8 @@ pub fn init() {
                                 rw_interface: Rc::new(Box::new(drive)),
                                 file_system: None,
                             };
+                            println!("[PCI] Probing a file system on the detected disk.");
+                            println!("[PCI] Result: {:?}", disk.probe_fs());
                             disk::DISKS.lock().push(disk);
                         }
                     }

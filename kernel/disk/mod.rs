@@ -19,8 +19,10 @@ pub mod ata;
 use alloc::boxed::Box;
 use alloc::rc::Rc;
 use alloc::vec::Vec;
+use core::mem::size_of;
+use core::ops::Range;
 
-use crate::fs::FileSystem;
+use crate::fs::{ext2, FileSystem};
 use crate::kernel_static::Mutex;
 
 pub trait ReadWriteInterface {
@@ -67,6 +69,54 @@ pub enum WriteErr {
 pub struct Disk {
     pub rw_interface: Rc<Box<dyn ReadWriteInterface>>,
     pub file_system: Option<Box<dyn FileSystem>>,
+}
+
+impl Disk {
+    pub fn probe_fs(&self) -> Result<KnownFs, ProbeErr> {
+        let rwif = self.rw_interface.as_ref();
+        let block_size = rwif.block_size();
+
+        // Ext2?  Read the superblock and check the signature.
+        let sb_start = 1024;
+        let sb_size = size_of::<ext2::Superblock>();
+        let blocks_to_read = Range {
+            start: sb_start / block_size,
+            end: (sb_start + sb_size) / block_size + 1,
+        };
+        let raw_sb =
+            rwif.read_blocks(blocks_to_read.start, blocks_to_read.len())?;
+        let offset_in_raw = sb_start % block_size;
+        assert!(offset_in_raw + sb_size <= raw_sb.len());
+        let sb = unsafe {
+            // SAFETY?
+            (raw_sb.as_ptr().add(offset_in_raw) as *const ext2::Superblock)
+                .read_unaligned()
+        };
+        if sb.ext2_signature == ext2::EXT2_SIGNATURE {
+            println!("[DISK] Found an ext2 signature.");
+            return Ok(KnownFs::Ext2);
+        }
+
+        println!("[DISK] Unknown file system.");
+        Err(ProbeErr::UnknownFs)
+    }
+}
+
+#[derive(Debug)]
+pub enum KnownFs {
+    Ext2,
+}
+
+#[derive(Debug)]
+pub enum ProbeErr {
+    UnknownFs,
+    ReadErr(ReadErr),
+}
+
+impl From<ReadErr> for ProbeErr {
+    fn from(err: ReadErr) -> Self {
+        ProbeErr::ReadErr(err)
+    }
 }
 
 kernel_static! {
