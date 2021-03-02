@@ -48,6 +48,7 @@ pub enum ReadDirErr {
     NoRwInterface,
     DiskErr(disk::ReadErr),
     InvalidName(FromUtf8Error),
+    InvalidDescriptor,
 }
 
 impl From<FromUtf8Error> for ReadDirErr {

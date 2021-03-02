@@ -775,6 +775,22 @@ impl From<ReadBlockErr> for ReadInodeBlockErr {
     }
 }
 
+impl From<ReadInodeBlockErr> for ReadDirErr {
+    fn from(err: ReadInodeBlockErr) -> Self {
+        match err {
+            ReadInodeBlockErr::BlockNotFound
+            | ReadInodeBlockErr::TooBigBlockIndex => {
+                ReadDirErr::InvalidDescriptor
+            }
+            ReadInodeBlockErr::ReadBlockErr(e) => match e {
+                ReadBlockErr::NoRwInterface => ReadDirErr::NoRwInterface,
+                ReadBlockErr::DiskErr(e) => ReadDirErr::DiskErr(e),
+                ReadBlockErr::InvalidBlockNum => ReadDirErr::InvalidDescriptor,
+            },
+        }
+    }
+}
+
 #[derive(Debug)]
 enum ReadBlockErr {
     NoRwInterface,
@@ -813,12 +829,17 @@ impl FileSystem for Ext2 {
         };
 
         // Traverse the directory.
-        let dbp0 = self.read_inode_block(&dir_inode, 0).unwrap();
-        let first_entry = dbp0.as_ptr() as *const DirEntry;
         let total_size = self.inode_size(&dir_inode);
-        if total_size > self.block_size {
-            unimplemented!();
-        }
+        let num_blocks = (total_size + self.block_size - 1) / self.block_size;
+        let blocks = unsafe {
+            let mut res = Vec::new();
+            for i in 0..num_blocks {
+                let block = self.read_inode_block(&dir_inode, i)?;
+                res.push(block.to_vec());
+            }
+            res.concat()
+        };
+        let first_entry = blocks.as_ptr() as *const DirEntry;
 
         for raw_entry in self.iter_dir(first_entry, total_size) {
             // TODO: read all inodes together in a hope that they are
