@@ -815,19 +815,27 @@ impl From<ReadBlockErr> for super::ReadFileErr {
 }
 
 impl FileSystem for Ext2 {
-    fn root_dir(&self) -> Result<Node, ReadDirErr> {
+    fn root_dir(&self) -> Result<Rc<Node>, ReadDirErr> {
         self.read_dir(2)
     }
 
-    fn read_dir(&self, id: usize) -> Result<Node, ReadDirErr> {
+    /// Creates a directory [`Node`](super::Node) after parsing an [`Inode`]
+    /// with the specified index.
+    /// # Notes
+    /// The parent node is not set, only the children nodes are figured out.  So
+    /// the caller has to set the parent node manually.
+    fn read_dir(&self, id: usize) -> Result<Rc<Node>, ReadDirErr> {
         assert_ne!(id as u32, 0, "invalid id");
         let dir_inode = self.read_inode(id as u32)?;
-        let mut node = Node {
+        let mut node = Rc::new(Node {
             _type: NodeType::Dir,
             name: String::new(),
             id_in_fs: Some(id),
+            parent: None,
             maybe_children: Some(Vec::new()),
-        };
+        });
+        let node_weak = Rc::downgrade(&node);
+        let node_mut = Rc::get_mut(&mut node).unwrap();
 
         // Traverse the directory.
         let total_size = self.inode_size(&dir_inode);
@@ -865,29 +873,34 @@ impl FileSystem for Ext2 {
                 }
             };
 
-            node.maybe_children.as_mut().unwrap().push(Rc::new(Node {
-                _type,
-                name: {
-                    let bytes = unsafe {
-                        slice::from_raw_parts(
-                            &entry.name as *const u8,
-                            name_len,
-                        )
-                    };
-                    String::from_utf8(bytes.to_vec())?
-                },
-                id_in_fs: Some(entry.inode as usize),
-                maybe_children: None,
-            }));
+            node_mut
+                .maybe_children
+                .as_mut()
+                .unwrap()
+                .push(Rc::new(Node {
+                    _type,
+                    name: {
+                        let bytes = unsafe {
+                            slice::from_raw_parts(
+                                &entry.name as *const u8,
+                                name_len,
+                            )
+                        };
+                        String::from_utf8(bytes.to_vec())?
+                    },
+                    id_in_fs: Some(entry.inode as usize),
+                    parent: Some(Weak::clone(&node_weak)),
+                    maybe_children: None,
+                }));
         }
 
         // Obtain the directory name.
         // FIXME: is ".." always the first dir entry?
-        let root_children = node.maybe_children.as_ref().unwrap();
+        let root_children = node_mut.maybe_children.as_ref().unwrap();
         if root_children[0].name != ".." {
             unimplemented!();
         } else if id == 2 {
-            node.name = String::from("/");
+            node_mut.name = String::from("/");
         } else {
             let parent_dir_id = root_children[0].id_in_fs.unwrap();
             let parent_dir = self.read_dir(parent_dir_id)?;
@@ -898,7 +911,7 @@ impl FileSystem for Ext2 {
                 .iter()
                 .find(|&e| e.id_in_fs.unwrap() == id)
             {
-                Some(itself) => node.name = itself.name.clone(),
+                Some(itself) => node_mut.name = itself.name.clone(),
                 None => {
                     // unreachable? see fixme above
                     unimplemented!();

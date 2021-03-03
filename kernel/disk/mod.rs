@@ -91,7 +91,7 @@ impl Disk {
         Err(ProbeFsErr::UnknownFs)
     }
 
-    pub fn try_init_fs(&mut self) -> Result<Node, TryInitFsErr> {
+    pub fn try_init_fs(&mut self) -> Result<Rc<Node>, TryInitFsErr> {
         match self.probe_fs()? {
             KnownFs::Ext2 => {
                 let rwif = &self.rw_interface;

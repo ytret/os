@@ -17,7 +17,7 @@
 pub mod ext2;
 
 use alloc::boxed::Box;
-use alloc::rc::Rc;
+use alloc::rc::{Rc, Weak};
 use alloc::string::{FromUtf8Error, String};
 use alloc::vec::Vec;
 use core::fmt;
@@ -29,6 +29,7 @@ pub struct Node {
     pub _type: NodeType,
     name: String,
     id_in_fs: Option<usize>,
+    parent: Option<Weak<Node>>,
     maybe_children: Option<Vec<Rc<Node>>>,
 }
 
@@ -61,8 +62,8 @@ pub enum ReadFileErr {
 }
 
 pub trait FileSystem {
-    fn root_dir(&self) -> Result<Node, ReadDirErr>;
-    fn read_dir(&self, id: usize) -> Result<Node, ReadDirErr>;
+    fn root_dir(&self) -> Result<Rc<Node>, ReadDirErr>;
+    fn read_dir(&self, id: usize) -> Result<Rc<Node>, ReadDirErr>;
     fn read_file(&self, id: usize) -> Result<Vec<Box<[u8]>>, ReadFileErr>;
     fn file_size_bytes(&self, id: usize) -> Result<u64, ReadFileErr>;
     fn file_size_blocks(&self, id: usize) -> Result<usize, ReadFileErr>;
