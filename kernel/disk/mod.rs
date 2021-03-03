@@ -67,6 +67,7 @@ pub enum WriteErr {
 }
 
 pub struct Disk {
+    pub id: usize,
     pub rw_interface: Rc<Box<dyn ReadWriteInterface>>,
     pub file_system: Option<Box<dyn FileSystem>>,
 }
