@@ -25,6 +25,7 @@ AS := i686-elf-as
 LD := i686-elf-ld
 RUST := rustc
 RUSTFMT := rustfmt
+RUSTDOC := rustdoc
 
 RUSTFLAGS := --target $(ARCHDIR)/target.json -L $(LIBDIR)
 RUSTFMTFLAGS := --check --edition 2018 \
@@ -64,7 +65,7 @@ OUTPUT := kernel.bin
 ISOFILE := kernel.iso
 HDIMG := hd.img
 
-.PHONY: all get-libs iso hd clean clean-all run check-fmt
+.PHONY: all get-libs doc iso hd clean clean-all run check-fmt
 
 all: $(OUTPUT)
 
@@ -92,6 +93,10 @@ $(LIBCOMP): $(LIBCORE)
 $(LIBALLOC): $(LIBCORE) $(LIBCOMP)
 	$(RUST) -O $(RUSTFLAGS) --edition 2018 --out-dir $(LIBDIR) \
 	--crate-name alloc --crate-type rlib $(LIBDIR)/alloc/src/lib.rs
+
+doc: $(SOURCES)
+	$(RUSTDOC) $(RUSTFLAGS) --edition 2018 --crate-name kernel \
+	--crate-type staticlib $<
 
 get-libs:
 	mkdir -p $(LIBDIR)
