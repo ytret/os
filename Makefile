@@ -43,7 +43,6 @@ SOURCES := \
 	kernel/disk/mod.rs \
 	kernel/disk/ata.rs \
 	kernel/fs/mod.rs \
-	kernel/fs/vfs.rs \
 	kernel/fs/ext2.rs \
 	kernel/elf.rs \
 	$(ARCH_SOURCES)

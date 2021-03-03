@@ -46,7 +46,6 @@ pub mod fs;
 
 pub mod elf;
 
-use alloc::rc::Rc;
 use core::panic::PanicInfo;
 use memory_region::Region;
 
@@ -92,8 +91,6 @@ pub extern "C" fn main(magic_num: u32, boot_info: *const mbi::BootInfo) {
     heap::init(&kernel_info);
 
     arch::pci::init();
-
-    fs::vfs::init(Rc::clone(&disk::DISKS.lock()[0]));
 
     // scheduler::init();
 

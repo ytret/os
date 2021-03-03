@@ -21,7 +21,7 @@ use alloc::rc::Rc;
 use alloc::vec::Vec;
 use core::mem::size_of;
 
-use crate::fs::{ext2, FileSystem};
+use crate::fs::{ext2, FileSystem, Node, ReadDirErr};
 use crate::kernel_static::Mutex;
 
 pub trait ReadWriteInterface {
@@ -91,7 +91,7 @@ impl Disk {
         Err(ProbeFsErr::UnknownFs)
     }
 
-    pub fn try_init_fs(&mut self) -> Result<(), TryInitFsErr> {
+    pub fn try_init_fs(&mut self) -> Result<Node, TryInitFsErr> {
         match self.probe_fs()? {
             KnownFs::Ext2 => {
                 let rwif = &self.rw_interface;
@@ -117,7 +117,7 @@ impl Disk {
                     )?
                 };
                 self.file_system = Some(Box::new(ext2));
-                Ok(())
+                Ok(self.file_system.as_ref().unwrap().root_dir()?)
             }
         }
     }
@@ -145,6 +145,7 @@ pub enum TryInitFsErr {
     ProbeFsErr(ProbeFsErr),
     InitExt2Err(ext2::FromRawErr),
     ReadErr(ReadErr),
+    ReadRootDirErr(ReadDirErr),
 }
 
 impl From<ProbeFsErr> for TryInitFsErr {
@@ -162,6 +163,12 @@ impl From<ext2::FromRawErr> for TryInitFsErr {
 impl From<ReadErr> for TryInitFsErr {
     fn from(err: ReadErr) -> Self {
         TryInitFsErr::ReadErr(err)
+    }
+}
+
+impl From<ReadDirErr> for TryInitFsErr {
+    fn from(err: ReadDirErr) -> Self {
+        TryInitFsErr::ReadRootDirErr(err)
     }
 }
 

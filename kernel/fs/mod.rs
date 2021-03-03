@@ -14,35 +14,38 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-pub mod vfs;
-
 pub mod ext2;
 
 use alloc::boxed::Box;
+use alloc::rc::Rc;
 use alloc::string::{FromUtf8Error, String};
 use alloc::vec::Vec;
+use core::fmt;
 
 use crate::disk;
 
 #[derive(Debug)]
-pub struct Directory {
-    id: usize,
+pub struct Node {
+    _type: NodeType,
     name: String,
-    entries: Vec<DirEntry>,
+    id_in_fs: Option<usize>,
+    maybe_children: Option<Vec<Node>>,
 }
 
-#[derive(Debug)]
-struct DirEntry {
-    id: usize,
-    name: String,
-    content: DirEntryContent,
-}
-
-#[derive(Debug)]
-enum DirEntryContent {
-    Unknown,
+enum NodeType {
+    MountPoint(Rc<disk::Disk>),
     RegularFile,
-    Directory,
+    Dir,
+}
+
+impl fmt::Debug for NodeType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            NodeType::MountPoint(_) => "MountPoint",
+            NodeType::RegularFile => "RegularFile",
+            NodeType::Dir => "Dir",
+        })
+    }
 }
 
 #[derive(Debug)]
@@ -67,8 +70,8 @@ pub enum ReadFileErr {
 }
 
 pub trait FileSystem {
-    fn root_dir(&self) -> Result<Directory, ReadDirErr>;
-    fn read_dir(&self, id: usize) -> Result<Directory, ReadDirErr>;
+    fn root_dir(&self) -> Result<Node, ReadDirErr>;
+    fn read_dir(&self, id: usize) -> Result<Node, ReadDirErr>;
     fn read_file(&self, id: usize) -> Result<Vec<Box<[u8]>>, ReadFileErr>;
     fn file_size_bytes(&self, id: usize) -> Result<u64, ReadFileErr>;
     fn file_size_blocks(&self, id: usize) -> Result<usize, ReadFileErr>;

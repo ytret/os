@@ -24,7 +24,7 @@ use core::mem::{align_of, size_of};
 use core::ops::Range;
 use core::slice;
 
-use super::{DirEntryContent, Directory, FileSystem, ReadDirErr, ReadFileErr};
+use super::{FileSystem, Node, NodeType, ReadDirErr, ReadFileErr};
 use crate::bitflags::BitFlags;
 use crate::disk;
 
@@ -815,23 +815,24 @@ impl From<ReadBlockErr> for super::ReadFileErr {
 }
 
 impl FileSystem for Ext2 {
-    fn root_dir(&self) -> Result<Directory, ReadDirErr> {
+    fn root_dir(&self) -> Result<Node, ReadDirErr> {
         self.read_dir(2)
     }
 
-    fn read_dir(&self, id: usize) -> Result<Directory, ReadDirErr> {
+    fn read_dir(&self, id: usize) -> Result<Node, ReadDirErr> {
         assert_ne!(id as u32, 0, "invalid id");
         let dir_inode = self.read_inode(id as u32)?;
-        let mut dir = Directory {
-            id,
+        let mut node = Node {
+            _type: NodeType::Dir,
             name: String::new(),
-            entries: Vec::new(),
+            id_in_fs: Some(id),
+            maybe_children: Some(Vec::new()),
         };
 
         // Traverse the directory.
         let total_size = self.inode_size(&dir_inode);
         let num_blocks = (total_size + self.block_size - 1) / self.block_size;
-        let blocks = unsafe {
+        let blocks = {
             let mut res = Vec::new();
             for i in 0..num_blocks {
                 let block = self.read_inode_block(&dir_inode, i)?;
@@ -845,7 +846,6 @@ impl FileSystem for Ext2 {
             // TODO: read all inodes together in a hope that they are
             // stored close to each other?
             let entry = unsafe { &*raw_entry };
-            let inode_idx = entry.inode;
             let mut name_len = entry.name_len_0_7 as usize;
 
             let _type = {
@@ -853,43 +853,52 @@ impl FileSystem for Ext2 {
                     .required_features
                     .has_set(RequiredFeature::DirsWithType)
                 {
-                    DirEntryContent::from(
+                    NodeType::try_from(
                         DirEntryType::try_from(entry.type_or_name_len_8_16)
                             .unwrap(),
                     )
+                    .unwrap()
                 } else {
                     name_len |= (entry.type_or_name_len_8_16 as usize) << 8;
-                    let inode = self.read_inode(inode_idx)?;
-                    DirEntryContent::from(inode._type())
+                    let inode = self.read_inode(entry.inode)?;
+                    NodeType::from(inode._type())
                 }
             };
 
-            dir.entries.push(super::DirEntry {
-                id: inode_idx as usize,
+            node.maybe_children.as_mut().unwrap().push(Node {
+                _type,
                 name: {
-                    let s = unsafe {
+                    let bytes = unsafe {
                         slice::from_raw_parts(
                             &entry.name as *const u8,
                             name_len,
                         )
                     };
-                    String::from_utf8(s.to_vec())?
+                    String::from_utf8(bytes.to_vec())?
                 },
-                content: _type,
+                id_in_fs: Some(entry.inode as usize),
+                maybe_children: None,
             });
         }
 
         // Obtain the directory name.
         // FIXME: is ".." always the first dir entry?
-        if dir.entries[0].name != ".." {
+        let root_children = node.maybe_children.as_ref().unwrap();
+        if root_children[0].name != ".." {
             unimplemented!();
         } else if id == 2 {
-            dir.name = String::from("/");
+            node.name = String::from("/");
         } else {
-            let parent_dir_id = dir.entries[0].id;
+            let parent_dir_id = root_children[0].id_in_fs.unwrap();
             let parent_dir = self.read_dir(parent_dir_id)?;
-            match parent_dir.entries.iter().find(|&e| e.id == id) {
-                Some(itself) => dir.name = itself.name.clone(),
+            match parent_dir
+                .maybe_children
+                .as_ref()
+                .unwrap()
+                .iter()
+                .find(|&e| e.id_in_fs.unwrap() == id)
+            {
+                Some(itself) => node.name = itself.name.clone(),
                 None => {
                     // unreachable? see fixme above
                     unimplemented!();
@@ -897,7 +906,7 @@ impl FileSystem for Ext2 {
             }
         }
 
-        Ok(dir)
+        Ok(node)
     }
 
     fn read_file(&self, id: usize) -> Result<Vec<Box<[u8]>>, ReadFileErr> {
@@ -998,22 +1007,23 @@ impl FileSystem for Ext2 {
     }
 }
 
-impl From<InodeType> for DirEntryContent {
+impl From<InodeType> for NodeType {
     fn from(inode_type: InodeType) -> Self {
         match inode_type {
-            InodeType::RegularFile => DirEntryContent::RegularFile,
-            InodeType::Dir => DirEntryContent::Directory,
-            _ => DirEntryContent::Unknown,
+            InodeType::RegularFile => NodeType::RegularFile,
+            InodeType::Dir => NodeType::Dir,
+            _ => unimplemented!(),
         }
     }
 }
 
-impl From<DirEntryType> for DirEntryContent {
-    fn from(entry_type: DirEntryType) -> Self {
+impl TryFrom<DirEntryType> for NodeType {
+    type Error = &'static str;
+    fn try_from(entry_type: DirEntryType) -> Result<Self, &'static str> {
         match entry_type {
-            DirEntryType::RegularFile => DirEntryContent::RegularFile,
-            DirEntryType::Dir => DirEntryContent::Directory,
-            _ => DirEntryContent::Unknown,
+            DirEntryType::RegularFile => Ok(NodeType::RegularFile),
+            DirEntryType::Dir => Ok(NodeType::Dir),
+            _ => Err("unknown dir entry type"),
         }
     }
 }
