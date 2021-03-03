@@ -15,7 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use alloc::boxed::Box;
-use alloc::rc::Weak;
+use alloc::rc::{Rc, Weak};
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::convert::TryFrom;
@@ -865,7 +865,7 @@ impl FileSystem for Ext2 {
                 }
             };
 
-            node.maybe_children.as_mut().unwrap().push(Node {
+            node.maybe_children.as_mut().unwrap().push(Rc::new(Node {
                 _type,
                 name: {
                     let bytes = unsafe {
@@ -878,7 +878,7 @@ impl FileSystem for Ext2 {
                 },
                 id_in_fs: Some(entry.inode as usize),
                 maybe_children: None,
-            });
+            }));
         }
 
         // Obtain the directory name.

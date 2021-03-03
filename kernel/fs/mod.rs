@@ -26,10 +26,10 @@ use crate::disk;
 
 #[derive(Debug)]
 pub struct Node {
-    _type: NodeType,
+    pub _type: NodeType,
     name: String,
     id_in_fs: Option<usize>,
-    maybe_children: Option<Vec<Node>>,
+    maybe_children: Option<Vec<Rc<Node>>>,
 }
 
 #[derive(Debug, PartialEq)]
