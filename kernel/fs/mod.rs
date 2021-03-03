@@ -32,20 +32,11 @@ pub struct Node {
     maybe_children: Option<Vec<Node>>,
 }
 
-enum NodeType {
-    MountPoint(Rc<disk::Disk>),
+#[derive(Debug, PartialEq)]
+pub enum NodeType {
+    MountPoint(usize),
     RegularFile,
     Dir,
-}
-
-impl fmt::Debug for NodeType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            NodeType::MountPoint(_) => "MountPoint",
-            NodeType::RegularFile => "RegularFile",
-            NodeType::Dir => "Dir",
-        })
-    }
 }
 
 #[derive(Debug)]
