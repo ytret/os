@@ -18,6 +18,7 @@ use core::marker::PhantomData;
 use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not};
 
 #[derive(Clone, Copy)]
+#[repr(transparent)]
 pub struct BitFlags<T, E>
 where
     T: BitOrAssign
