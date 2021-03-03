@@ -15,7 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use crate::arch;
-use crate::arch::process::Process;
+use crate::arch::process::{Process, ProcessControlBlock};
 
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU32, Ordering};
@@ -65,14 +65,15 @@ impl Scheduler {
         );
 
         let from_idx = self.current_idx;
-        let from = &self.processes[self.current_idx] as *const _ as *mut _;
+        let from =
+            &mut self.processes[from_idx].pcb as *mut ProcessControlBlock;
 
         self.current_idx = match self.current_idx {
             max if max + 1 == self.processes.len() => 0,
             not_max => not_max + 1,
         };
-        let to = &self.processes[self.current_idx];
         let to_idx = self.current_idx;
+        let to = &self.processes[to_idx].pcb as *const ProcessControlBlock;
 
         println!(" switching from {} to {}", from_idx, to_idx);
         // println!(" to Process struct addr: 0x{:08X}", to as *const _ as u32);
@@ -80,7 +81,6 @@ impl Scheduler {
         // println!("  to.esp0 = 0x{:08X}", to.esp0);
         // println!("  to.esp = 0x{:08X}", to.esp);
 
-        assert!(from as *const _ != to, "from and to point to the same task");
         self.switch_tasks(from, to);
     }
 }

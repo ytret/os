@@ -17,25 +17,29 @@
 use core::sync::atomic::Ordering;
 
 use crate::arch::gdt;
-use crate::arch::process::Process;
+use crate::arch::process::{Process, ProcessControlBlock};
 use crate::scheduler::{NO_SCHED_COUNTER, SCHEDULER};
 
 extern "C" {
+    fn switch_tasks(
+        from: *mut ProcessControlBlock,
+        to: *const ProcessControlBlock,
+        tss: *mut gdt::TaskStateSegment,
+    );
+
     pub fn jump_into_usermode(
         code_seg: u16,
         data_seg: u16,
         jump_to: extern "C" fn() -> !,
     ) -> !;
-
-    fn switch_tasks(
-        from: *mut Process,
-        to: *const Process,
-        tss: *mut gdt::TaskStateSegment,
-    );
 }
 
 impl crate::scheduler::Scheduler {
-    pub fn switch_tasks(&self, from: *mut Process, to: *const Process) {
+    pub fn switch_tasks(
+        &self,
+        from: *mut ProcessControlBlock,
+        to: *const ProcessControlBlock,
+    ) {
         // NOTE: call this method with interrupts disabled and enable them after
         // it returns.
         unsafe {
@@ -70,7 +74,7 @@ pub fn init() -> ! {
     // after enablig the spawner will save the current context as a context
     // of the process with index 0.
     let init_process = Process::new();
-    tss.esp0 = init_process.esp0;
+    tss.esp0 = init_process.pcb.esp0;
 
     unsafe {
         // Load the GDT with the new entries.

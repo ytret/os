@@ -20,9 +20,13 @@ use crate::arch::gdt;
 use crate::arch::vas::VirtAddrSpace;
 use crate::scheduler::SCHEDULER;
 
+pub struct Process {
+    pub pcb: ProcessControlBlock,
+}
+
 #[derive(Clone, Copy)]
 #[repr(C, packed)]
-pub struct Process {
+pub struct ProcessControlBlock {
     // NOTE: when changing the order of these fields, also edit switch_tasks()
     // in scheduler.s.
     pub cr3: u32,
@@ -52,15 +56,17 @@ impl Process {
                 default_entry_point as *const () as u32; // eip
             *kernel_stack_top.wrapping_add(7) = 0x00000000;
             // Here 0x00000000 is just some value for the stack tracer to print
-            // out as EIP instead of the heap garbage after the the stack.  Also
-            // it may serve as a return address for default_entry_point().
+            // out as EIP instead of the heap garbage after the stack.  Also it
+            // may serve as a return address for default_entry_point().
         }
 
-        Process {
+        let pcb = ProcessControlBlock {
             cr3: crate::arch::vas::KERNEL_VAS.lock().pgdir_phys,
             esp0: kernel_stack_bottom as u32,
             esp: kernel_stack_top as u32,
-        }
+        };
+
+        Process { pcb }
     }
 }
 

@@ -92,9 +92,9 @@ pub extern "C" fn main(magic_num: u32, boot_info: *const mbi::BootInfo) {
 
     arch::pci::init();
 
-    // scheduler::init();
+    scheduler::init();
 
-    println!("Reached the end of main.");
+    // println!("Reached the end of main.");
 }
 
 #[panic_handler]
