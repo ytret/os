@@ -166,5 +166,5 @@ impl From<ReadErr> for TryInitFsErr {
 }
 
 kernel_static! {
-    pub static ref DISKS: Mutex<Vec<Disk>> = Mutex::new(Vec::new());
+    pub static ref DISKS: Mutex<Vec<Rc<Disk>>> = Mutex::new(Vec::new());
 }

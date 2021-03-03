@@ -18,7 +18,6 @@
 #![feature(alloc_error_handler)]
 #![cfg_attr(target_arch = "x86", feature(asm))]
 
-#[macro_use]
 extern crate alloc;
 
 #[macro_use]
@@ -47,6 +46,7 @@ pub mod fs;
 
 pub mod elf;
 
+use alloc::rc::Rc;
 use core::panic::PanicInfo;
 use memory_region::Region;
 
@@ -93,40 +93,9 @@ pub extern "C" fn main(magic_num: u32, boot_info: *const mbi::BootInfo) {
 
     arch::pci::init();
 
+    fs::vfs::init(Rc::clone(&disk::DISKS.lock()[0]));
+
     // scheduler::init();
-
-    /*
-    let data: Box<[u8]> = Box::new([
-        0x7f, 101, 108, 102, 1, 1, 1, 7, 8, 9,
-        2, 0,
-        1, 0,
-        2, 0, 0, 0,
-        3, 0, 0, 0,
-        4, 0, 0, 0,
-        5, 0, 0, 0,
-        6, 0, 0, 0,
-        7, 0,
-        8, 0,
-        9, 0,
-        10, 0,
-        11, 0,
-        12, 0,
-    ]);
-    elf::read_elf_header(data).unwrap();
-    */
-
-    use alloc::boxed::Box;
-    let disk = &mut disk::DISKS.lock()[0];
-    match &disk.file_system {
-        Some(fs) => {
-            println!("{:?}", fs.root_dir().unwrap());
-            let data = fs.read_file(13).unwrap();
-            // println!("{:?}", elf::ElfInfo::from_raw_data(&data[0]));
-        }
-        None => panic!(),
-    }
-
-    // loop {}
 
     println!("Reached the end of main.");
 }
