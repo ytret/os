@@ -113,7 +113,7 @@ unsafe impl GlobalAlloc for Allocator {
 
         let heap = match *KERNEL_HEAP.lock() {
             Some(kernel_heap) => kernel_heap,
-            None => panic!("dealloc on unitialized kernel heap"),
+            None => panic!("dealloc on uninitialized kernel heap"),
         };
 
         let mut tag_ptr: *const u8 = ptr.sub(1);
