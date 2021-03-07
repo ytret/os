@@ -20,20 +20,79 @@ use alloc::boxed::Box;
 use alloc::rc::{Rc, Weak};
 use alloc::string::{FromUtf8Error, String};
 use alloc::vec::Vec;
+use core::cell::RefCell;
 use core::fmt;
 
 use crate::disk;
 
-#[derive(Debug)]
-pub struct Node {
+#[derive(Clone, Debug)]
+pub struct Node(pub Rc<RefCell<NodeInternals>>);
+
+#[derive(Clone, Debug)]
+pub struct NodeInternals {
     pub _type: NodeType,
     name: String,
-    id_in_fs: Option<usize>,
-    parent: Option<Weak<Node>>,
-    maybe_children: Option<Vec<Rc<Node>>>,
+    pub id_in_fs: Option<usize>,
+    parent: Option<Weak<RefCell<NodeInternals>>>,
+    pub maybe_children: Option<Vec<Node>>,
 }
 
-#[derive(Debug, PartialEq)]
+impl NodeInternals {
+    fn is_mount_point(&self) -> bool {
+        if let NodeType::MountPoint(_) = self._type {
+            true
+        } else {
+            false
+        }
+    }
+
+    fn has_parent(&self) -> bool {
+        if let Some(_) = self.parent {
+            true
+        } else {
+            false
+        }
+    }
+}
+
+impl Node {
+    /// Searches for the first [`MountPoint`](NodeType) among the parent nodes.
+    ///
+    /// # Notes
+    /// If this node is a mount point, there will be no search and this node
+    /// will be returned.
+    ///
+    /// # Panics
+    /// This function panics if it could not find any mount point parent node or
+    /// if any of the parent nodes has been deallocated.
+    fn mount_point(&self) -> Rc<RefCell<NodeInternals>> {
+        let mut current = Rc::clone(&self.0);
+        loop {
+            if current.borrow().is_mount_point() {
+                return current;
+            } else if current.borrow().has_parent() {
+                let weak = current.borrow().parent.as_ref().unwrap().clone();
+                current = weak.upgrade().unwrap();
+            } else {
+                panic!("could not find any mount point");
+            }
+        }
+    }
+
+    /// Returns a [`FileSystem`] which this node resides on.
+    pub fn fs(&self) -> Rc<Box<dyn FileSystem>> {
+        let mp_node = self.mount_point();
+        let mp_node_internals = mp_node.borrow();
+        if let NodeType::MountPoint(disk_id) = mp_node_internals._type {
+            let disk = &disk::DISKS.lock()[disk_id];
+            Rc::clone(disk.file_system.as_ref().unwrap())
+        } else {
+            unreachable!();
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum NodeType {
     MountPoint(usize),
     RegularFile,
@@ -62,8 +121,8 @@ pub enum ReadFileErr {
 }
 
 pub trait FileSystem {
-    fn root_dir(&self) -> Result<Rc<Node>, ReadDirErr>;
-    fn read_dir(&self, id: usize) -> Result<Rc<Node>, ReadDirErr>;
+    fn root_dir(&self) -> Result<Node, ReadDirErr>;
+    fn read_dir(&self, id: usize) -> Result<Node, ReadDirErr>;
     fn read_file(&self, id: usize) -> Result<Vec<Box<[u8]>>, ReadFileErr>;
     fn file_size_bytes(&self, id: usize) -> Result<u64, ReadFileErr>;
     fn file_size_blocks(&self, id: usize) -> Result<usize, ReadFileErr>;

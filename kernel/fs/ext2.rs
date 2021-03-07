@@ -18,13 +18,16 @@ use alloc::boxed::Box;
 use alloc::rc::{Rc, Weak};
 use alloc::string::String;
 use alloc::vec::Vec;
+use core::cell::RefCell;
 use core::convert::TryFrom;
 use core::fmt;
-use core::mem::{align_of, size_of};
+use core::mem::{align_of, drop, size_of};
 use core::ops::Range;
 use core::slice;
 
-use super::{FileSystem, Node, NodeType, ReadDirErr, ReadFileErr};
+use super::{
+    FileSystem, Node, NodeInternals, NodeType, ReadDirErr, ReadFileErr,
+};
 use crate::bitflags::BitFlags;
 use crate::disk;
 
@@ -598,10 +601,10 @@ impl Ext2 {
             }
             let dib_ptr_idx = (index - dibs_range.start) / sibs_range.len();
             let sib_ptr_idx = (index - dibs_range.start) % sibs_range.len();
-            println!(
-                "  DIB ptr idx {} SIB ptr idx {}",
-                dib_ptr_idx, sib_ptr_idx,
-            );
+            // println!(
+            //     "  DIB ptr idx {} SIB ptr idx {}",
+            //     dib_ptr_idx, sib_ptr_idx,
+            // );
             let sib_ptr = self.read_block_entry(
                 inode.doubly_indirect_block_ptr as usize,
                 dib_ptr_idx,
@@ -619,10 +622,10 @@ impl Ext2 {
                 / sibs_range.len();
             let sib_ptr_idx = ((index - tibs_range.start) % dibs_range.len())
                 % sibs_range.len();
-            println!(
-                "  TIB ptr idx {} DIB ptr idx {} SIB ptr idx {}",
-                tib_ptr_idx, dib_ptr_idx, sib_ptr_idx,
-            );
+            // println!(
+            //     "  TIB ptr idx {} DIB ptr idx {} SIB ptr idx {}",
+            //     tib_ptr_idx, dib_ptr_idx, sib_ptr_idx,
+            // );
             let dib_ptr = self.read_block_entry(
                 inode.triply_indirect_block_ptr as usize,
                 tib_ptr_idx,
@@ -815,27 +818,28 @@ impl From<ReadBlockErr> for super::ReadFileErr {
 }
 
 impl FileSystem for Ext2 {
-    fn root_dir(&self) -> Result<Rc<Node>, ReadDirErr> {
+    fn root_dir(&self) -> Result<Node, ReadDirErr> {
         self.read_dir(2)
     }
 
     /// Creates a directory [`Node`](super::Node) after parsing an [`Inode`]
     /// with the specified index.
+    ///
     /// # Notes
     /// The parent node is not set, only the children nodes are figured out.  So
     /// the caller has to set the parent node manually.
-    fn read_dir(&self, id: usize) -> Result<Rc<Node>, ReadDirErr> {
+    fn read_dir(&self, id: usize) -> Result<Node, ReadDirErr> {
         assert_ne!(id as u32, 0, "invalid id");
         let dir_inode = self.read_inode(id as u32)?;
-        let mut node = Rc::new(Node {
+        let mut node = Node(Rc::new(RefCell::new(NodeInternals {
             _type: NodeType::Dir,
             name: String::new(),
             id_in_fs: Some(id),
             parent: None,
             maybe_children: Some(Vec::new()),
-        });
-        let node_weak = Rc::downgrade(&node);
-        let node_mut = Rc::get_mut(&mut node).unwrap();
+        })));
+        let node_weak = Rc::downgrade(&node.0);
+        let mut node_mut = node.0.borrow_mut();
 
         // Traverse the directory.
         let total_size = self.inode_size(&dir_inode);
@@ -873,11 +877,8 @@ impl FileSystem for Ext2 {
                 }
             };
 
-            node_mut
-                .maybe_children
-                .as_mut()
-                .unwrap()
-                .push(Rc::new(Node {
+            node_mut.maybe_children.as_mut().unwrap().push(Node(Rc::new(
+                RefCell::new(NodeInternals {
                     _type,
                     name: {
                         let bytes = unsafe {
@@ -891,27 +892,30 @@ impl FileSystem for Ext2 {
                     id_in_fs: Some(entry.inode as usize),
                     parent: Some(Weak::clone(&node_weak)),
                     maybe_children: None,
-                }));
+                }),
+            )));
         }
 
         // Obtain the directory name.
         // FIXME: is ".." always the first dir entry?
         let root_children = node_mut.maybe_children.as_ref().unwrap();
-        if root_children[0].name != ".." {
+        if root_children[0].0.borrow().name != ".." {
             unimplemented!();
         } else if id == 2 {
+            node_mut._type = NodeType::MountPoint(0); // FIXME
             node_mut.name = String::from("/");
         } else {
-            let parent_dir_id = root_children[0].id_in_fs.unwrap();
-            let parent_dir = self.read_dir(parent_dir_id)?;
+            let parent_dir_id = root_children[0].0.borrow().id_in_fs.unwrap();
+            let parent_dir_node = self.read_dir(parent_dir_id)?;
+            let parent_dir = parent_dir_node.0.borrow();
             match parent_dir
                 .maybe_children
                 .as_ref()
                 .unwrap()
                 .iter()
-                .find(|&e| e.id_in_fs.unwrap() == id)
+                .find(|&e| e.0.borrow().id_in_fs.unwrap() == id)
             {
-                Some(itself) => node_mut.name = itself.name.clone(),
+                Some(itself) => node_mut.name = itself.0.borrow().name.clone(),
                 None => {
                     // unreachable? see fixme above
                     unimplemented!();
@@ -919,6 +923,7 @@ impl FileSystem for Ext2 {
             }
         }
 
+        drop(node_mut);
         Ok(node)
     }
 
