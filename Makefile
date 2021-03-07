@@ -124,7 +124,8 @@ clean-all: clean
 run:
 	qemu-system-i386 -m 32 \
 	                 -drive if=ide,index=0,media=cdrom,file=$(ISOFILE) \
-	                 -drive if=ide,index=1,media=disk,file=hd.img,format=raw
+	                 -drive if=ide,index=1,media=disk,file=hd.img,format=raw \
+	                 -serial stdio
 
 check-fmt: $(SOURCES)
 	$(RUSTFMT) $(RUSTFMTFLAGS) $<
