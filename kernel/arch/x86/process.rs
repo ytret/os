@@ -15,23 +15,17 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use alloc::alloc::{alloc, Layout};
+use alloc::rc::Rc;
+use alloc::vec::Vec;
 
 use crate::arch::gdt;
 use crate::arch::vas::VirtAddrSpace;
+use crate::fs;
 use crate::scheduler::SCHEDULER;
 
 pub struct Process {
     pub pcb: ProcessControlBlock,
-}
-
-#[derive(Clone, Copy)]
-#[repr(C, packed)]
-pub struct ProcessControlBlock {
-    // NOTE: when changing the order of these fields, also edit switch_tasks()
-    // in scheduler.s.
-    pub cr3: u32,
-    pub esp0: u32,
-    pub esp: u32,
+    opened_files: Vec<OpenedFile>,
 }
 
 impl Process {
@@ -50,7 +44,7 @@ impl Process {
             *kernel_stack_top.wrapping_add(3) = 0; // ebx
             *kernel_stack_top.wrapping_add(4) = 0; // eax
             *kernel_stack_top.wrapping_add(5) = 0x00000000;
-            // ebp = 0x00000000 is a magic value making the stack tracer to
+            // ebp = 0x00000000 is a magic value that makes the stack tracer to
             // stop.  It is used here the same way as in boot.s.
             *kernel_stack_top.wrapping_add(6) =
                 default_entry_point as *const () as u32; // eip
@@ -66,7 +60,69 @@ impl Process {
             esp: kernel_stack_top as u32,
         };
 
-        Process { pcb }
+        Process {
+            pcb,
+            opened_files: Vec::new(),
+        }
+    }
+
+    fn open_file_by_node(
+        &mut self,
+        node: fs::Node,
+    ) -> Result<usize, OpenFileErr> {
+        if node.0.borrow()._type == fs::NodeType::RegularFile {
+            let fd = self.opened_files.len();
+            self.opened_files.push(OpenedFile::new(node.clone()));
+            Ok(fd)
+        } else {
+            Err(OpenFileErr::NotRegularFile)
+        }
+    }
+}
+
+#[derive(Debug)]
+enum OpenFileErr {
+    NotRegularFile,
+    IdNotAssigned,
+}
+
+#[derive(Clone, Copy)]
+#[repr(C, packed)]
+pub struct ProcessControlBlock {
+    // NOTE: when changing the order of these fields, also edit switch_tasks()
+    // in scheduler.s.
+    pub cr3: u32,
+    pub esp0: u32,
+    pub esp: u32,
+}
+
+struct OpenedFile {
+    node: fs::Node,
+    offset: usize,
+    contents: Vec<u8>,
+}
+
+impl OpenedFile {
+    fn new(node: fs::Node) -> Self {
+        let id_in_fs = node.0.borrow().id_in_fs.unwrap();
+        let fs = node.fs();
+        OpenedFile {
+            node,
+            offset: 0,
+            contents: fs.read_file(id_in_fs).unwrap(),
+        }
+    }
+
+    fn read(&mut self, mut count: usize) -> &[u8] {
+        if self.offset + count >= self.contents.len() {
+            count = self.contents.len() - self.offset;
+        }
+        if count != 0 {
+            let res = &self.contents[self.offset..count];
+            res
+        } else {
+            &[]
+        }
     }
 }
 
@@ -97,6 +153,25 @@ fn default_entry_point() -> ! {
     //         usermode_part,
     //     );
     // }
+
+    unsafe {
+        SCHEDULER.stop_scheduling();
+        println!("[PROC] Opening the test file.");
+        let root_node = crate::arch::pci::TEST_VFS.as_ref().unwrap().clone();
+        println!("[PROC] Root node: {:?}", root_node.clone());
+        let test_file =
+            root_node.0.borrow().maybe_children.as_ref().unwrap()[2].clone();
+        println!("[PROC] Test file node: {:?}", test_file);
+        let fd = SCHEDULER
+            .current_process()
+            .open_file_by_node(test_file)
+            .unwrap();
+        let f = &mut SCHEDULER.current_process().opened_files[fd];
+        let buf = f.read(11);
+        println!("{}", core::str::from_utf8(&buf).unwrap());
+        println!("[PROC] Closing the test file.");
+        SCHEDULER.keep_scheduling();
+    }
 
     println!("[PROC] End of default process entry.");
     loop {}

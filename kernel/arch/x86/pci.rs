@@ -691,6 +691,8 @@ const PORT_CONFIG_DATA: u16 = 0xCFC;
 
 static mut PCI: Pci = Pci::new();
 
+pub static mut TEST_VFS: Option<crate::fs::Node> = None;
+
 pub fn init() {
     unsafe {
         PCI.enumerate();
@@ -716,7 +718,9 @@ pub fn init() {
                                 file_system: None,
                             };
                             println!("[PCI] Probing a file system on the detected disk.");
-                            println!("[PCI] Result: {:?}", disk.try_init_fs());
+                            let maybe_root_node = disk.try_init_fs();
+                            // println!("[PCI] Result: {:?}", maybe_root_node);
+                            TEST_VFS = Some(maybe_root_node.unwrap());
                             disk::DISKS.lock().push(Rc::new(disk));
                         }
                     }
