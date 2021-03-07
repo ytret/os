@@ -43,6 +43,10 @@ impl Scheduler {
         self.processes.push(process);
     }
 
+    pub fn current_process(&mut self) -> &mut Process {
+        &mut self.processes[self.current_idx]
+    }
+
     pub fn schedule(&mut self, add_count: u32) {
         self.counter += add_count as u64;
         if NO_SCHED_COUNTER.load(Ordering::SeqCst) == 0
