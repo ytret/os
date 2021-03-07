@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use crate::arch::port_io;
 use crate::kernel_static::Mutex;
 
 use core::fmt;
@@ -82,6 +83,11 @@ pub struct Writer {
 
 impl Writer {
     pub fn write_char(&mut self, ch: u8) {
+        // Duplicate to COM1.
+        unsafe {
+            port_io::outb(0x3F8, ch);
+        }
+
         match ch {
             b'\n' => self.new_line(),
             ch => {
