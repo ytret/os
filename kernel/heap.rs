@@ -36,38 +36,32 @@ unsafe impl GlobalAlloc for Allocator {
             None => panic!("Kernel heap is not initiailized."),
         };
 
-        // Find an appropriate free chunk.
+        // Find a suitable free chunk.
         let mut needed_size = 0;
         let mut chosen_tag: *mut Tag = core::ptr::null_mut();
         let mut chunk_start: *mut u8 = core::ptr::null_mut();
         for possible_tag in heap.iter_free_tags() {
             let chunk_size = possible_tag.chunk_size();
             chunk_start = (possible_tag as *mut Tag).offset(1) as *mut u8;
-            needed_size =
-                chunk_start.align_offset(layout.align()) + layout.size();
-            assert_eq!(
-                chunk_start.align_offset(layout.align()) + layout.size(),
-                ((chunk_start as usize + layout.align() - 1)
-                    & !(layout.align() - 1))
-                    - chunk_start as usize
-                    + layout.size(),
-            );
-            if chunk_size >= needed_size + size_of::<Tag>() {
+            needed_size = ((chunk_start as usize + layout.align() - 1)
+                & !(layout.align() - 1))
+                - chunk_start as usize
+                + layout.size();
+            if chunk_size >= needed_size {
                 chosen_tag = possible_tag as *mut Tag;
                 break;
             }
         }
         if chosen_tag.is_null() {
             panic!(
-                "alloc: insufficient free heap: {} / {} bytes",
+                "alloc: insufficient free heap: {} bytes, need: {} bytes",
                 heap.total_free(),
-                needed_size + size_of::<Tag>(),
+                needed_size,
             );
             //return core::ptr::null_mut();
         }
-        //println!(" chosen_tag: 0x{:08X}", chosen_tag as u32);
 
-        // Add +1 byte in case an alignment for the tag is needed.
+        // Add +1 byte just in case an alignment for the tag is needed.
         if (*chosen_tag).chunk_size() - needed_size
             < size_of::<Tag>() + heap.min_chunk_size + 1
         {
@@ -97,14 +91,13 @@ unsafe impl GlobalAlloc for Allocator {
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        /*
-        println!(
-            "dealloc: ptr: 0x{:08X}, layout: size: {}, align: {}",
-            ptr as u32,
-            layout.size(),
-            layout.align(),
-        );
-        */
+        // println!(
+        //     "dealloc: ptr: 0x{:08X}, layout: size: {}, align: {}",
+        //     ptr as u32,
+        //     layout.size(),
+        //     layout.align(),
+        // );
+
         assert_eq!(
             ptr.align_offset(layout.align()),
             0,
@@ -122,16 +115,14 @@ unsafe impl GlobalAlloc for Allocator {
         }
 
         let tag = (tag_ptr.add(1) as *mut Tag).sub(1);
-        /*
-        println!(
-            "- tag at 0x{:08X} -> 0x{:08X}, used: {}, align: {}, size: {}",
-            tag as u32,
-            (*tag).next_tag_addr(),
-            (*tag).is_used() as usize,
-            (*tag).align(),
-            (*tag).chunk_size(),
-        );
-        */
+        // println!(
+        //     "- tag at 0x{:08X} -> 0x{:08X}, used: {}, align: {}, size: {}",
+        //     tag as u32,
+        //     (*tag).next_tag_addr(),
+        //     (*tag).is_used() as usize,
+        //     (*tag).align(),
+        //     (*tag).chunk_size(),
+        // );
 
         (*tag).set_used(false);
         (*tag).align = 1;
@@ -151,8 +142,10 @@ fn alloc_error_handler(_: Layout) -> ! {
 #[derive(Clone, Copy, Debug)]
 #[repr(C, packed)]
 struct Tag {
+    magic_1: u32,
     value: usize,
     align: usize,
+    magic_2: u32,
 }
 
 impl Tag {
@@ -161,9 +154,24 @@ impl Tag {
         assert_eq!(addr & 1, 0, "next_tag must be aligned at 2 bytes");
         assert_eq!(align.count_ones(), 1, "align must be a power of two");
         Tag {
+            magic_1: 0xDEADBEEF,
             value: addr | used as usize,
             align,
+            magic_2: 0xCAFEBABE,
         }
+    }
+
+    fn check_magic(&self) {
+        assert_eq!(
+            self.magic_1, 0xDEADBEEF,
+            "tag: 0x{:08X}",
+            self as *const _ as usize,
+        );
+        assert_eq!(
+            self.magic_2, 0xCAFEBABE,
+            "tag: 0x{:08X}",
+            self as *const _ as usize,
+        );
     }
 
     fn is_used(&self) -> bool {
@@ -196,7 +204,13 @@ impl Tag {
         } else {
             let start = self as *const _ as usize + size_of::<Tag>();
             let end = self.next_tag_addr();
-            assert!(end >= start, "start: 0x{:08X}, end: 0x{:08X}", start, end);
+            assert!(
+                end > start,
+                "self: 0x{:08X}, start: 0x{:08X}, end: 0x{:08X}",
+                self as *const _ as usize,
+                start,
+                end,
+            );
             end - start
         }
     }
@@ -299,7 +313,9 @@ impl<'a> Iterator for HeapIter<'a> {
             if self.current_tag.is_null() {
                 self.current_tag = self.heap.first_tag() as *mut Tag;
                 if !self.only_free || !(*self.current_tag).is_used() {
-                    return Some(self.current_tag.as_mut().unwrap());
+                    let tag = self.current_tag.as_mut().unwrap();
+                    tag.check_magic();
+                    return Some(tag);
                 } else {
                     // self.only_free && (*self.current_tag).is_used()
                     // continue (see below)
@@ -313,7 +329,9 @@ impl<'a> Iterator for HeapIter<'a> {
                 } else if !self.only_free
                     || (self.only_free && !(*self.current_tag).is_used())
                 {
-                    return Some(self.current_tag.as_mut().unwrap());
+                    let tag = self.current_tag.as_mut().unwrap();
+                    tag.check_magic();
+                    return Some(tag);
                 }
             }
         }
