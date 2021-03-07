@@ -31,8 +31,8 @@ pub struct Process {
 impl Process {
     pub fn new() -> Self {
         let kernel_stack_bottom =
-            unsafe { alloc(Layout::from_size_align(1024, 4096).unwrap()) }
-                .wrapping_offset(1024) as *mut u32;
+            unsafe { alloc(Layout::from_size_align(65536, 4096).unwrap()) }
+                .wrapping_offset(65536) as *mut u32;
 
         // Make an initial stack frame that will be popped on a task switch (see
         // scheduler.s).
