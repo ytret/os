@@ -75,8 +75,19 @@ impl<T> Mutex<T> {
             Ordering::Acquire,
             Ordering::Relaxed,
         ) {
+            let mut color: u8 = 0;
             while self.locked.load(Ordering::Relaxed) {
+                unsafe {
+                    let ch_ptr = 0xB8000 as *mut u8;
+                    let color_ptr = 0xB8001 as *mut u8;
+                    *ch_ptr = 0x25; // %
+                    *color_ptr = color;
+                }
                 spin_loop();
+                color = match color {
+                    _max if color == 255 => 0,
+                    not_max => not_max + 1,
+                };
             }
         }
         MutexWrapper {
