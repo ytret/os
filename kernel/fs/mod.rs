@@ -123,7 +123,7 @@ pub enum ReadFileErr {
 pub trait FileSystem {
     fn root_dir(&self) -> Result<Node, ReadDirErr>;
     fn read_dir(&self, id: usize) -> Result<Node, ReadDirErr>;
-    fn read_file(&self, id: usize) -> Result<Vec<Box<[u8]>>, ReadFileErr>;
-    fn file_size_bytes(&self, id: usize) -> Result<u64, ReadFileErr>;
+    fn read_file(&self, id: usize) -> Result<Vec<u8>, ReadFileErr>;
+    fn file_size_bytes(&self, id: usize) -> Result<usize, ReadFileErr>;
     fn file_size_blocks(&self, id: usize) -> Result<usize, ReadFileErr>;
 }

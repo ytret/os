@@ -927,15 +927,21 @@ impl FileSystem for Ext2 {
         Ok(node)
     }
 
-    fn read_file(&self, id: usize) -> Result<Vec<Box<[u8]>>, ReadFileErr> {
+    fn read_file(&self, id: usize) -> Result<Vec<u8>, ReadFileErr> {
         assert_ne!(id as u32, 0, "invalid id");
         let inode = self.read_inode(id as u32)?;
+        println!("[EXT2] Reading file inode {}.", id);
+
+        let file_sz = self.file_size_bytes(id)?;
+        let mut res_buf = Vec::with_capacity(file_sz);
+
         let mut i: usize = 0;
-        let mut all_bufs = Vec::new();
         loop {
+            print!("{} ", i);
             match self.read_inode_block(&inode, i) {
                 Ok(buf) => {
-                    all_bufs.push(buf);
+                    // println!("[EXT2] Extending the buffer from slice {}.", i);
+                    res_buf.extend_from_slice(&buf);
                     i += 1;
                 }
                 Err(err) => match err {
@@ -947,18 +953,24 @@ impl FileSystem for Ext2 {
                 },
             }
         }
-        Ok(all_bufs)
+
+        println!("[EXT2] Done, buffer len: {} bytes.", res_buf.len());
+        Ok(res_buf)
     }
 
-    fn file_size_bytes(&self, id: usize) -> Result<u64, ReadFileErr> {
+    fn file_size_bytes(&self, id: usize) -> Result<usize, ReadFileErr> {
         assert_ne!(id as u32, 0, "invalid id");
         let inode = self.read_inode(id as u32)?;
-        let mut size = inode.size as u64;
+        let size = inode.size as usize;
         if self
             .read_only_features
             .has_set(ReadOnlyFeature::FileSize64Bit)
         {
-            size |= (inode.file_size_bits_32_63 as u64) << 32;
+            if inode.file_size_bits_32_63 != 0 {
+                // FIXME: abort on 32-bit machines and proceed on 64-bit ones.
+                unimplemented!();
+            }
+            // size |= (inode.file_size_bits_32_63 as u64) << 32;
         }
         Ok(size)
     }
