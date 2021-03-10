@@ -99,30 +99,25 @@ pub struct ProcessControlBlock {
 struct OpenedFile {
     node: fs::Node,
     offset: usize,
-    contents: Vec<u8>,
 }
 
 impl OpenedFile {
     fn new(node: fs::Node) -> Self {
-        let id_in_fs = node.0.borrow().id_in_fs.unwrap();
-        let fs = node.fs();
-        OpenedFile {
-            node,
-            offset: 0,
-            contents: fs.read_file(id_in_fs).unwrap(),
-        }
+        OpenedFile { node, offset: 0 }
     }
 
-    fn read(&mut self, mut count: usize) -> &[u8] {
-        if self.offset + count >= self.contents.len() {
-            count = self.contents.len() - self.offset;
-        }
-        if count != 0 {
-            let res = &self.contents[self.offset..count];
-            res
-        } else {
-            &[]
-        }
+    fn read(&mut self, count: usize) -> Vec<u8> {
+        let fs = self.node.fs();
+        let id_in_fs = self.node.0.borrow().id_in_fs.unwrap();
+        let res = fs
+            .read_file_offset_len(id_in_fs, self.offset, count)
+            .unwrap();
+        self.seek(count);
+        res
+    }
+
+    fn seek(&mut self, offset: usize) {
+        self.offset += offset;
     }
 }
 
