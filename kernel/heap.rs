@@ -297,6 +297,33 @@ impl Heap {
             );
         }
     }
+
+    #[allow(dead_code)]
+    pub fn stats(&self) {
+        let mut used_sizes: [(usize, usize); 32] = [(0, 0); 32];
+        let mut free_sizes: [(usize, usize); 32] = [(0, 0); 32];
+        for tag in self.iter_tags() {
+            let size = tag.chunk_size();
+            let sizes = if tag.is_used() {
+                &mut used_sizes
+            } else {
+                &mut free_sizes
+            };
+            if let Some(idx) = sizes.iter().position(|x| x.0 == size) {
+                sizes[idx].1 += 1;
+            } else if let Some(idx) = sizes.iter().position(|x| x.0 == 0) {
+                sizes[idx] = (size, 1);
+            } else {
+                println!("[HEAP] Skipping size: {}.", size);
+            }
+        }
+        used_sizes.sort_unstable_by_key(|&x| x.1);
+        used_sizes.reverse();
+        free_sizes.sort_unstable_by_key(|&x| x.1);
+        free_sizes.reverse();
+        println!("[HEAP] Used sizes: {:?}.", used_sizes);
+        println!("[HEAP] Free sizes: {:?}.", free_sizes);
+    }
 }
 
 struct HeapIter<'a> {
