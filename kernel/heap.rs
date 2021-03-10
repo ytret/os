@@ -163,12 +163,14 @@ impl Tag {
 
     fn check_magic(&self) {
         assert_eq!(
-            self.magic_1, 0xDEADBEEF,
+            { self.magic_1 },
+            0xDEADBEEF,
             "tag: 0x{:08X}",
             self as *const _ as usize,
         );
         assert_eq!(
-            self.magic_2, 0xCAFEBABE,
+            { self.magic_2 },
+            0xCAFEBABE,
             "tag: 0x{:08X}",
             self as *const _ as usize,
         );
