@@ -63,7 +63,7 @@ impl Node {
     /// will be returned.
     ///
     /// # Panics
-    /// This function panics if it could not find any mount point parent node or
+    /// This method panics if it could not find any mount point parent node or
     /// if any of the parent nodes has been deallocated.
     fn mount_point(&self) -> Rc<RefCell<NodeInternals>> {
         let mut current = Rc::clone(&self.0);
@@ -118,12 +118,21 @@ pub enum ReadFileErr {
     NoRwInterface,
     DiskErr(disk::ReadErr),
     InvalidBlockNum, // FIXME: is this ext2-specific?
+    InvalidOffsetOrLength,
 }
 
 pub trait FileSystem {
     fn root_dir(&self) -> Result<Node, ReadDirErr>;
     fn read_dir(&self, id: usize) -> Result<Node, ReadDirErr>;
+
     fn read_file(&self, id: usize) -> Result<Vec<u8>, ReadFileErr>;
+    fn read_file_offset_len(
+        &self,
+        id: usize,
+        offset: usize,
+        len: usize,
+    ) -> Result<Vec<u8>, ReadFileErr>;
+
     fn file_size_bytes(&self, id: usize) -> Result<usize, ReadFileErr>;
     fn file_size_blocks(&self, id: usize) -> Result<usize, ReadFileErr>;
 }

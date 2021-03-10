@@ -822,8 +822,8 @@ impl FileSystem for Ext2 {
         self.read_dir(2)
     }
 
-    /// Creates a directory [`Node`](super::Node) after parsing an [`Inode`]
-    /// with the specified index.
+    /// Creates a directory [`Node`](super::Node) after parsing the inode with
+    /// the index `id`.
     ///
     /// # Notes
     /// The parent node is not set, only the children nodes are figured out.  So
@@ -928,31 +928,54 @@ impl FileSystem for Ext2 {
     }
 
     fn read_file(&self, id: usize) -> Result<Vec<u8>, ReadFileErr> {
+        let file_sz = self.file_size_bytes(id)?;
+        self.read_file_offset_len(id, 0, file_sz)
+    }
+
+    /// Reads `len` bytes from the file with inode `id` starting at byte
+    /// `offset`.
+    ///
+    /// # Panics
+    /// This method panics if one or more bytes from the range
+    /// `offset..offset+len` lie outside the blocks used by the file.  That is,
+    /// one can read bytes `0..1024` from a one-block file, but cannot read
+    /// bytes `0..1025` from the same file.  In the former case, the bytes that
+    /// lie outside the file are undefined (they are likely to be zero).
+    fn read_file_offset_len(
+        &self,
+        id: usize,
+        offset: usize,
+        len: usize,
+    ) -> Result<Vec<u8>, ReadFileErr> {
         assert_ne!(id as u32, 0, "invalid id");
         let inode = self.read_inode(id as u32)?;
-        println!("[EXT2] Reading file inode {}.", id);
+        println!(
+            "[EXT2] Reading file inode {}, offset: {}, len: {}.",
+            id, offset, len,
+        );
 
-        let file_sz = self.file_size_bytes(id)?;
-        let mut res_buf = Vec::with_capacity(file_sz);
+        let mut res_buf = Vec::with_capacity(len);
+        let start_block = offset / self.block_size;
+        let end_block = (offset + len - 1) / self.block_size + 1;
 
-        let mut i: usize = 0;
-        loop {
+        for i in start_block..end_block {
             print!("{} ", i);
             match self.read_inode_block(&inode, i) {
-                Ok(buf) => {
-                    // println!("[EXT2] Extending the buffer from slice {}.", i);
-                    res_buf.extend_from_slice(&buf);
-                    i += 1;
-                }
+                Ok(buf) => res_buf.extend_from_slice(&buf),
                 Err(err) => match err {
                     ReadInodeBlockErr::BlockNotFound
-                    | ReadInodeBlockErr::TooBigBlockIndex => break,
+                    | ReadInodeBlockErr::TooBigBlockIndex => {
+                        return Err(ReadFileErr::InvalidOffsetOrLength)
+                    }
                     ReadInodeBlockErr::ReadBlockErr(e) => {
                         return Err(From::from(e))
                     }
                 },
             }
         }
+
+        res_buf.drain(0..offset % self.block_size);
+        res_buf.truncate(len);
 
         println!("[EXT2] Done, buffer len: {} bytes.", res_buf.len());
         Ok(res_buf)
