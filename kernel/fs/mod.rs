@@ -90,6 +90,37 @@ impl Node {
             unreachable!();
         }
     }
+
+    /// Returns the children of the node.
+    ///
+    /// # Panics
+    /// This method panics if:
+    /// * the node is not a directory node,
+    /// * it has `id_in_fs` unset, or
+    /// * it is named `..`.
+    pub fn children(&mut self) -> Vec<Node> {
+        assert_eq!(self.0.borrow()._type, NodeType::Dir);
+        assert_ne!(self.0.borrow().name, String::from(".."));
+        let asdasd = self.0.borrow().maybe_children.clone();
+        if let Some(children) = asdasd {
+            children.clone()
+        } else {
+            let fs = self.fs();
+            let id_in_fs = self.0.borrow().id_in_fs.unwrap();
+            let node = fs.read_dir(id_in_fs).unwrap(); // FIXME: no panic
+            let some_clone = node.0.borrow().maybe_children.clone();
+            self.0.borrow_mut().maybe_children = some_clone;
+            self.0.borrow().maybe_children.as_ref().unwrap().clone()
+        }
+    }
+
+    /// Returns the `nth` child node of the node.
+    ///
+    /// # Panics
+    /// See [`children()`].
+    pub fn child(&mut self, nth: usize) -> Node {
+        self.children()[nth].clone()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
