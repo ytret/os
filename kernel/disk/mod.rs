@@ -103,9 +103,11 @@ impl Disk {
                         .read_unaligned();
                     let bs = 1024 * 2usize.pow(sb.log_block_size_minus_10);
                     let bgd_offset = bs * (sb_offset / bs + 1);
+                    let num_bgds = sb.total_num_blocks as usize
+                        / sb.block_group_num_blocks as usize;
                     rwif.read(
                         bgd_offset,
-                        size_of::<ext2::BlockGroupDescriptor>(),
+                        num_bgds * size_of::<ext2::BlockGroupDescriptor>(),
                     )?
                 };
                 let ext2 = unsafe {

@@ -35,14 +35,14 @@ use crate::disk;
 #[repr(C, packed)]
 pub struct Superblock {
     total_num_inodes: u32,
-    total_num_blocks: u32,
+    pub total_num_blocks: u32,
     num_reserved_blocks: u32,
     total_num_unallocated_blocks: u32,
     total_num_unallocated_inodes: u32,
     block_num_of_superblock: u32,
     pub log_block_size_minus_10: u32,
     log_fragment_size_minus_10: u32,
-    block_group_num_blocks: u32,
+    pub block_group_num_blocks: u32,
     block_group_num_fragments: u32,
     block_group_num_inodes: u32,
     last_mount_time: u32,
@@ -151,10 +151,10 @@ pub struct BlockGroupDescriptor {
     num_unalloc_blocks: u16,
     num_unalloc_inodes: u16,
     num_dirs: u16,
-    // unused_18: u32,
-    // unused_22: u32,
-    // unused_26: u32,
-    // unused_30: u16,
+    _unused_18: u32,
+    _unused_22: u32,
+    _unused_26: u32,
+    _unused_30: u16,
 }
 
 #[allow(dead_code)]
@@ -383,8 +383,7 @@ impl Ext2 {
                 None
             }
         };
-        let raw_bgd_tbl =
-            raw_block_group_descriptor.as_ptr() as *const BlockGroupDescriptor;
+        let raw_bgd_tbl = raw_block_group_descriptor.as_ptr() as usize;
         let mut read_only = false;
 
         Ok(Ext2 {
@@ -501,8 +500,8 @@ impl Ext2 {
                         / superblock.block_group_num_blocks as f64,
                 );
                 for i in 0..num_block_groups {
-                    let raw_bgd = (raw_bgd_tbl as usize + i * 32)
-                        as *const BlockGroupDescriptor;
+                    let raw_bgd =
+                        (raw_bgd_tbl + i * 32) as *const BlockGroupDescriptor;
                     bgd_table.push((*raw_bgd).clone());
                 }
                 bgd_table
@@ -530,7 +529,7 @@ impl Ext2 {
 
         let inode_addr = abs_block_with_inode * block_size
             + (idx_in_group * inode_size) % block_size;
-        // FIXME: inode_addr should be u64?
+        // FIXME: should inode_addr be u64?
         inode_addr as usize
     }
 
@@ -831,7 +830,7 @@ impl FileSystem for Ext2 {
     fn read_dir(&self, id: usize) -> Result<Node, ReadDirErr> {
         assert_ne!(id as u32, 0, "invalid id");
         let dir_inode = self.read_inode(id as u32)?;
-        let mut node = Node(Rc::new(RefCell::new(NodeInternals {
+        let node = Node(Rc::new(RefCell::new(NodeInternals {
             _type: NodeType::Dir,
             name: String::new(),
             id_in_fs: Some(id),
