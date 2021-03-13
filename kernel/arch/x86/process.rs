@@ -83,7 +83,6 @@ impl Process {
 #[derive(Debug)]
 enum OpenFileErr {
     NotRegularFile,
-    IdNotAssigned,
 }
 
 #[derive(Clone, Copy)]
@@ -152,18 +151,27 @@ fn default_entry_point() -> ! {
     unsafe {
         SCHEDULER.stop_scheduling();
         println!("[PROC] Opening the test file.");
-        let root_node = crate::arch::pci::TEST_VFS.as_ref().unwrap().clone();
-        println!("[PROC] Root node: {:?}", root_node.clone());
-        let test_file =
+
+        let root_node = fs::VFS_ROOT.lock().as_ref().unwrap().clone();
+        // println!("[PROC] Root node: {:#?}", root_node.clone());
+
+        let mut test_dir =
             root_node.0.borrow().maybe_children.as_ref().unwrap()[2].clone();
-        println!("[PROC] Test file node: {:?}", test_file);
-        let fd = SCHEDULER
-            .current_process()
-            .open_file_by_node(test_file)
-            .unwrap();
-        let f = &mut SCHEDULER.current_process().opened_files[fd];
-        let buf = f.read(11);
-        println!("{}", core::str::from_utf8(&buf).unwrap());
+        // println!("[PROC] Test dir node: {:#?}", test_dir);
+
+        println!("{:?}", test_dir.0.borrow().maybe_children);
+        println!("{:#?}", test_dir.children());
+        println!("{:?}", test_dir.0.borrow().maybe_children);
+
+        // let fd = SCHEDULER
+        //     .current_process()
+        //     .open_file_by_node(test_file)
+        //     .unwrap();
+        // let f = &mut SCHEDULER.current_process().opened_files[fd];
+        // f.seek(1020);
+        // let buf = f.read(1);
+        // println!("{:?}", core::str::from_utf8(&buf).unwrap());
+
         println!("[PROC] Closing the test file.");
         SCHEDULER.keep_scheduling();
     }

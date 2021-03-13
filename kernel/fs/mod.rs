@@ -21,9 +21,9 @@ use alloc::rc::{Rc, Weak};
 use alloc::string::{FromUtf8Error, String};
 use alloc::vec::Vec;
 use core::cell::RefCell;
-use core::fmt;
 
 use crate::disk;
+use crate::kernel_static::Mutex;
 
 #[derive(Clone, Debug)]
 pub struct Node(pub Rc<RefCell<NodeInternals>>);
@@ -166,4 +166,28 @@ pub trait FileSystem {
 
     fn file_size_bytes(&self, id: usize) -> Result<usize, ReadFileErr>;
     fn file_size_blocks(&self, id: usize) -> Result<usize, ReadFileErr>;
+}
+
+kernel_static! {
+    pub static ref VFS_ROOT: Mutex<Option<Node>> = Mutex::new(None);
+}
+
+/// Initializes the VFS root on the specified disk.
+///
+/// # Locks
+/// This function accesses the mutexes:
+/// * [`static@disk::DISKS`] and
+/// * [`static@VFS_ROOT`].
+///
+/// # Panics
+/// This function panics if:
+/// * there is no disk with the specified ID (see [`static@disk::DISKS`]) or
+/// * a file system on the specified disk is already initialized and thus the
+///   root node cannot be acquired by [`disk::Disk::try_init_fs`].
+pub fn init_root_on_disk(disk_id: usize) {
+    let mut disks = disk::DISKS.lock();
+    assert!(disk_id < disks.len(), "invalid disk id");
+    let disk = Rc::get_mut(&mut disks[disk_id]).unwrap();
+    let root_node = disk.try_init_fs().unwrap();
+    *VFS_ROOT.lock() = Some(root_node);
 }

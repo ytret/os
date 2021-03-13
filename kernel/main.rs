@@ -90,6 +90,13 @@ pub extern "C" fn main(magic_num: u32, boot_info: *const mbi::BootInfo) {
 
     arch::pci::init();
 
+    {
+        if disk::DISKS.lock().len() > 0 {
+            println!("Initializing the VFS root on disk 0.");
+            fs::init_root_on_disk(0);
+        }
+    }
+
     scheduler::init();
 
     // println!("Reached the end of main.");
