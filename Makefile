@@ -36,6 +36,7 @@ SOURCES := \
 	kernel/main.rs \
 	kernel/bitflags.rs \
 	kernel/kernel_static.rs \
+	kernel/memory_region.rs \
 	kernel/port.rs \
 	kernel/vga.rs \
 	kernel/mbi.rs \
