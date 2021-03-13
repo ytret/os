@@ -14,10 +14,22 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use core::cmp;
+use core::fmt;
+use core::ops;
+
 #[derive(Clone, Copy)]
-pub struct Region<T = u64> {
+pub struct Region<T: Copy + ops::Sub<Output = T> + cmp::PartialOrd = u64> {
     pub start: T,
     pub end: T,
+}
+
+impl<T: fmt::UpperHex + Copy + ops::Sub<Output = T> + cmp::PartialOrd>
+    fmt::Debug for Region<T>
+{
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt.write_fmt(format_args!("0x{:08X}..0x{:08X}", self.start, self.end))
+    }
 }
 
 pub enum OverlappingWith {
@@ -28,8 +40,8 @@ pub enum OverlappingWith {
     NoOverlap,
 }
 
-impl Region {
-    pub fn overlapping_with(&self, region: Region) -> OverlappingWith {
+impl<T: Copy + ops::Sub<Output = T> + cmp::PartialOrd> Region<T> {
+    pub fn overlapping_with(&self, region: Region<T>) -> OverlappingWith {
         if self.start < region.start && self.end > region.end {
             return OverlappingWith::Covers;
         }
