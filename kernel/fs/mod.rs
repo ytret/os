@@ -117,7 +117,7 @@ impl Node {
     /// Returns the `nth` child node of the node.
     ///
     /// # Panics
-    /// See [`children()`].
+    /// See [`Node::children()`].
     pub fn child(&mut self, nth: usize) -> Node {
         self.children()[nth].clone()
     }
