@@ -96,14 +96,13 @@ impl Node {
     /// # Panics
     /// This method panics if:
     /// * the node is not a directory node,
-    /// * it has `id_in_fs` unset, or
-    /// * it is named `..`.
+    /// * it is named `..`, or
+    /// * it has `id_in_fs` unset.
     pub fn children(&mut self) -> Vec<Node> {
         assert_eq!(self.0.borrow()._type, NodeType::Dir);
         assert_ne!(self.0.borrow().name, String::from(".."));
-        let asdasd = self.0.borrow().maybe_children.clone();
-        if let Some(children) = asdasd {
-            children.clone()
+        if self.0.borrow().maybe_children.is_some() {
+            self.0.borrow().maybe_children.as_ref().unwrap().clone()
         } else {
             let fs = self.fs();
             let id_in_fs = self.0.borrow().id_in_fs.unwrap();
