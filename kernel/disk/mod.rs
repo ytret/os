@@ -92,6 +92,10 @@ impl Disk {
     }
 
     pub fn try_init_fs(&mut self) -> Result<Node, TryInitFsErr> {
+        if self.file_system.is_some() {
+            return Err(TryInitFsErr::AlreadyHasFs);
+        }
+
         match self.probe_fs()? {
             KnownFs::Ext2 => {
                 let rwif = &self.rw_interface;
@@ -144,6 +148,7 @@ impl From<ReadErr> for ProbeFsErr {
 
 #[derive(Debug)]
 pub enum TryInitFsErr {
+    AlreadyHasFs,
     ProbeFsErr(ProbeFsErr),
     InitExt2Err(ext2::FromRawErr),
     ReadErr(ReadErr),
