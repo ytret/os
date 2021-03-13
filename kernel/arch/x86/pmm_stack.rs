@@ -15,7 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use crate::kernel_static::{Mutex, MutexWrapper};
-use crate::memory_region::{OverlappingWith, Region};
+use crate::memory_region::OverlappingWith;
 use crate::KernelInfo;
 
 extern "C" {
@@ -40,29 +40,26 @@ impl PmmStack {
     }
 
     fn fill(&mut self, kernel_info: &KernelInfo) {
-        let kernel_region = Region {
-            start: kernel_info.arch_init_info.kernel_start as u64,
-            end: kernel_info.arch_init_info.kernel_end as u64,
-        };
-
         for region in kernel_info.available_memory_regions.iter() {
             let mut region = region.clone();
             if region.start == 0 && region.end == 0 {
                 // End of slice.
                 break;
             }
-            match region.overlapping_with(kernel_region) {
+            match region
+                .overlapping_with(kernel_info.arch_init_info.kernel_region)
+            {
                 OverlappingWith::Covers => {
                     unimplemented!("a free region covers the kernel");
                 }
                 OverlappingWith::StartsIn => {
-                    region.start = kernel_region.end;
+                    region.start = kernel_info.arch_init_info.kernel_region.end;
                 }
                 OverlappingWith::IsIn => {
                     continue;
                 }
                 OverlappingWith::EndsIn => {
-                    region.end = kernel_region.start;
+                    region.end = kernel_info.arch_init_info.kernel_region.start;
                 }
                 OverlappingWith::NoOverlap => {}
             }
@@ -71,23 +68,6 @@ impl PmmStack {
             if region.start >= region.end {
                 // The region is too small.
                 continue;
-            }
-            let higher_half = Region {
-                start: 0x00000001_00000000,
-                end: 0xFFFFFFFF_FFFFFFFF,
-            };
-            match region.overlapping_with(higher_half) {
-                OverlappingWith::Covers | OverlappingWith::StartsIn => {
-                    unreachable!();
-                }
-                OverlappingWith::IsIn => {
-                    println!("[PMM] Ignoring a region above 4 GiB.");
-                    continue;
-                }
-                OverlappingWith::EndsIn => {
-                    region.end = higher_half.start - 1;
-                }
-                OverlappingWith::NoOverlap => {}
             }
             for page_addr in (region.start..region.end).step_by(4096) {
                 self.push_page(page_addr as u32);

@@ -334,19 +334,16 @@ pub unsafe fn parse(boot_info: *const BootInfo, kernel_info: &mut KernelInfo) {
             break;
         }
 
-        print!("[{:02}:", tag_type);
+        print!("<{:02}:", tag_type);
         match tag_size {
-            size if size < 100 => {
-                print!("{:02}b] ", size);
-            }
             size if size < 1000 => {
-                print!("{:3}] ", size);
+                print!("{:03}> ", size);
             }
             size if 1000 <= size && size < 2 * 1024 => {
-                print!(" 1K] ");
+                print!(" 1K> ");
             }
             size if 2 * 1024 <= size => {
-                print!("{:2}K] ", size / 1024);
+                print!("{:2}K> ", size / 1024);
             }
             _ => unreachable!(),
         }
@@ -407,15 +404,19 @@ pub unsafe fn parse(boot_info: *const BootInfo, kernel_info: &mut KernelInfo) {
                     let start = entry.base_addr;
                     let length = entry.length;
                     let _type = MemoryMapRegionType::from(entry.region_type);
-                    println!(
-                        " start: 0x{:08X}_{:08X}, end: 0x{:08X}_{:08X}, \
-                         type: {}",
+                    print!(
+                        "         0x{:08X}_{:08X}..0x{:08X}_{:08X}: {}",
                         (start >> 32) & 0xFFFFFFFF,
                         (start >> 00) & 0xFFFFFFFF,
                         ((start + length) >> 32) & 0xFFFFFFFF,
                         ((start + length) >> 00) & 0xFFFFFFFF,
                         _type,
                     );
+                    if start >> 32 != 0 || (start + length) >> 32 != 0 {
+                        println!(", ignored");
+                        i += 1;
+                        continue;
+                    }
                     match _type {
                         MemoryMapRegionType::Available
                             if added_to_info
@@ -425,13 +426,14 @@ pub unsafe fn parse(boot_info: *const BootInfo, kernel_info: &mut KernelInfo) {
                         {
                             kernel_info.available_memory_regions
                                 [added_to_info] = memory_region::Region {
-                                start,
-                                end: start + length,
+                                start: start as usize,
+                                end: start as usize + length as usize,
                             };
                             added_to_info += 1;
                         }
                         _ => {}
                     }
+                    println!("");
                     i += 1;
                 }
             }

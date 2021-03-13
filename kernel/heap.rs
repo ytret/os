@@ -375,9 +375,8 @@ kernel_static! {
 
 pub fn init(kernel_info: &KernelInfo) {
     let heap_region = kernel_info.arch_init_info.heap_region;
-    let heap_size = heap_region.end - heap_region.start;
     assert!(
-        heap_size > 2 * size_of::<Tag>(),
+        heap_region.size() > 2 * size_of::<Tag>(),
         "heap must be big enough to accomodate at least two tags",
     );
 

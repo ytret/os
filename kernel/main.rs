@@ -51,7 +51,7 @@ use memory_region::Region;
 
 pub struct KernelInfo {
     arch_init_info: arch::ArchInitInfo,
-    available_memory_regions: [Region<u64>; 32], // 32 is enough maybe
+    available_memory_regions: [Region<usize>; 32], // 32 is enough maybe
 }
 
 impl KernelInfo {
@@ -80,12 +80,10 @@ pub extern "C" fn main(magic_num: u32, boot_info: *const mbi::BootInfo) {
 
     arch::init(&mut kernel_info);
 
-    let kernel_size = kernel_info.arch_init_info.kernel_end
-        - kernel_info.arch_init_info.kernel_start;
     println!(
         "Kernel size: {} KiB ({} pages)",
-        kernel_size / 1024,
-        kernel_size / 4096,
+        kernel_info.arch_init_info.kernel_region.size() / 1024,
+        kernel_info.arch_init_info.kernel_region.size() / 4096,
     );
 
     heap::init(&kernel_info);

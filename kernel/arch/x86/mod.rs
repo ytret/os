@@ -34,16 +34,14 @@ use crate::memory_region::Region;
 use crate::KernelInfo;
 
 pub struct ArchInitInfo {
-    pub kernel_start: u32,
-    pub kernel_end: u32,
+    pub kernel_region: Region<usize>,
     pub heap_region: Region<usize>,
 }
 
 impl ArchInitInfo {
     pub fn new() -> Self {
         ArchInitInfo {
-            kernel_start: 0,
-            kernel_end: 0,
+            kernel_region: Region { start: 0, end: 0 },
             heap_region: Region { start: 0, end: 0 },
         }
     }
@@ -64,12 +62,11 @@ pub fn init(kernel_info: &mut KernelInfo) {
 
     gdt::init();
 
-    let kernel_start_addr = unsafe { &kernel_start as *const _ as u32 };
-    let kernel_end_addr = unsafe { &kernel_end as *const _ as u32 };
-    print!("kernel_start = 0x{:08X}; ", kernel_start_addr);
-    println!("kernel_end = 0x{:08X}", kernel_end_addr);
-    aif.kernel_start = kernel_start_addr;
-    aif.kernel_end = kernel_end_addr;
+    aif.kernel_region = Region {
+        start: unsafe { &kernel_start as *const _ as usize },
+        end: unsafe { &kernel_end as *const _ as usize },
+    };
+    println!("Kernel region: {:?}", aif.kernel_region);
 
     unsafe {
         println!(
@@ -94,23 +91,23 @@ pub fn init(kernel_info: &mut KernelInfo) {
 
     pmm_stack::init(kernel_info);
 
-    let heap_region = Region {
-        start: (kernel_end_addr as usize + 0x400_000 - 1) & !(0x400_000 - 1),
-        end: ((kernel_end_addr as usize + 0x400_000 - 1) & !(0x400_000 - 1))
+    aif.heap_region = Region {
+        start: (aif.kernel_region.end + 0x400_000 - 1) & !(0x400_000 - 1),
+        end: ((aif.kernel_region.end + 0x400_000 - 1) & !(0x400_000 - 1))
             + crate::heap::KERNEL_HEAP_SIZE,
     };
-    aif.heap_region = heap_region;
+    println!("Heap region: {:?}", aif.heap_region);
 
     // Map the heap.
     unsafe {
         let kvas = vas::KERNEL_VAS.lock();
         let heap_pgtbl_virt =
             &mut *vas::KERNEL_HEAP_PGTBL.lock() as *mut vas::Table;
-        kvas.set_pde_addr(heap_region.start as usize >> 22, heap_pgtbl_virt);
+        kvas.set_pde_addr(aif.heap_region.start >> 22, heap_pgtbl_virt);
         ptr::write_bytes(heap_pgtbl_virt as *mut u8, 0, 4096);
         kvas.allocate_pages_from_stack(
-            heap_region.start as u32,
-            heap_region.end as u32,
+            aif.heap_region.start as u32,
+            aif.heap_region.end as u32,
         );
     }
 
