@@ -41,6 +41,10 @@ pub enum OverlappingWith {
 }
 
 impl<T: Copy + ops::Sub<Output = T> + cmp::PartialOrd> Region<T> {
+    pub fn size(&self) -> T {
+        self.end - self.start
+    }
+
     pub fn overlapping_with(&self, region: Region<T>) -> OverlappingWith {
         if self.start < region.start && self.end > region.end {
             return OverlappingWith::Covers;
