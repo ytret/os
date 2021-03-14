@@ -70,19 +70,22 @@ impl Process {
         &mut self,
         node: fs::Node,
     ) -> Result<usize, OpenFileErr> {
-        if node.0.borrow()._type == fs::NodeType::RegularFile {
+        let file_type = node.0.borrow()._type.clone();
+        if file_type == fs::NodeType::RegularFile
+            || file_type == fs::NodeType::BlockDevice
+        {
             let fd = self.opened_files.len();
             self.opened_files.push(OpenedFile::new(node.clone()));
             Ok(fd)
         } else {
-            Err(OpenFileErr::NotRegularFile)
+            Err(OpenFileErr::UnsupportedFileType)
         }
     }
 }
 
 #[derive(Debug)]
 enum OpenFileErr {
-    NotRegularFile,
+    UnsupportedFileType,
 }
 
 #[derive(Clone, Copy)]
@@ -150,29 +153,26 @@ fn default_entry_point() -> ! {
 
     unsafe {
         SCHEDULER.stop_scheduling();
-        println!("[PROC] Opening the test file.");
+        println!("[PROC] Opening /dev/disk0.");
 
-        let root_node = fs::VFS_ROOT.lock().as_ref().unwrap().clone();
+        let mut root_node = fs::VFS_ROOT.lock().as_ref().unwrap().clone();
         // println!("[PROC] Root node: {:#?}", root_node.clone());
+        // println!("{:#?}", root_node.children());
 
-        let mut test_dir =
-            root_node.0.borrow().maybe_children.as_ref().unwrap()[2].clone();
+        let mut test_dir = root_node.child_named("dev").unwrap().clone();
+        let disk0 = test_dir.child_named("disk0").unwrap().clone();
+        let fd = SCHEDULER
+            .current_process()
+            .open_file_by_node(disk0)
+            .unwrap();
         // println!("[PROC] Test dir node: {:#?}", test_dir);
 
-        println!("{:?}", test_dir.0.borrow().maybe_children);
-        println!("{:#?}", test_dir.children());
-        println!("{:?}", test_dir.0.borrow().maybe_children);
+        let f = &mut SCHEDULER.current_process().opened_files[fd];
+        f.seek(1024);
+        let buf = f.read(10);
+        println!("{:02X?}", buf);
 
-        // let fd = SCHEDULER
-        //     .current_process()
-        //     .open_file_by_node(test_file)
-        //     .unwrap();
-        // let f = &mut SCHEDULER.current_process().opened_files[fd];
-        // f.seek(1020);
-        // let buf = f.read(1);
-        // println!("{:?}", core::str::from_utf8(&buf).unwrap());
-
-        println!("[PROC] Closing the test file.");
+        println!("[PROC] Closing /dev/disk0.");
         SCHEDULER.keep_scheduling();
     }
 

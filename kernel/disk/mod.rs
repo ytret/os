@@ -21,7 +21,7 @@ use alloc::rc::Rc;
 use alloc::vec::Vec;
 use core::mem::size_of;
 
-use crate::fs::{ext2, FileSystem, Node, ReadDirErr};
+use crate::fs::{ext2, FileSystem, Mountable, Node, ReadDirErr};
 use crate::kernel_static::Mutex;
 
 pub trait ReadWriteInterface {
@@ -126,6 +126,12 @@ impl Disk {
                 Ok(self.file_system.as_ref().unwrap().root_dir()?)
             }
         }
+    }
+}
+
+impl Mountable for Disk {
+    fn fs(&self) -> Rc<Box<dyn FileSystem>> {
+        self.file_system.as_ref().unwrap().clone()
     }
 }
 

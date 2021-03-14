@@ -93,7 +93,7 @@ pub extern "C" fn main(magic_num: u32, boot_info: *const mbi::BootInfo) {
     {
         if disk::DISKS.lock().len() > 0 {
             println!("Initializing the VFS root on disk 0.");
-            fs::init_root_on_disk(0);
+            fs::init_vfs_root_on_disk(0);
         }
     }
 

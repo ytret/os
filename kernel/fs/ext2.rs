@@ -834,6 +834,7 @@ impl FileSystem for Ext2 {
             _type: NodeType::Dir,
             name: String::new(),
             id_in_fs: Some(id),
+
             parent: None,
             maybe_children: Some(Vec::new()),
         })));
@@ -889,6 +890,7 @@ impl FileSystem for Ext2 {
                         String::from_utf8(bytes.to_vec())?
                     },
                     id_in_fs: Some(entry.inode as usize),
+
                     parent: Some(Weak::clone(&node_weak)),
                     maybe_children: None,
                 }),
@@ -901,7 +903,7 @@ impl FileSystem for Ext2 {
         if root_children[0].0.borrow().name != ".." {
             unimplemented!();
         } else if id == 2 {
-            node_mut._type = NodeType::MountPoint(0); // FIXME
+            node_mut._type = NodeType::Dir;
             node_mut.name = String::from("/");
         } else {
             let parent_dir_id = root_children[0].0.borrow().id_in_fs.unwrap();
