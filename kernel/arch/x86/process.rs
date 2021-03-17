@@ -153,18 +153,15 @@ fn default_entry_point() -> ! {
 
     unsafe {
         SCHEDULER.stop_scheduling();
-        println!("[PROC] Opening /dev/disk0.");
+        println!("[PROC] Opening /dev/blk0.");
 
         let mut root_node = fs::VFS_ROOT.lock().as_ref().unwrap().clone();
         // println!("[PROC] Root node: {:#?}", root_node.clone());
         // println!("{:#?}", root_node.children());
 
         let mut test_dir = root_node.child_named("dev").unwrap().clone();
-        let disk0 = test_dir.child_named("disk0").unwrap().clone();
-        let fd = SCHEDULER
-            .current_process()
-            .open_file_by_node(disk0)
-            .unwrap();
+        let blk0 = test_dir.child_named("blk0").unwrap().clone();
+        let fd = SCHEDULER.current_process().open_file_by_node(blk0).unwrap();
         // println!("[PROC] Test dir node: {:#?}", test_dir);
 
         let f = &mut SCHEDULER.current_process().opened_files[fd];

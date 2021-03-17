@@ -24,25 +24,79 @@ use core::cell::RefCell;
 use crate::disk;
 
 use super::{
-    FileSystem, FsWrapper, Mountable, Node, NodeInternals, NodeType,
-    ReadDirErr, ReadFileErr,
+    FileSystem, Node, NodeInternals, NodeType, ReadDirErr, ReadFileErr,
 };
 
-pub struct DevFs {}
+const ROOT_ID: usize = 200;
+const MAX_BLOCK_DEVICES: usize = 100; // block device IDs: 0..100
+
+pub struct DevFs {
+    block_devices: Vec<BlockDevice>,
+}
+
+impl DevFs {
+    pub fn init() -> Self {
+        let mut res = DevFs {
+            block_devices: Vec::new(),
+        };
+        let num_disks = disk::DISKS.lock().len();
+        for disk_id in 0..num_disks {
+            res.register_disk_by_id(disk_id);
+        }
+        res
+    }
+
+    /// Allocates an inode ID.
+    ///
+    /// # Panics
+    /// This method panics if there are more than [`MAX_BLOCK_DEVICES`]
+    /// registered block devices.
+    fn allocate_id(&self, is_block_device: bool) -> usize {
+        if is_block_device {
+            assert!(self.block_devices.len() < MAX_BLOCK_DEVICES);
+            self.block_devices.len()
+        } else {
+            unimplemented!();
+        }
+    }
+
+    fn resolve_id(&self, id_in_fs: usize) -> ResolveId {
+        if id_in_fs < MAX_BLOCK_DEVICES {
+            ResolveId::BlockDevice(&self.block_devices[id_in_fs])
+        } else {
+            unimplemented!();
+        }
+    }
+
+    /// Registers the specified disk as a block device, returning its ID in
+    /// devfs.
+    ///
+    /// # Panics
+    /// See [`DevFs::allocate_id()`].
+    fn register_disk_by_id(&mut self, disk_id: usize) -> usize {
+        let id_in_fs = self.allocate_id(true);
+        println!("[DEVFS] Registering a block device blk{}.", id_in_fs);
+        self.block_devices.push(BlockDevice {
+            id_in_fs,
+            _type: BlockDeviceType::Disk(disk_id),
+        });
+        id_in_fs
+    }
+}
 
 impl FileSystem for DevFs {
     fn root_dir(&self) -> Result<Node, ReadDirErr> {
-        self.read_dir(0)
+        self.read_dir(ROOT_ID)
     }
 
     fn read_dir(&self, id: usize) -> Result<Node, ReadDirErr> {
         // There is only one directory currently.
-        assert_eq!(id, 0, "invalid id");
+        assert_eq!(id, ROOT_ID, "invalid id");
 
         let node = Node(Rc::new(RefCell::new(NodeInternals {
             _type: NodeType::Dir,
             name: String::from("/"),
-            id_in_fs: Some(0),
+            id_in_fs: Some(ROOT_ID),
 
             parent: None,
             maybe_children: Some(Vec::new()),
@@ -50,13 +104,12 @@ impl FileSystem for DevFs {
         let node_weak = Rc::downgrade(&node.0);
         let mut node_mut = node.0.borrow_mut();
 
-        for (i, disk) in disk::DISKS.lock().iter().enumerate() {
-            println!("[DEVFS] Creating a block device disk{}.", i);
+        for (i, disk) in self.block_devices.iter().enumerate() {
             node_mut.maybe_children.as_mut().unwrap().push(Node(Rc::new(
                 RefCell::new(NodeInternals {
                     _type: NodeType::BlockDevice,
-                    name: format!("disk{}", i),
-                    id_in_fs: Some(i + 1),
+                    name: format!("blk{}", i),
+                    id_in_fs: Some(i),
 
                     parent: Some(Weak::clone(&node_weak)),
                     maybe_children: None,
@@ -87,10 +140,10 @@ impl FileSystem for DevFs {
         offset: usize,
         len: usize,
     ) -> Result<Vec<u8>, ReadFileErr> {
-        assert!(id > 0 && id - 1 < disk::DISKS.lock().len(), "invalid id");
-        let disk_id = id - 1;
-        let disk = &disk::DISKS.lock()[disk_id];
-        let rwif = &disk.rw_interface;
+        let blkdev = match self.resolve_id(id) {
+            ResolveId::BlockDevice(blkdev) => blkdev,
+        };
+        let rwif = blkdev.rw_interface();
 
         let mut res_buf = Vec::with_capacity(len);
         let start_block = offset / rwif.block_size();
@@ -114,4 +167,27 @@ impl FileSystem for DevFs {
     fn file_size_blocks(&self, id: usize) -> Result<usize, ReadFileErr> {
         unimplemented!();
     }
+}
+
+struct BlockDevice {
+    id_in_fs: usize,
+    _type: BlockDeviceType,
+}
+
+impl BlockDevice {
+    fn rw_interface(&self) -> Rc<Box<dyn disk::ReadWriteInterface>> {
+        match self._type {
+            BlockDeviceType::Disk(disk_id) => {
+                Rc::clone(&disk::DISKS.lock()[disk_id].rw_interface)
+            }
+        }
+    }
+}
+
+enum BlockDeviceType {
+    Disk(usize),
+}
+
+enum ResolveId<'a> {
+    BlockDevice(&'a BlockDevice),
 }

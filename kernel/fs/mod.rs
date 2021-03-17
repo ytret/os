@@ -333,7 +333,7 @@ pub fn init_vfs_root_on_disk(disk_id: usize) {
     // Initialize devfs on /dev.
     println!("[VFS] Initializing devfs on /dev.");
     *DEV_FS.lock() =
-        Some(Rc::new(FsWrapper(Rc::new(Box::new(devfs::DevFs {})))));
+        Some(Rc::new(FsWrapper(Rc::new(Box::new(devfs::DevFs::init())))));
     let mountable = Rc::clone(DEV_FS.lock().as_ref().unwrap());
     root_node.mount_on_child("dev", mountable);
 
