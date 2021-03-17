@@ -39,7 +39,7 @@ SOURCES := \
 	kernel/memory_region.rs \
 	kernel/port.rs \
 	kernel/vga.rs \
-	kernel/mbi.rs \
+	kernel/multiboot.rs \
 	kernel/heap.rs \
 	kernel/scheduler.rs \
 	kernel/disk/mod.rs \
