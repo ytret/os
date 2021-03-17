@@ -19,14 +19,14 @@ Patch GCC 10.2.0:
     $ patch -p1 < ../gcc-10.2.0.patch
     $ cd libstdc++-v3 && autoreconf
 
-Configure and build Binutils 2.36.1:
+Configure, build and install Binutils 2.36.1:
 
     $ mkdir build-binutils-2.36.1 && cd build-binutils-2.36.1
     $ ../binutils-2.36.1/configure --target=$TARGET --prefix=$PREFIX --with-sysroot=$SYSROOT --disable-werror --enable-shared
     $ make
     $ make install
 
-Configure and build GCC 10.2.0:
+Configure, build and install GCC 10.2.0:
 
     $ mkdir build-gcc-10.2.0 && cd build-gcc-10.2.0
     $ ../gcc-10.2.0/configure --target=$TARGET --prefix=$PREFIX --with-sysroot=$SYSROOT --enable-languages=c,c++ --enable-shared
