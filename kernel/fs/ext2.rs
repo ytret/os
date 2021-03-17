@@ -479,6 +479,7 @@ impl Ext2 {
             total_num_blocks: superblock.total_num_blocks,
             block_size: {
                 let bs = 1024 * 2usize.pow(superblock.log_block_size_minus_10);
+                assert!(bs <= 4096, "too big block size");
                 println!("[EXT2] Block size: {} bytes.", bs);
                 bs
             },
@@ -575,11 +576,11 @@ impl Ext2 {
         };
         let dibs_range = Range {
             start: sibs_range.end,
-            end: sibs_range.end + sibs_range.len() * self.block_size / 4,
+            end: sibs_range.end + sibs_range.len() * (self.block_size / 4),
         };
         let tibs_range = Range {
             start: dibs_range.end,
-            end: dibs_range.end + dibs_range.len() * self.block_size / 4,
+            end: dibs_range.end + dibs_range.len() * (self.block_size / 4),
         };
 
         let block_num = if index < 12 {
