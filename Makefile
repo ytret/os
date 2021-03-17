@@ -66,8 +66,9 @@ LINKLIST := \
 OUTPUT := kernel.bin
 ISOFILE := kernel.iso
 HDIMG := hd.img
+SYSROOT := sysroot
 
-.PHONY: all get-libs doc iso hd clean clean-all run check-fmt
+.PHONY: all get-libs doc iso sysroot hd clean clean-all run check-fmt
 
 all: $(OUTPUT)
 
@@ -113,9 +114,17 @@ $(ISOFILE): $(OUTPUT) grub.cfg
 	cp $(OUTPUT) $(ISODIR)/boot
 	grub-mkrescue -o $(ISOFILE) $(ISODIR)
 
+sysroot:
+	test ! -d $(SYSROOT)
+	mkdir -p $(SYSROOT)/dev
+	mkdir -p $(SYSROOT)/usr/local/lib $(SYSROOT)/usr/local/include
+	ln -s local/lib $(SYSROOT)/usr/lib
+	ln -s local/include $(SYSROOT)/usr/include
+
 hd:
-	rm -rf hd.img
-	bximage -q -mode=create -hd=19M -imgmode=flat $(HDIMG)
+	test -f $(HDIMG) && rm -i $(HDIMG)
+	bximage -q -mode=create -hd=4096M -imgmode=flat $(HDIMG)
+	mkfs.ext2 $(HDIMG) -d $(SYSROOT)
 
 clean:
 	rm -rf $(ISOFILE) $(ISODIR) $(LINKLIST) $(OUTPUT)
