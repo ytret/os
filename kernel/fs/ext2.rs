@@ -27,6 +27,7 @@ use core::slice;
 
 use super::{
     FileSystem, Node, NodeInternals, NodeType, ReadDirErr, ReadFileErr,
+    WriteFileErr,
 };
 use crate::bitflags::BitFlags;
 use crate::disk;
@@ -929,11 +930,6 @@ impl FileSystem for Ext2 {
         Ok(node)
     }
 
-    fn read_file(&self, id: usize) -> Result<Vec<u8>, ReadFileErr> {
-        let file_sz = self.file_size_bytes(id)?;
-        self.read_file_offset_len(id, 0, file_sz)
-    }
-
     /// Reads `len` bytes from the file with inode `id` starting at byte
     /// `offset`.
     ///
@@ -943,7 +939,7 @@ impl FileSystem for Ext2 {
     /// one can read bytes `0..1024` from a one-block file, but cannot read
     /// bytes `0..1025` from the same file.  In the former case, the bytes that
     /// lie outside the file are undefined (they are likely to be zero).
-    fn read_file_offset_len(
+    fn read_file(
         &self,
         id: usize,
         offset: usize,
@@ -967,7 +963,7 @@ impl FileSystem for Ext2 {
                 Err(err) => match err {
                     ReadInodeBlockErr::BlockNotFound
                     | ReadInodeBlockErr::TooBigBlockIndex => {
-                        return Err(ReadFileErr::InvalidOffsetOrLength)
+                        return Err(ReadFileErr::InvalidOffsetOrLen)
                     }
                     ReadInodeBlockErr::ReadBlockErr(e) => {
                         return Err(From::from(e))
@@ -981,6 +977,15 @@ impl FileSystem for Ext2 {
 
         println!("[EXT2] Done, buffer len: {} bytes.", res_buf.len());
         Ok(res_buf)
+    }
+
+    fn write_file(
+        &self,
+        _id: usize,
+        _offset: usize,
+        _buf: &[u8],
+    ) -> Result<(), WriteFileErr> {
+        unimplemented!();
     }
 
     fn file_size_bytes(&self, id: usize) -> Result<usize, ReadFileErr> {
@@ -997,67 +1002,6 @@ impl FileSystem for Ext2 {
             }
             // size |= (inode.file_size_bits_32_63 as u64) << 32;
         }
-        Ok(size)
-    }
-
-    fn file_size_blocks(&self, id: usize) -> Result<usize, ReadFileErr> {
-        // FIXME: compare with inode.count_disk_sectors
-        assert_ne!(id as u32, 0, "invalid id");
-        let rw_interface = self
-            .rw_interface
-            .upgrade()
-            .ok_or(ReadFileErr::NoRwInterface)
-            .unwrap();
-        let inode = self.read_inode(id as u32)?;
-        let mut size = 0;
-        size += inode.direct_block_ptrs().iter().fold(0, |acc, x| match x {
-            0 => acc,
-            _ => acc + 1,
-        });
-        let mut fs_blocks = 0; // blocks used by the file system for the inode
-        if inode.singly_indirect_block_ptr != 0 {
-            //let was = size;
-            size += self
-                .num_block_entries(inode.singly_indirect_block_ptr as usize)?;
-            fs_blocks += 1;
-            //let is = size;
-            //println!("sibs: {}", is - was);
-        }
-        if inode.doubly_indirect_block_ptr != 0 {
-            let num_dibs = self
-                .num_block_entries(inode.doubly_indirect_block_ptr as usize)?;
-            //println!("num_dibs = {}", num_dibs);
-            let last_dib = self.read_block_entry(
-                inode.doubly_indirect_block_ptr as usize,
-                num_dibs - 1,
-            )?;
-            let num_sibs_in_last_dib = self.num_block_entries(last_dib)?;
-            //println!("num_sibs_in_last_dib = {}", num_sibs_in_last_dib);
-            size += (num_dibs - 1) * self.block_size / 4 + num_sibs_in_last_dib;
-            fs_blocks += 1 + num_dibs;
-        }
-        if inode.triply_indirect_block_ptr != 0 {
-            let num_tibs = self
-                .num_block_entries(inode.triply_indirect_block_ptr as usize)?;
-            let last_tib = self.read_block_entry(
-                inode.triply_indirect_block_ptr as usize,
-                num_tibs - 1,
-            )?;
-            let num_dibs_in_last_tib = self.num_block_entries(last_tib)?;
-            let last_dib =
-                self.read_block_entry(last_tib, num_dibs_in_last_tib - 1)?;
-            let num_sibs_in_last_dib = self.num_block_entries(last_dib)?;
-            size += (num_tibs - 1) * (self.block_size / 4).pow(2)
-                + num_dibs_in_last_tib * self.block_size / 4
-                + num_sibs_in_last_dib;
-            fs_blocks +=
-                1 + (num_tibs - 1) * self.block_size / 4 + num_dibs_in_last_tib;
-        }
-        assert!(self.block_size >= rw_interface.block_size());
-        assert_eq!(
-            inode.count_disk_sectors as usize,
-            (size + fs_blocks) * (self.block_size / rw_interface.block_size()),
-        );
         Ok(size)
     }
 }

@@ -15,7 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use alloc::alloc::{alloc, Layout};
-use alloc::rc::Rc;
+use alloc::string::String;
 use alloc::vec::Vec;
 
 use crate::arch::gdt;
@@ -73,9 +73,11 @@ impl Process {
         let file_type = node.0.borrow()._type.clone();
         if file_type == fs::NodeType::RegularFile
             || file_type == fs::NodeType::BlockDevice
+            || file_type == fs::NodeType::CharDevice
         {
             let fd = self.opened_files.len();
-            self.opened_files.push(OpenedFile::new(node.clone()));
+            self.opened_files
+                .push(OpenedFile::new(node.clone(), file_type.is_seekable()));
             Ok(fd)
         } else {
             Err(OpenFileErr::UnsupportedFileType)
@@ -100,26 +102,39 @@ pub struct ProcessControlBlock {
 
 struct OpenedFile {
     node: fs::Node,
-    offset: usize,
+    offset: Option<usize>,
 }
 
 impl OpenedFile {
-    fn new(node: fs::Node) -> Self {
-        OpenedFile { node, offset: 0 }
+    fn new(node: fs::Node, seekable: bool) -> Self {
+        OpenedFile {
+            node,
+            offset: if seekable { Some(0) } else { None },
+        }
+    }
+
+    fn seek(&mut self, add_offset: usize) {
+        if let Some(offset) = self.offset.as_mut() {
+            *offset += add_offset;
+        }
     }
 
     fn read(&mut self, count: usize) -> Vec<u8> {
         let fs = self.node.fs();
         let id_in_fs = self.node.0.borrow().id_in_fs.unwrap();
         let res = fs
-            .read_file_offset_len(id_in_fs, self.offset, count)
+            .read_file(id_in_fs, self.offset.unwrap_or(0), count)
             .unwrap();
         self.seek(count);
         res
     }
 
-    fn seek(&mut self, offset: usize) {
-        self.offset += offset;
+    fn write(&mut self, buf: &[u8]) {
+        let fs = self.node.fs();
+        let id_in_fs = self.node.0.borrow().id_in_fs.unwrap();
+        fs.write_file(id_in_fs, self.offset.unwrap_or(0), buf)
+            .unwrap();
+        self.seek(buf.len());
     }
 }
 
@@ -153,23 +168,18 @@ fn default_entry_point() -> ! {
 
     unsafe {
         SCHEDULER.stop_scheduling();
-        println!("[PROC] Opening /dev/blk0.");
+        println!("[PROC] Opening /dev/chr0.");
 
         let mut root_node = fs::VFS_ROOT.lock().as_ref().unwrap().clone();
-        // println!("[PROC] Root node: {:#?}", root_node.clone());
-        // println!("{:#?}", root_node.children());
 
         let mut test_dir = root_node.child_named("dev").unwrap().clone();
-        let blk0 = test_dir.child_named("blk0").unwrap().clone();
-        let fd = SCHEDULER.current_process().open_file_by_node(blk0).unwrap();
-        // println!("[PROC] Test dir node: {:#?}", test_dir);
+        let chr0 = test_dir.child_named("chr0").unwrap().clone();
+        let fd = SCHEDULER.current_process().open_file_by_node(chr0).unwrap();
 
         let f = &mut SCHEDULER.current_process().opened_files[fd];
-        f.seek(1024);
-        let buf = f.read(10);
-        println!("{:02X?}", buf);
+        f.write(&String::from("Hello, World!\n").into_bytes());
 
-        println!("[PROC] Closing /dev/blk0.");
+        println!("[PROC] Closing /dev/chr0.");
         SCHEDULER.keep_scheduling();
     }
 

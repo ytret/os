@@ -45,9 +45,14 @@ pub mod disk;
 
 pub mod fs;
 
+pub mod char_device;
+pub mod console;
+
 pub mod elf;
 
+use alloc::rc::Rc;
 use core::panic::PanicInfo;
+
 use memory_region::Region;
 
 pub struct KernelInfo {
@@ -90,6 +95,9 @@ pub extern "C" fn main(magic_num: u32, boot_info: *const multiboot::BootInfo) {
     heap::init(&kernel_info);
 
     arch::pci::init();
+
+    let rc_console = Rc::clone(&console::CONSOLE.lock());
+    char_device::CHAR_DEVICES.lock().push(rc_console);
 
     if disk::DISKS.lock().len() > 0 {
         println!("Initializing the VFS root on disk 0.");

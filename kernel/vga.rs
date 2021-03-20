@@ -24,14 +24,25 @@ extern "C" {
     fn get_eflags() -> u32;
 }
 
+const BUFFER_WIDTH: usize = 80;
+const BUFFER_HEIGHT: usize = 25;
+
 pub struct CursorPos {
     row: usize,
     col: usize,
 }
 
+impl CursorPos {
+    pub fn new(row: usize, col: usize) -> Self {
+        assert!(row < BUFFER_HEIGHT, "invalid row");
+        assert!(col < BUFFER_WIDTH, "invalid col");
+        CursorPos { row, col }
+    }
+}
+
 #[allow(dead_code)]
 #[repr(u8)]
-enum Color {
+pub enum Color {
     Black,
     Blue,
     Green,
@@ -55,7 +66,7 @@ enum Color {
 pub struct ColorCode(u8);
 
 impl ColorCode {
-    fn new(fg: Color, bg: Color) -> Self {
+    pub const fn new(fg: Color, bg: Color) -> Self {
         Self((bg as u8) << 4 | (fg as u8))
     }
 }
@@ -67,18 +78,15 @@ struct ScreenChar {
     color_code: ColorCode,
 }
 
-const BUFFER_WIDTH: usize = 80;
-const BUFFER_HEIGHT: usize = 25;
-
 #[repr(transparent)]
-struct Buffer {
+pub struct Buffer {
     chars: [[ScreenChar; BUFFER_WIDTH]; BUFFER_HEIGHT],
 }
 
 pub struct Writer {
-    pos: CursorPos,
-    color_code: ColorCode,
-    buffer: *mut Buffer,
+    pub pos: CursorPos,
+    pub color_code: ColorCode,
+    pub buffer: *mut Buffer,
 }
 
 impl Writer {

@@ -202,6 +202,14 @@ pub enum NodeType {
     Dir,
     RegularFile,
     BlockDevice,
+    CharDevice,
+}
+
+impl NodeType {
+    pub fn is_seekable(&self) -> bool {
+        self.clone() == NodeType::RegularFile
+            || self.clone() == NodeType::BlockDevice
+    }
 }
 
 impl cmp::PartialEq for NodeType {
@@ -230,6 +238,12 @@ impl cmp::PartialEq for NodeType {
             } else {
                 false
             }
+        } else if let NodeType::CharDevice = self {
+            if let NodeType::CharDevice = other {
+                true
+            } else {
+                false
+            }
         } else {
             unreachable!();
         }
@@ -243,6 +257,7 @@ impl fmt::Debug for NodeType {
             NodeType::Dir => fmt.write_str("Dir"),
             NodeType::RegularFile => fmt.write_str("RegularFile"),
             NodeType::BlockDevice => fmt.write_str("BlockDevice"),
+            NodeType::CharDevice => fmt.write_str("CharDevice"),
         }
     }
 }
@@ -259,16 +274,21 @@ pub trait FileSystem {
     fn root_dir(&self) -> Result<Node, ReadDirErr>;
     fn read_dir(&self, id: usize) -> Result<Node, ReadDirErr>;
 
-    fn read_file(&self, id: usize) -> Result<Vec<u8>, ReadFileErr>;
-    fn read_file_offset_len(
+    fn read_file(
         &self,
         id: usize,
         offset: usize,
         len: usize,
     ) -> Result<Vec<u8>, ReadFileErr>;
 
+    fn write_file(
+        &self,
+        id: usize,
+        offset: usize,
+        buf: &[u8],
+    ) -> Result<(), WriteFileErr>;
+
     fn file_size_bytes(&self, id: usize) -> Result<usize, ReadFileErr>;
-    fn file_size_blocks(&self, id: usize) -> Result<usize, ReadFileErr>;
 }
 
 #[derive(Debug)]
@@ -290,7 +310,13 @@ pub enum ReadFileErr {
     NoRwInterface,
     DiskErr(disk::ReadErr),
     InvalidBlockNum, // FIXME: is this ext2-specific?
-    InvalidOffsetOrLength,
+    InvalidOffsetOrLen,
+    NotReadable,
+}
+
+#[derive(Debug)]
+pub enum WriteFileErr {
+    NotWritable,
 }
 
 pub struct FsWrapper(Rc<Box<dyn FileSystem>>);

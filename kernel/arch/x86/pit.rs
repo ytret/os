@@ -197,7 +197,7 @@ pub extern "C" fn pit_irq0_handler() {
     COUNTER_MS.fetch_add(period_ms, Ordering::SeqCst);
 
     if TEMP_SPAWNER_ON.load(Ordering::SeqCst)
-        && NUM_SPAWNED.load(Ordering::SeqCst) < 30
+        && NUM_SPAWNED.load(Ordering::SeqCst) < 2
     {
         println!("[PIT] Creating a new process.");
         use crate::arch::process::Process;

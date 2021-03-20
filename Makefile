@@ -48,6 +48,8 @@ SOURCES := \
 	kernel/fs/mod.rs \
 	kernel/fs/devfs.rs \
 	kernel/fs/ext2.rs \
+	kernel/char_device.rs \
+	kernel/console.rs \
 	kernel/elf.rs \
 	$(ARCH_SOURCES)
 
