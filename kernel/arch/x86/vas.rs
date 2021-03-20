@@ -18,6 +18,7 @@ use alloc::alloc::{alloc, Layout};
 use core::mem::align_of;
 use core::ptr;
 
+use crate::arch::interrupts::InterruptStackFrame;
 use crate::arch::pmm_stack::PMM_STACK;
 use crate::bitflags::BitFlags;
 use crate::kernel_static::Mutex;
@@ -49,6 +50,10 @@ bitflags! {
         Dirty = 1 << 6,               // not set: not dirty (not written to)
         // Bit 7 must be zero if PAT is not supported.
         Global = 1 << 8,              // not set: not invalidated on CR3 reset (set CR4)
+
+        // OS-specific:
+        GuardPage = 1 << 9,
+        WasPresent = 1 << 10,
     }
 }
 
@@ -172,41 +177,52 @@ impl VirtAddrSpace {
         assert_eq!(virt & 0xFFF, 0, "virt must be page-aligned");
         assert_eq!(phys & 0xFFF, 0, "phys must be page-aligned");
 
-        let pte_idx = ((virt >> 12) & 0x3FF) as usize;
-
-        let pgtbl_virt = self.pgtbl_virt_of(virt);
-        assert!(!pgtbl_virt.is_null(), "page table does not exist");
-
-        let entry = &mut (*pgtbl_virt).0[pte_idx];
+        let entry = self.pgtbl_entry(virt);
         entry.set_addr(phys);
         entry.set_flag(PteFlags::Present);
         entry.set_flag(PteFlags::ReadWrite);
         if self.usermode {
             entry.set_flag(PteFlags::AnyDpl);
         }
+
         asm!("invlpg ({})", in(reg) virt, options(att_syntax));
     }
 
-    /// Allocates pages for the specified virtual memory region from the PMM
-    /// stack.
     pub unsafe fn allocate_pages_from_stack(&self, start: u32, end: u32) {
         assert_eq!(start & 0xFFF, 0, "start must be page-aligned");
         assert_eq!(end & 0xFFF, 0, "end must be page-aligned");
-
-        let mut prev_phys: Option<u32> = None;
-        for virt in (start..end).step_by(4096).rev() {
-            // We go downwards because the pages on the PMM stack do so.
+        for virt in (start..end).step_by(4096) {
             let phys = PMM_STACK.lock().pop_page();
-            if let Some(prev_phys) = prev_phys {
-                assert_eq!(
-                    phys,
-                    prev_phys - 4096,
-                    "could not map to a consecutive region",
-                );
-            }
             self.map_page(virt, phys);
-            prev_phys = Some(phys);
         }
+    }
+
+    pub unsafe fn place_guard_page(&mut self, at: u32) {
+        assert_eq!(at & 0xFFF, 0, "at must be page-aligned");
+        let entry = self.pgtbl_entry(at);
+
+        if entry.flags().has_set(PteFlags::Present) {
+            entry.unset_flag(PteFlags::Present);
+            entry.set_flag(PteFlags::WasPresent);
+        }
+        entry.set_flag(PteFlags::GuardPage);
+
+        asm!("invlpg ({})", in(reg) at, options(att_syntax));
+        println!("[VAS] Placed a guard page at 0x{:08X}.", at);
+    }
+
+    pub unsafe fn remove_guard_page(&mut self, from: u32) {
+        assert_eq!(from & 0xFFF, 0, "from must be page-aligned");
+        let entry = self.pgtbl_entry(from);
+
+        if entry.flags().has_set(PteFlags::WasPresent) {
+            entry.unset_flag(PteFlags::WasPresent);
+            entry.set_flag(PteFlags::Present);
+        }
+        entry.unset_flag(PteFlags::GuardPage);
+
+        asm!("invlpg ({})", in(reg) from, options(att_syntax));
+        println!("[VAS] Removed a guard page from 0x{:08X}.", from);
     }
 
     pub unsafe fn set_pde_addr(
@@ -214,7 +230,6 @@ impl VirtAddrSpace {
         pde_idx: usize,
         pgtbl_virt: *mut Table,
     ) -> u32 {
-        let pgdir = self.pgdir_virt.as_mut().unwrap();
         assert_eq!(
             pgtbl_virt as usize & 0xFFF,
             0,
@@ -227,6 +242,7 @@ impl VirtAddrSpace {
         *self.pgtbls_virt.add(pde_idx) = pgtbl_virt;
         *self.pgtbls_phys.add(pde_idx) = pgtbl_phys;
 
+        let pgdir = self.pgdir_virt.as_mut().unwrap();
         pgdir.0[pde_idx].set_addr(pgtbl_phys);
         pgdir.0[pde_idx].set_flag(PdeFlags::Present);
         pgdir.0[pde_idx].set_flag(PdeFlags::ReadWrite);
@@ -247,6 +263,14 @@ impl VirtAddrSpace {
         }
     }
 
+    pub unsafe fn pgtbl_entry(&self, virt: u32) -> &mut TableEntry {
+        let pgtbl_virt = self.pgtbl_virt_of(virt);
+        assert!(!pgtbl_virt.is_null(), "page table does not exist");
+
+        let pte_idx = ((virt >> 12) & 0x3FF) as usize;
+        &mut (*pgtbl_virt).0[pte_idx]
+    }
+
     unsafe fn pgtbl_virt_of(&self, virt: u32) -> *mut Table {
         let pde_idx = (virt >> 22) as usize;
         *self.pgtbls_virt.add(pde_idx)
@@ -255,7 +279,7 @@ impl VirtAddrSpace {
 
 #[derive(Clone, Copy)]
 #[repr(transparent)]
-struct Entry<F: Into<u32> + Copy>(BitFlags<u32, F>);
+pub struct Entry<F: Into<u32> + Copy>(BitFlags<u32, F>);
 
 impl<F: Into<u32> + Copy> Entry<F> {
     fn new(addr: u32) -> Self {
@@ -281,6 +305,10 @@ impl<F: Into<u32> + Copy> Entry<F> {
 
     fn set_flag(&mut self, flag: F) {
         self.0.set_flag(flag);
+    }
+
+    fn unset_flag(&mut self, flag: F) {
+        self.0.unset_flag(flag);
     }
 }
 
@@ -321,4 +349,49 @@ kernel_static! {
             (KERNEL_PGTBLS_VIRT.lock().as_mut_ptr(), KERNEL_PGTBLS_PHYS.lock().as_mut_ptr()),
         )
     });
+}
+
+#[no_mangle]
+pub extern "C" fn page_fault_handler(
+    int_num: u32,
+    err_code: u32,
+    stack_frame: &InterruptStackFrame,
+) {
+    assert_eq!(int_num, 14);
+    println!("A page fault has occurred.");
+    println!(
+        " error code: {:08b}_{:08b}_{:08b}_{:08b} (0x{:08X})",
+        (err_code >> 24) & 0xF,
+        (err_code >> 16) & 0xF,
+        (err_code >> 08) & 0xF,
+        (err_code >> 00) & 0xF,
+        err_code
+    );
+
+    let eip = stack_frame.eip;
+    println!(" eip: 0x{:08X}", eip);
+
+    let cr2: u32;
+    unsafe {
+        asm!("movl %cr2, %eax", out("eax") cr2, options(att_syntax));
+    }
+    println!(" cr2: 0x{:08X}", cr2);
+
+    let page = cr2 & !0xFFF;
+
+    if let Some(kvas) = KERNEL_VAS.try_lock() {
+        let pgtbl_virt = unsafe { kvas.pgtbl_virt_of(page) };
+        if pgtbl_virt.is_null() {
+            println!("No page table for 0x{:08X}.", cr2);
+        } else {
+            let entry = unsafe { kvas.pgtbl_entry(page) };
+            if entry.flags().has_set(PteFlags::GuardPage) {
+                println!("There is a guard page at 0x{:08X}.", page);
+            }
+        }
+    } else {
+        println!("Unable to lock the kernel VAS.");
+    }
+
+    panic!("Unhandled page fault.");
 }

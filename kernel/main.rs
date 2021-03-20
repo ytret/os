@@ -104,6 +104,15 @@ pub extern "C" fn main(magic_num: u32, boot_info: *const multiboot::BootInfo) {
         fs::init_vfs_root_on_disk(0);
     }
 
+    unsafe {
+        {
+            let mut kvas = arch::vas::KERNEL_VAS.lock();
+            kvas.place_guard_page(0x700_000);
+        }
+        let ptr = 0x700_123 as *mut u8;
+        *ptr = 0xAB;
+    }
+
     scheduler::init();
 
     // println!("Reached the end of main.");

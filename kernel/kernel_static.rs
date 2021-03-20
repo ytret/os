@@ -95,6 +95,22 @@ impl<T> Mutex<T> {
             data: unsafe { &mut *self.data.get() },
         }
     }
+
+    pub fn try_lock(&self) -> Option<MutexWrapper<T>> {
+        if let Ok(_) = self.locked.compare_exchange(
+            false,
+            true,
+            Ordering::Acquire,
+            Ordering::Relaxed,
+        ) {
+            Some(MutexWrapper {
+                locked: &self.locked,
+                data: unsafe { &mut *self.data.get() },
+            })
+        } else {
+            None
+        }
+    }
 }
 
 unsafe impl<T> Sync for Mutex<T> {}

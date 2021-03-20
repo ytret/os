@@ -21,39 +21,38 @@ use crate::kernel_static::Mutex;
 
 // See interrupts.s
 extern "C" {
-    // Dummy handlers for exceptions.
-    fn dummy_isr_0(stack_frame: &InterruptStackFrame);
-    fn dummy_isr_1(stack_frame: &InterruptStackFrame);
-    fn dummy_isr_2(stack_frame: &InterruptStackFrame);
-    fn dummy_isr_3(stack_frame: &InterruptStackFrame);
-    fn dummy_isr_4(stack_frame: &InterruptStackFrame);
-    fn dummy_isr_5(stack_frame: &InterruptStackFrame);
-    fn dummy_isr_6(stack_frame: &InterruptStackFrame);
-    fn dummy_isr_7(stack_frame: &InterruptStackFrame);
-    fn dummy_isr_8(stack_frame: &InterruptStackFrame, err_code: u32);
-    fn dummy_isr_9(stack_frame: &InterruptStackFrame);
-    fn dummy_isr_10(stack_frame: &InterruptStackFrame, err_code: u32);
-    fn dummy_isr_11(stack_frame: &InterruptStackFrame, err_code: u32);
-    fn dummy_isr_12(stack_frame: &InterruptStackFrame, err_code: u32);
-    fn dummy_isr_13(stack_frame: &InterruptStackFrame, err_code: u32);
-    fn dummy_isr_14(stack_frame: &InterruptStackFrame, err_code: u32);
-    fn dummy_isr_15(stack_frame: &InterruptStackFrame);
-    fn dummy_isr_16(stack_frame: &InterruptStackFrame);
-    fn dummy_isr_17(stack_frame: &InterruptStackFrame, err_code: u32);
-    fn dummy_isr_18(stack_frame: &InterruptStackFrame);
-    fn dummy_isr_19(stack_frame: &InterruptStackFrame);
-    fn dummy_isr_20(stack_frame: &InterruptStackFrame);
-    fn dummy_isr_21(stack_frame: &InterruptStackFrame, err_code: u32);
-    fn dummy_isr_22(stack_frame: &InterruptStackFrame);
-    fn dummy_isr_23(stack_frame: &InterruptStackFrame);
-    fn dummy_isr_24(stack_frame: &InterruptStackFrame);
-    fn dummy_isr_25(stack_frame: &InterruptStackFrame);
-    fn dummy_isr_26(stack_frame: &InterruptStackFrame);
-    fn dummy_isr_27(stack_frame: &InterruptStackFrame);
-    fn dummy_isr_28(stack_frame: &InterruptStackFrame);
-    fn dummy_isr_29(stack_frame: &InterruptStackFrame);
-    fn dummy_isr_30(stack_frame: &InterruptStackFrame);
-    fn dummy_isr_31(stack_frame: &InterruptStackFrame);
+    fn isr_0(stack_frame: &InterruptStackFrame);
+    fn isr_1(stack_frame: &InterruptStackFrame);
+    fn isr_2(stack_frame: &InterruptStackFrame);
+    fn isr_3(stack_frame: &InterruptStackFrame);
+    fn isr_4(stack_frame: &InterruptStackFrame);
+    fn isr_5(stack_frame: &InterruptStackFrame);
+    fn isr_6(stack_frame: &InterruptStackFrame);
+    fn isr_7(stack_frame: &InterruptStackFrame);
+    fn isr_8(stack_frame: &InterruptStackFrame, err_code: u32);
+    fn isr_9(stack_frame: &InterruptStackFrame);
+    fn isr_10(stack_frame: &InterruptStackFrame, err_code: u32);
+    fn isr_11(stack_frame: &InterruptStackFrame, err_code: u32);
+    fn isr_12(stack_frame: &InterruptStackFrame, err_code: u32);
+    fn isr_13(stack_frame: &InterruptStackFrame, err_code: u32);
+    fn isr_14(stack_frame: &InterruptStackFrame, err_code: u32);
+    fn isr_15(stack_frame: &InterruptStackFrame);
+    fn isr_16(stack_frame: &InterruptStackFrame);
+    fn isr_17(stack_frame: &InterruptStackFrame, err_code: u32);
+    fn isr_18(stack_frame: &InterruptStackFrame);
+    fn isr_19(stack_frame: &InterruptStackFrame);
+    fn isr_20(stack_frame: &InterruptStackFrame);
+    fn isr_21(stack_frame: &InterruptStackFrame, err_code: u32);
+    fn isr_22(stack_frame: &InterruptStackFrame);
+    fn isr_23(stack_frame: &InterruptStackFrame);
+    fn isr_24(stack_frame: &InterruptStackFrame);
+    fn isr_25(stack_frame: &InterruptStackFrame);
+    fn isr_26(stack_frame: &InterruptStackFrame);
+    fn isr_27(stack_frame: &InterruptStackFrame);
+    fn isr_28(stack_frame: &InterruptStackFrame);
+    fn isr_29(stack_frame: &InterruptStackFrame);
+    fn isr_30(stack_frame: &InterruptStackFrame);
+    fn isr_31(stack_frame: &InterruptStackFrame);
 
     // For all other interrupts.
     fn common_isr(stack_frame: &InterruptStackFrame);
@@ -156,13 +155,13 @@ type HandlerFuncWithErrCode =
 
 #[repr(C, packed)]
 pub struct InterruptStackFrame {
-    eip: u32,
-    cs: u32,
-    eflags: u32,
+    pub eip: u32,
+    pub cs: u32,
+    pub eflags: u32,
 
     // These values are present only when a privilege level switch happens.
-    esp: u32,
-    ss: u32,
+    pub esp: u32,
+    pub ss: u32,
 }
 
 #[repr(C)]
@@ -233,38 +232,38 @@ struct IdtDescriptor {
 kernel_static! {
     pub static ref IDT: Mutex<InterruptDescriptorTable> = Mutex::new({
         let mut idt = InterruptDescriptorTable::new();
-        idt.divide_error.set_handler(dummy_isr_0);
-        idt.debug.set_handler(dummy_isr_1);
-        idt.non_maskable_int.set_handler(dummy_isr_2);
-        idt.breakpoint.set_handler(dummy_isr_3);
-        idt.overflow.set_handler(dummy_isr_4);
-        idt.bound_range_exceeded.set_handler(dummy_isr_5);
-        idt.invalid_opcode.set_handler(dummy_isr_6);
-        idt.device_not_available.set_handler(dummy_isr_7);
-        idt.double_fault.set_handler(dummy_isr_8);
-        idt.coprocessor_segment_overrun.set_handler(dummy_isr_9);
-        idt.invalid_tss.set_handler(dummy_isr_10);
-        idt.segment_not_present.set_handler(dummy_isr_11);
-        idt.stack_fault.set_handler(dummy_isr_12);
-        idt.general_protection.set_handler(dummy_isr_13);
-        idt.page_fault.set_handler(dummy_isr_14);
-        idt.reserved_1.set_handler(dummy_isr_15);
-        idt.x87_fpu_floating_point_error.set_handler(dummy_isr_16);
-        idt.alignment_check.set_handler(dummy_isr_17);
-        idt.machine_check.set_handler(dummy_isr_18);
-        idt.simd_floating_point.set_handler(dummy_isr_19);
-        idt.virtualization.set_handler(dummy_isr_20);
-        idt.control_protection.set_handler(dummy_isr_21);
-        idt.reserved_2[0].set_handler(dummy_isr_22);
-        idt.reserved_2[1].set_handler(dummy_isr_23);
-        idt.reserved_2[2].set_handler(dummy_isr_24);
-        idt.reserved_2[3].set_handler(dummy_isr_25);
-        idt.reserved_2[4].set_handler(dummy_isr_26);
-        idt.reserved_2[5].set_handler(dummy_isr_27);
-        idt.reserved_2[6].set_handler(dummy_isr_28);
-        idt.reserved_2[7].set_handler(dummy_isr_29);
-        idt.reserved_2[8].set_handler(dummy_isr_30);
-        idt.reserved_2[9].set_handler(dummy_isr_31);
+        idt.divide_error.set_handler(isr_0);
+        idt.debug.set_handler(isr_1);
+        idt.non_maskable_int.set_handler(isr_2);
+        idt.breakpoint.set_handler(isr_3);
+        idt.overflow.set_handler(isr_4);
+        idt.bound_range_exceeded.set_handler(isr_5);
+        idt.invalid_opcode.set_handler(isr_6);
+        idt.device_not_available.set_handler(isr_7);
+        idt.double_fault.set_handler(isr_8);
+        idt.coprocessor_segment_overrun.set_handler(isr_9);
+        idt.invalid_tss.set_handler(isr_10);
+        idt.segment_not_present.set_handler(isr_11);
+        idt.stack_fault.set_handler(isr_12);
+        idt.general_protection.set_handler(isr_13);
+        idt.page_fault.set_handler(isr_14);
+        idt.reserved_1.set_handler(isr_15);
+        idt.x87_fpu_floating_point_error.set_handler(isr_16);
+        idt.alignment_check.set_handler(isr_17);
+        idt.machine_check.set_handler(isr_18);
+        idt.simd_floating_point.set_handler(isr_19);
+        idt.virtualization.set_handler(isr_20);
+        idt.control_protection.set_handler(isr_21);
+        idt.reserved_2[0].set_handler(isr_22);
+        idt.reserved_2[1].set_handler(isr_23);
+        idt.reserved_2[2].set_handler(isr_24);
+        idt.reserved_2[3].set_handler(isr_25);
+        idt.reserved_2[4].set_handler(isr_26);
+        idt.reserved_2[5].set_handler(isr_27);
+        idt.reserved_2[6].set_handler(isr_28);
+        idt.reserved_2[7].set_handler(isr_29);
+        idt.reserved_2[8].set_handler(isr_30);
+        idt.reserved_2[9].set_handler(isr_31);
 
         // Spurios interrupts (probably).  Those may happen because the kernel
         // sends an EOI to the PIT before iret so that it can switch tasks.
@@ -294,14 +293,6 @@ pub extern "C" fn dummy_exception_handler(
 
     let eip = stack_frame.eip;
     println!(" eip: 0x{:08X}", eip);
-
-    if int_num == 14 {
-        unsafe {
-            let cr2: u32;
-            asm!("movl %cr2, %eax", out("eax") cr2, options(att_syntax));
-            println!(" cr2: 0x{:08X}", cr2);
-        }
-    }
 
     panic!("Unhandled exception.");
 }

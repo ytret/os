@@ -14,36 +14,36 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-.macro CALL_HANDLER int_num err_code frame_ptr
+.macro CALL_HANDLER handler int_num err_code frame_ptr
     pushl \frame_ptr
     pushl \err_code                 // error code
     pushl \int_num                  // interrupt number
     cld
-    call dummy_exception_handler
+    call \handler
     addl $12, %esp
 .endm
 
-.macro DUMMY_EXCEPTION_ISR num
-.global dummy_isr_\num
-.type dummy_isr_\num, @function
-dummy_isr_\num:
+.macro EXCEPTION_ISR num handler
+.global isr_\num
+.type isr_\num, @function
+isr_\num:
     cli
     pushl %ebp
     movl %esp, %ebp
     pusha
     movl %ebp, %ebx
     addl $4, %ebx                   // interrupt stack frame pointer
-    CALL_HANDLER $\num $0 %ebx
+    CALL_HANDLER \handler $\num $0 %ebx
     popa
     addl $4, %esp
     iret
-.size dummy_isr_\num, . - dummy_isr_\num
+.size isr_\num, . - isr_\num
 .endm
 
-.macro DUMMY_EXCEPTION_ISR_EC num
-.global dummy_isr_\num
-.type dummy_isr_\num, @function
-dummy_isr_\num:
+.macro EXCEPTION_ISR_EC num handler
+.global isr_\num
+.type isr_\num, @function
+isr_\num:
     cli
     pushl %ebp
     movl %esp, %ebp
@@ -57,12 +57,20 @@ dummy_isr_\num:
     movl %ebx, 4(%ebp)
     movl %ebp, %ebx
     addl $8, %ebx                   // interrupt stack frame pointer
-    CALL_HANDLER $\num %ecx %ebx
+    CALL_HANDLER \handler $\num %ecx %ebx
     popa
 
     addl $8, %esp                   // consume the saved %ebp and error code
     iret
-.size dummy_isr_\num, . - dummy_isr_\num
+.size isr_\num, . - isr_\num
+.endm
+
+.macro DUMMY_EXCEPTION_ISR num
+EXCEPTION_ISR \num dummy_exception_handler
+.endm
+
+.macro DUMMY_EXCEPTION_ISR_EC num
+EXCEPTION_ISR_EC \num dummy_exception_handler
 .endm
 
 DUMMY_EXCEPTION_ISR 0       // divide error
@@ -79,7 +87,7 @@ DUMMY_EXCEPTION_ISR_EC 10   // invalid TSS
 DUMMY_EXCEPTION_ISR_EC 11   // segment not present
 DUMMY_EXCEPTION_ISR_EC 12   // stack fault
 DUMMY_EXCEPTION_ISR_EC 13   // general protection
-DUMMY_EXCEPTION_ISR_EC 14   // page fault
+EXCEPTION_ISR_EC 14 page_fault_handler
 DUMMY_EXCEPTION_ISR 15      // reserved
 DUMMY_EXCEPTION_ISR 16      // x87 FPU floating-point error
 DUMMY_EXCEPTION_ISR_EC 17   // alignment check
