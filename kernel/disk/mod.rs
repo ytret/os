@@ -19,52 +19,12 @@ pub mod ata;
 use alloc::boxed::Box;
 use alloc::rc::Rc;
 use alloc::vec::Vec;
+use core::cell::RefCell;
 use core::mem::size_of;
 
+use crate::block_device;
 use crate::fs::{ext2, FileSystem, Mountable, Node, ReadDirErr};
 use crate::kernel_static::Mutex;
-
-pub trait ReadWriteInterface {
-    fn block_size(&self) -> usize;
-    fn has_block(&self, block_idx: usize) -> bool;
-
-    fn read_block(&self, block_idx: usize) -> Result<Box<[u8]>, ReadErr>;
-    fn read_blocks(
-        &self,
-        first_block_idx: usize,
-        num_blocks: usize,
-    ) -> Result<Box<[u8]>, ReadErr>;
-    fn read(&self, from_byte: usize, len: usize) -> Result<Box<[u8]>, ReadErr>;
-
-    fn write_block(
-        &self,
-        block_idx: usize,
-        data: [u8; 512],
-    ) -> Result<(), WriteErr>;
-    fn write_blocks(
-        &self,
-        first_block_idx: usize,
-        data: &[u8],
-    ) -> Result<(), WriteErr>;
-}
-
-#[derive(Debug)]
-pub enum ReadErr {
-    BusUnavailable,
-    NoSuchBlock,
-    TooMuchBlocks,
-    ZeroNumBlocks,
-    Other(&'static str),
-}
-
-#[derive(Debug)]
-pub enum WriteErr {
-    BusUnavailable,
-    NoSuchBlock,
-    TooMuchBlocks,
-    EmptyDataPassed,
-    Other(&'static str),
-}
 
 pub struct Disk {
     pub id: usize,
@@ -129,6 +89,55 @@ impl Disk {
     }
 }
 
+impl block_device::BlockDevice for Disk {
+    fn block_size(&self) -> usize {
+        self.rw_interface.block_size()
+    }
+
+    fn has_block(&self, block_idx: usize) -> bool {
+        self.rw_interface.has_block(block_idx)
+    }
+
+    fn read_block(
+        &self,
+        block_idx: usize,
+    ) -> Result<Box<[u8]>, block_device::ReadErr> {
+        Ok(self.rw_interface.read_block(block_idx)?)
+    }
+
+    fn read_blocks(
+        &self,
+        first_block_idx: usize,
+        num_blocks: usize,
+    ) -> Result<Box<[u8]>, block_device::ReadErr> {
+        Ok(self.rw_interface.read_blocks(first_block_idx, num_blocks)?)
+    }
+
+    fn read(
+        &self,
+        from_byte: usize,
+        len: usize,
+    ) -> Result<Box<[u8]>, block_device::ReadErr> {
+        Ok(self.rw_interface.read(from_byte, len)?)
+    }
+
+    fn write_block(
+        &self,
+        block_idx: usize,
+        data: [u8; 512],
+    ) -> Result<(), block_device::WriteErr> {
+        Ok(self.rw_interface.write_block(block_idx, data)?)
+    }
+
+    fn write_blocks(
+        &self,
+        first_block_idx: usize,
+        data: &[u8],
+    ) -> Result<(), block_device::WriteErr> {
+        Ok(self.rw_interface.write_blocks(first_block_idx, data)?)
+    }
+}
+
 impl Mountable for Disk {
     fn fs(&self) -> Rc<Box<dyn FileSystem>> {
         self.file_system.as_ref().unwrap().clone()
@@ -185,6 +194,44 @@ impl From<ReadDirErr> for TryInitFsErr {
     }
 }
 
+pub trait ReadWriteInterface {
+    fn block_size(&self) -> usize;
+    fn has_block(&self, block_idx: usize) -> bool;
+
+    fn read_block(&self, block_idx: usize) -> Result<Box<[u8]>, ReadErr>;
+    fn read_blocks(
+        &self,
+        first_block_idx: usize,
+        num_blocks: usize,
+    ) -> Result<Box<[u8]>, ReadErr>;
+    fn read(&self, from_byte: usize, len: usize) -> Result<Box<[u8]>, ReadErr>;
+
+    fn write_block(
+        &self,
+        block_idx: usize,
+        data: [u8; 512],
+    ) -> Result<(), WriteErr>;
+    fn write_blocks(
+        &self,
+        first_block_idx: usize,
+        data: &[u8],
+    ) -> Result<(), WriteErr>;
+}
+
+#[derive(Debug)]
+pub enum ReadErr {
+    NoSuchBlock,
+    TooMuchBlocks,
+    InvalidNumBlocks,
+}
+
+#[derive(Debug)]
+pub enum WriteErr {
+    NoSuchBlock,
+    TooMuchBlocks,
+    EmptyDataPassed,
+}
+
 kernel_static! {
-    pub static ref DISKS: Mutex<Vec<Rc<Disk>>> = Mutex::new(Vec::new());
+    pub static ref DISKS: Mutex<Vec<Rc<RefCell<Disk>>>> = Mutex::new(Vec::new());
 }

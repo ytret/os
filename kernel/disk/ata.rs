@@ -345,7 +345,7 @@ impl ReadWriteInterface for Drive {
         num_blocks: usize,
     ) -> Result<Box<[u8]>, ReadErr> {
         if num_blocks == 0 {
-            return Err(ReadErr::ZeroNumBlocks);
+            return Err(ReadErr::InvalidNumBlocks);
         }
 
         let mut bus = self.bus.as_ref().unwrap().borrow_mut();

@@ -169,7 +169,7 @@ fn default_entry_point() -> ! {
         let buf = f.read(10);
         println!("{:02X?}", buf);
 
-        println!("[PROC] Closing /dev/disk0.");
+        println!("[PROC] Closing /dev/blk0.");
         SCHEDULER.keep_scheduling();
     }
 

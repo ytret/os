@@ -40,6 +40,7 @@ mod memory_region;
 
 mod scheduler;
 
+pub mod block_device;
 pub mod disk;
 
 pub mod fs;

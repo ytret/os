@@ -94,7 +94,7 @@ impl Node {
         let mp_node_internals = mp_node.borrow();
         if let NodeType::MountPoint(mountable) = mp_node_internals._type.clone()
         {
-            mountable.fs()
+            mountable.borrow().fs()
         } else {
             unreachable!();
         }
@@ -174,14 +174,14 @@ impl Node {
     pub fn mount_on_child(
         &mut self,
         child_name: &str,
-        mountable: Rc<dyn Mountable>,
+        mountable: Rc<RefCell<dyn Mountable>>,
     ) {
         let maybe_child = self.child_named(child_name);
         let mut child = maybe_child.unwrap();
         assert_eq!(child.0.borrow()._type, NodeType::Dir);
         assert!(!child.has_children());
 
-        let mut mount_node = mountable.fs().root_dir().unwrap();
+        let mut mount_node = mountable.borrow().fs().root_dir().unwrap();
         mount_node.0.borrow_mut()._type =
             NodeType::MountPoint(Rc::clone(&mountable));
         mount_node.0.borrow_mut().name = String::from(child_name);
@@ -198,7 +198,7 @@ impl Node {
 
 #[derive(Clone)]
 pub enum NodeType {
-    MountPoint(Rc<dyn Mountable>),
+    MountPoint(Rc<RefCell<dyn Mountable>>),
     Dir,
     RegularFile,
     BlockDevice,
@@ -303,7 +303,7 @@ impl Mountable for FsWrapper {
 
 kernel_static! {
     pub static ref VFS_ROOT: Mutex<Option<Node>> = Mutex::new(None);
-    pub static ref DEV_FS: Mutex<Option<Rc<FsWrapper>>> = Mutex::new(None);
+    pub static ref DEV_FS: Mutex<Option<Rc<RefCell<FsWrapper>>>> = Mutex::new(None);
 }
 
 /// Initializes the VFS root on the specified disk.
@@ -323,8 +323,8 @@ pub fn init_vfs_root_on_disk(disk_id: usize) {
 
     // Make up the VFS root node.
     let mut root_node = {
-        let mut disks = disk::DISKS.lock();
-        let disk = Rc::get_mut(&mut disks[disk_id]).unwrap();
+        let disks = disk::DISKS.lock();
+        let mut disk = disks[disk_id].borrow_mut();
         disk.try_init_fs().unwrap()
     };
     let mountable = Rc::clone(&disk::DISKS.lock()[disk_id]);
@@ -332,8 +332,9 @@ pub fn init_vfs_root_on_disk(disk_id: usize) {
 
     // Initialize devfs on /dev.
     println!("[VFS] Initializing devfs on /dev.");
-    *DEV_FS.lock() =
-        Some(Rc::new(FsWrapper(Rc::new(Box::new(devfs::DevFs::init())))));
+    *DEV_FS.lock() = Some(Rc::new(RefCell::new(FsWrapper(Rc::new(Box::new(
+        devfs::DevFs::init(),
+    ))))));
     let mountable = Rc::clone(DEV_FS.lock().as_ref().unwrap());
     root_node.mount_on_child("dev", mountable);
 

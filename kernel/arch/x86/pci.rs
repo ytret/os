@@ -17,9 +17,11 @@
 use alloc::boxed::Box;
 use alloc::rc::Rc;
 use alloc::vec::Vec;
+use core::cell::RefCell;
 use core::marker::PhantomData;
 
 use crate::arch::port_io;
+use crate::block_device;
 use crate::disk;
 
 #[derive(Clone)]
@@ -710,12 +712,15 @@ pub fn init() {
                     unsafe {
                         let drives = disk::ata::init();
                         for drive in drives {
-                            let disk = disk::Disk {
+                            let disk = RefCell::new(disk::Disk {
                                 id: disk::DISKS.lock().len(),
                                 rw_interface: Rc::new(Box::new(drive)),
                                 file_system: None,
-                            };
-                            disk::DISKS.lock().push(Rc::new(disk));
+                            });
+                            let rc_disk = Rc::new(disk);
+                            disk::DISKS.lock().push(Rc::clone(&rc_disk));
+                            let rc_dyn = Rc::clone(&rc_disk);
+                            block_device::BLOCK_DEVICES.lock().push(rc_dyn);
                         }
                     }
                 }
