@@ -194,6 +194,24 @@ impl Node {
             mp_child.0.borrow_mut().parent = Some(Weak::clone(&child_weak));
         }
     }
+
+    pub fn path(&mut self, path: &str) -> Option<Node> {
+        let mut current = self.clone();
+        let last_is_dir = path.ends_with("/");
+        for elem in path.split("/") {
+            if !elem.is_empty() {
+                if let Some(child) = current.child_named(elem) {
+                    current = child;
+                } else {
+                    return None;
+                }
+            }
+        }
+        if last_is_dir && current.0.borrow()._type != NodeType::Dir {
+            return None;
+        }
+        Some(current)
+    }
 }
 
 #[derive(Clone)]
@@ -264,10 +282,6 @@ impl fmt::Debug for NodeType {
 
 pub trait Mountable {
     fn fs(&self) -> Rc<Box<dyn FileSystem>>;
-}
-
-pub enum PathErr {
-    NotFound,
 }
 
 pub trait FileSystem {
