@@ -26,12 +26,6 @@ extern "C" {
         to: *const ProcessControlBlock,
         tss: *mut gdt::TaskStateSegment,
     );
-
-    pub fn jump_into_usermode(
-        code_seg: u16,
-        data_seg: u16,
-        jump_to: unsafe extern "C" fn() -> !,
-    ) -> !;
 }
 
 impl crate::scheduler::Scheduler {

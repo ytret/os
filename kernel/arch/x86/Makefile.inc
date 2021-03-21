@@ -33,4 +33,5 @@ ARCH_OBJECTS := \
 	$(ARCHDIR)/stack_trace.o \
 	$(ARCHDIR)/gdt.o \
 	$(ARCHDIR)/interrupts.o \
-	$(ARCHDIR)/scheduler.o
+	$(ARCHDIR)/scheduler.o \
+	$(ARCHDIR)/process.o

@@ -18,12 +18,17 @@ use alloc::alloc::{alloc, Layout};
 use alloc::vec::Vec;
 
 use crate::arch::gdt;
-use crate::arch::scheduler::jump_into_usermode;
 use crate::arch::vas::VirtAddrSpace;
 use crate::fs;
 use crate::scheduler::SCHEDULER;
 
 extern "C" {
+    fn jump_into_usermode(
+        code_seg: u16,
+        data_seg: u16,
+        jump_to: unsafe extern "C" fn() -> !,
+    ) -> !;
+
     fn usermode_part() -> !;
 }
 

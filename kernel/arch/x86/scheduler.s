@@ -111,25 +111,3 @@ jump_into_usermode:
     iret
 1:  ud2
 .size jump_into_usermode, . - jump_into_usermode
-
-.global usermode_part
-usermode_part:
-    pushl %ebp
-    movl %esp, %ebp
-
-    movl $0, %eax
-    movl $.pathname, %ebx
-    movl $9, %ecx
-    int $0x88
-
-    movl $1, %eax
-    movl $0, %ebx
-    movl $.greeting, %ecx
-    movl $14, %edx
-    int $0x88
-
-1:  jmp 1b
-
-.pathname:  .ascii "/dev/chr0"
-
-.greeting:  .ascii "Hello, World!\n"
