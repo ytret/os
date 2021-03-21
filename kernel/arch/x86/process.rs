@@ -23,9 +23,13 @@ use crate::arch::vas::VirtAddrSpace;
 use crate::fs;
 use crate::scheduler::SCHEDULER;
 
+extern "C" {
+    fn usermode_part() -> !;
+}
+
 pub struct Process {
     pub pcb: ProcessControlBlock,
-    opened_files: Vec<OpenedFile>,
+    pub opened_files: Vec<OpenedFile>,
 }
 
 impl Process {
@@ -66,7 +70,7 @@ impl Process {
         }
     }
 
-    fn open_file_by_node(
+    pub fn open_file_by_node(
         &mut self,
         node: fs::Node,
     ) -> Result<usize, OpenFileErr> {
@@ -86,7 +90,7 @@ impl Process {
 }
 
 #[derive(Debug)]
-enum OpenFileErr {
+pub enum OpenFileErr {
     UnsupportedFileType,
 }
 
@@ -100,7 +104,7 @@ pub struct ProcessControlBlock {
     pub esp: u32,
 }
 
-struct OpenedFile {
+pub struct OpenedFile {
     node: fs::Node,
     offset: Option<usize>,
 }
@@ -129,7 +133,7 @@ impl OpenedFile {
         res
     }
 
-    fn write(&mut self, buf: &[u8]) {
+    pub fn write(&mut self, buf: &[u8]) {
         let fs = self.node.fs();
         let id_in_fs = self.node.0.borrow().id_in_fs.unwrap();
         fs.write_file(id_in_fs, self.offset.unwrap_or(0), buf)
@@ -165,11 +169,4 @@ fn default_entry_point() -> ! {
             usermode_part,
         );
     }
-}
-
-pub extern "C" fn usermode_part() -> ! {
-    unsafe {
-        asm!("int 0x88");
-    }
-    loop {}
 }

@@ -14,11 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use crate::arch;
-use crate::arch::process::{Process, ProcessControlBlock};
-
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU32, Ordering};
+
+use crate::arch;
+use crate::arch::process::{Process, ProcessControlBlock};
 
 /// A counter used by the scheduler to count the number of tasks that want
 /// the interrupts to be disabled in order to perform their critical stuff.

@@ -237,12 +237,14 @@ int0x88_handler:
     movl %esp, %ebp
 
     pusha
+    movl %esp, %eax
     movl %ebp, %ebx
     addl $4, %ebx
     cld
-    pushl %ebx
+    pushl %eax                      // general purpose registers pointer
+    pushl %ebx                      // stack frame pointer
     call syscall_handler
-    addl $4, %esp
+    addl $8, %esp
     popa
 
     addl $4, %esp

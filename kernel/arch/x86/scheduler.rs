@@ -30,7 +30,7 @@ extern "C" {
     pub fn jump_into_usermode(
         code_seg: u16,
         data_seg: u16,
-        jump_to: extern "C" fn() -> !,
+        jump_to: unsafe extern "C" fn() -> !,
     ) -> !;
 }
 
