@@ -15,10 +15,10 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use alloc::alloc::{alloc, Layout};
-use alloc::string::String;
 use alloc::vec::Vec;
 
 use crate::arch::gdt;
+use crate::arch::scheduler::jump_into_usermode;
 use crate::arch::vas::VirtAddrSpace;
 use crate::fs;
 use crate::scheduler::SCHEDULER;
@@ -157,32 +157,19 @@ fn default_entry_point() -> ! {
         SCHEDULER.keep_scheduling();
     }
 
-    // unsafe {
-    //     println!("[PROC] Entering usermode.");
-    //     scheduler::jump_into_usermode(
-    //         gdt::USERMODE_CODE_SEG,
-    //         gdt::USERMODE_DATA_SEG,
-    //         usermode_part,
-    //     );
-    // }
-
     unsafe {
-        SCHEDULER.stop_scheduling();
-        println!("[PROC] Opening /dev/chr0.");
-
-        let mut root_node = fs::VFS_ROOT.lock().as_ref().unwrap().clone();
-
-        let mut test_dir = root_node.child_named("dev").unwrap().clone();
-        let chr0 = test_dir.child_named("chr0").unwrap().clone();
-        let fd = SCHEDULER.current_process().open_file_by_node(chr0).unwrap();
-
-        let f = &mut SCHEDULER.current_process().opened_files[fd];
-        f.write(&String::from("Hello, World!\n").into_bytes());
-
-        println!("[PROC] Closing /dev/chr0.");
-        SCHEDULER.keep_scheduling();
+        println!("[PROC] Entering usermode.");
+        jump_into_usermode(
+            gdt::USERMODE_CODE_SEG,
+            gdt::USERMODE_DATA_SEG,
+            usermode_part,
+        );
     }
+}
 
-    println!("[PROC] End of default process entry.");
+pub extern "C" fn usermode_part() -> ! {
+    unsafe {
+        asm!("int 0x88");
+    }
     loop {}
 }

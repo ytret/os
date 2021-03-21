@@ -15,49 +15,10 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 /*
- * Does a far return with usermode segments to the specified function.
- * Arguments: 1) usermode code segment (not a selector)
- *            2) usermode data segment (not a selector)
- *            3) the address to jump to
- * This function does not return.
- */
-.global jump_into_usermode
-.type jump_into_usermode, @function
-jump_into_usermode:
-    // If we don't push %ebp here, StackTrace::walk_and_get() will go mad.
-    pushl %ebp
-    movl %esp, %ebp
-
-    movl 8(%ebp), %eax          // eax = usermode code segment
-    movl 12(%ebp), %ebx         // ebx = usermode data segment
-    movl 16(%ebp), %ecx         // ecx = the address to jump to
-
-    // Set RPL to 3, that is to usermode.
-    orl $3, %eax
-    orl $3, %ebx
-
-    // Set data segments (%ss is set by iret).
-    movw %bx, %ds
-    movw %bx, %es
-    movw %bx, %fs
-    movw %bx, %gs
-
-    // Make up the iret stack frame.
-    movl %esp, %edx
-    pushl %ebx                  // ss = data segment selector
-    pushl %edx                  // esp
-    pushf
-    pushl %eax                  // cs = code segment selector
-    pushl %ecx                  // eip
-
-    iret
-.size jump_into_usermode, . - jump_into_usermode
-
-/*
  * Passes execution from the current task to the specified one.  Updates the
  * ESP0 field in the specified Task State Segment.
- * Arguments: 1) from: *mut Process
- *            2) to: *const Process
+ * Arguments: 1) from: *mut ProcessControlBlock
+ *            2) to: *const ProcessControlBlock
  *            3) tss: *mut TaskStateSegment
  * This function returns when the scheduler decides to run the caller's task.
  * It returns as if it wasn't ever called (i.e. like a normal function).
@@ -77,14 +38,14 @@ switch_tasks:
     pushl %esi
     pushl %edi
 
-    movl 8(%ebp), %esi          // esi = from: *mut Process
-    movl 12(%ebp), %edi         // edi = to: *const Process
+    movl 8(%ebp), %esi          // esi = from: *mut ProcessControlBlock
+    movl 12(%ebp), %edi         // edi = to: *const ProcessControlBlock
     movl 16(%ebp), %eax         // eax = tss: *mut TaskStateSegment
 
-    // Save %esp of the current task in its Process struct.
+    // Save %esp of the current task in its ProcessControlBlock.
     movl %esp, 8(%esi)
 
-    // Load the next task's Process struct.
+    // Load the next task's ProcessControlBlock.
     movl 0*4(%edi), %ebx        // ebx = cr3
     movl 1*4(%edi), %ecx        // ecx = kernel stack bottom
     movl 2*4(%edi), %esp        // esp = kernel stack top
@@ -108,3 +69,46 @@ switch_tasks:
     // Load the next task's %eip from its stack.
     ret
 .size switch_tasks, . - switch_tasks
+
+/*
+ * Does a far return with usermode segments to the specified function.
+ * Arguments: 1) usermode code segment (not a selector)
+ *            2) usermode data segment (not a selector)
+ *            3) the address to jump to
+ * This function does not return.
+ */
+.global jump_into_usermode
+.type jump_into_usermode, @function
+jump_into_usermode:
+    pushl %ebp
+    xchg %bx, %bx
+    movl %esp, %ebp
+
+    movl 8(%ebp), %eax          // eax = usermode code segment
+    movl 12(%ebp), %ebx         // ebx = usermode data segment
+    movl 16(%ebp), %ecx         // ecx = the address to jump to
+
+    // Set RPL to 3, that is to usermode.
+    orl $3, %eax
+    orl $3, %ebx
+
+    // Set data segments (%ss is set by iret).
+    movw %bx, %ds
+    movw %bx, %es
+    movw %bx, %fs
+    movw %bx, %gs
+
+    // Imitate a call by pushing a return address.
+    pushl 1f
+
+    // Make up the iret stack frame.
+    movl %esp, %edx
+    pushl %ebx                  // ss = data segment selector
+    pushl %edx                  // esp
+    pushf
+    pushl %eax                  // cs = code segment selector
+    pushl %ecx                  // eip
+
+    iret
+1:  ud2
+.size jump_into_usermode, . - jump_into_usermode

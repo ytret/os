@@ -61,11 +61,14 @@ extern "C" {
     // Probably spurious IRQs.
     fn irq7_handler(stack_frame: &InterruptStackFrame);
     fn irq15_handler(stack_frame: &InterruptStackFrame);
+
+    // Syscall.
+    fn int0x88_handler(stack_frame: &InterruptStackFrame);
 }
 
 #[allow(dead_code)]
 #[repr(u8)]
-enum Dpl {
+pub enum Dpl {
     Kernel = 0,
     Userspace = 3,
 }
@@ -91,6 +94,11 @@ impl TypeAttr {
         type_attr.0 |= (dpl as u8) << 5;
         type_attr.0 |= gate_type as u8;
         type_attr
+    }
+
+    pub fn set_dpl(&mut self, new_dpl: Dpl) {
+        self.0 &= !(0b11 << 5);
+        self.0 |= (new_dpl as u8) << 5;
     }
 }
 
@@ -141,6 +149,10 @@ macro_rules! impl_gate {
                 let offset = handler as u32;
                 self.offset_1 = (offset & 0xFFFF) as u16;
                 self.offset_2 = ((offset >> 16) & 0xFFFF) as u16;
+            }
+
+            pub fn set_dpl(&mut self, new_dpl: Dpl) {
+                self.type_attr.set_dpl(new_dpl);
             }
         }
     };
@@ -269,6 +281,10 @@ kernel_static! {
         // sends an EOI to the PIT before iret so that it can switch tasks.
         idt.interrupts[7].set_handler(irq7_handler);
         idt.interrupts[15].set_handler(irq15_handler);
+
+        // Syscall.
+        idt.interrupts[0x88 - 32].set_handler(int0x88_handler);
+        idt.interrupts[0x88 - 32].set_dpl(Dpl::Userspace);
 
         idt
     });

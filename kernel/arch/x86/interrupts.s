@@ -229,9 +229,9 @@ irq15_handler:
 .size irq15_handler, . - irq15_handler
 
 // Syscall.
-.global irq88_handler
-.type irq88_handler, @function
-irq88_handler:
+.global int0x88_handler
+.type int0x88_handler, @function
+int0x88_handler:
     cli
     pushl %ebp
     movl %esp, %ebp
@@ -247,4 +247,4 @@ irq88_handler:
 
     addl $4, %esp
     iret
-.size irq88_handler, . - irq88_handler
+.size int0x88_handler, . - int0x88_handler
