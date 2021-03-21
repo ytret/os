@@ -121,9 +121,9 @@ pub fn panic() {
     unsafe {
         asm!("cli");
     }
-    let trace = stack_trace::StackTrace::walk_and_get();
-    println!(" stack trace:");
-    for (i, addr) in trace.iter().enumerate() {
-        print!(" #{:02}: 0x{:08X}    ", trace.length - i, addr);
-    }
+    // let trace = stack_trace::StackTrace::walk_and_get();
+    // println!(" stack trace:");
+    // for (i, addr) in trace.iter().enumerate() {
+    //     print!(" #{:02}: 0x{:08X}    ", trace.length - i, addr);
+    // }
 }
