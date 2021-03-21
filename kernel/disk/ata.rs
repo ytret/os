@@ -543,7 +543,7 @@ pub unsafe fn init() -> Vec<Drive> {
 }
 
 #[no_mangle]
-pub extern "C" fn ata_irq14_handler() {
+pub extern "C" fn ata_irq14_handler(_: &InterruptStackFrame) {
     println!("[ATA] IRQ 14");
     PIC.send_eoi(14);
 }

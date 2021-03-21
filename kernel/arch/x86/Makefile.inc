@@ -25,7 +25,8 @@ ARCH_SOURCES := \
 	$(ARCHDIR)/pmm_stack.rs \
 	$(ARCHDIR)/process.rs \
 	$(ARCHDIR)/scheduler.rs \
-	$(ARCHDIR)/pci.rs
+	$(ARCHDIR)/pci.rs \
+	$(ARCHDIR)/syscalls.rs
 
 ARCH_OBJECTS := \
 	$(ARCHDIR)/boot.o \

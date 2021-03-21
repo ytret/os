@@ -165,24 +165,7 @@ irq0_handler:
     iret
 .size irq0_handler, . - irq0_handler
 
-.global irq14_handler
-.type irq14_handler, @function
-irq14_handler:
-    cli
-    pushl %ebp
-    movl %esp, %ebp
-
-    pusha
-    cld
-    call ata_irq14_handler
-    popa
-
-    addl $4, %esp
-    iret
-.size irq14_handler, . - irq14_handler
-
-// IRQ 7 may be either a spurious IRQ or an ATA IRQ. stage1_irq7_handler()
-// figures out which one it is.
+// IRQ 7 may be a spurious IRQ.
 .global irq7_handler
 .type irq7_handler, @function
 irq7_handler:
@@ -203,7 +186,28 @@ irq7_handler:
     iret
 .size irq7_handler, . - irq7_handler
 
-// Same as IRQ 7.
+.global irq14_handler
+.type irq14_handler, @function
+irq14_handler:
+    cli
+    pushl %ebp
+    movl %esp, %ebp
+
+    pusha
+    movl %ebp, %ebx
+    addl $4, %ebx
+    cld
+    pushl %ebx
+    call ata_irq14_handler
+    addl $4, %esp
+    popa
+
+    addl $4, %esp
+    iret
+.size irq14_handler, . - irq14_handler
+
+// Either a spurios interrupt (as IRQ 7) or an ATA interrupt.
+// stage1_irq15_handler() figures out which one it is.
 .global irq15_handler
 .type irq15_handler, @function
 irq15_handler:
@@ -223,3 +227,24 @@ irq15_handler:
     addl $4, %esp
     iret
 .size irq15_handler, . - irq15_handler
+
+// Syscall.
+.global irq88_handler
+.type irq88_handler, @function
+irq88_handler:
+    cli
+    pushl %ebp
+    movl %esp, %ebp
+
+    pusha
+    movl %ebp, %ebx
+    addl $4, %ebx
+    cld
+    pushl %ebx
+    call syscall_handler
+    addl $4, %esp
+    popa
+
+    addl $4, %esp
+    iret
+.size irq88_handler, . - irq88_handler

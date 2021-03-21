@@ -28,6 +28,8 @@ pub mod scheduler;
 
 pub mod pci;
 
+pub mod syscalls;
+
 use core::ptr;
 
 use crate::memory_region::Region;
