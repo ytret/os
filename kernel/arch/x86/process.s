@@ -25,8 +25,10 @@ usermode_part:
     movl $9, %ecx
     int $0x88
 
+    pushl %eax
+    popl %ebx
+
     movl $1, %eax
-    movl $0, %ebx
     movl $.greeting, %ecx
     movl $14, %edx
     int $0x88

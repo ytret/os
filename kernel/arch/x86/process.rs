@@ -32,6 +32,8 @@ extern "C" {
     fn usermode_part() -> !;
 }
 
+pub const MAX_OPENED_FILES: i32 = 32;
+
 pub struct Process {
     pub pcb: ProcessControlBlock,
     pub opened_files: Vec<OpenedFile>,
@@ -78,13 +80,16 @@ impl Process {
     pub fn open_file_by_node(
         &mut self,
         node: fs::Node,
-    ) -> Result<usize, OpenFileErr> {
+    ) -> Result<i32, OpenFileErr> {
         let file_type = node.0.borrow()._type.clone();
         if file_type == fs::NodeType::RegularFile
             || file_type == fs::NodeType::BlockDevice
             || file_type == fs::NodeType::CharDevice
         {
-            let fd = self.opened_files.len();
+            if self.opened_files.len() == MAX_OPENED_FILES as usize {
+                return Err(OpenFileErr::MaxOpenedFiles);
+            }
+            let fd = self.opened_files.len() as i32;
             self.opened_files
                 .push(OpenedFile::new(node.clone(), file_type.is_seekable()));
             Ok(fd)
@@ -92,10 +97,19 @@ impl Process {
             Err(OpenFileErr::UnsupportedFileType)
         }
     }
+
+    pub fn opened_file(&mut self, fd: i32) -> &mut OpenedFile {
+        &mut self.opened_files[fd as usize]
+    }
+
+    pub fn check_fd(&self, fd: i32) -> bool {
+        return 0 <= fd && fd < self.opened_files.len() as i32;
+    }
 }
 
 #[derive(Debug)]
 pub enum OpenFileErr {
+    MaxOpenedFiles,
     UnsupportedFileType,
 }
 

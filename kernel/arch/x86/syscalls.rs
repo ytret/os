@@ -18,11 +18,12 @@ use core::slice;
 use core::str;
 
 use crate::arch::interrupts::InterruptStackFrame;
+use crate::arch::process::OpenFileErr;
 use crate::fs::VFS_ROOT;
 use crate::scheduler::SCHEDULER;
 
 #[derive(Debug)]
-pub struct GpRegisters {
+pub struct GpRegs {
     edi: u32,
     esi: u32,
     ebp: u32,
@@ -33,14 +34,21 @@ pub struct GpRegisters {
     eax: u32,
 }
 
+const OPEN_ENOENT: i32 = -1;
+const OPEN_EMFILE: i32 = -2;
+const OPEN_EINVAL: i32 = -3;
+
+const WRITE_EBADF: i32 = -1;
+
 #[no_mangle]
 pub extern "C" fn syscall_handler(
     _stack_frame: &InterruptStackFrame,
-    gp_regs: &GpRegisters,
+    gp_regs: &mut GpRegs,
 ) {
     println!("[SYS] Syscall number: {}", gp_regs.eax);
     println!("{:#010X?}", gp_regs);
     let current_process = unsafe { SCHEDULER.current_process() };
+    let return_value: i32;
 
     // 0 open
     // ebx: pathname, *const u8
@@ -57,31 +65,51 @@ pub extern "C" fn syscall_handler(
         let maybe_node = VFS_ROOT.lock().as_mut().unwrap().path(pathname);
         if let Some(node) = maybe_node {
             match current_process.open_file_by_node(node) {
-                Ok(fd) => println!("[SYS OPEN] fd = {}", fd),
-                Err(err) => println!("[SYS OPEN] err: {:?}", err),
+                Ok(fd) => {
+                    println!("[SYS OPEN] fd = {}", fd);
+                    return_value = fd;
+                }
+                Err(err) => {
+                    println!("[SYS OPEN] Could not open the node: {:?}", err);
+                    return_value = match err {
+                        OpenFileErr::MaxOpenedFiles => OPEN_EMFILE,
+                        OpenFileErr::UnsupportedFileType => OPEN_EINVAL,
+                    };
+                }
             }
         } else {
-            // FIXME: return something.
-            unimplemented!();
+            println!("[SYS OPEN] Node not found.");
+            return_value = OPEN_ENOENT;
         }
     }
-
     // 1 write
     // ebx: fd, u32
     // ecx: buffer pointer, *const u8
     // edx: buffer size in bytes, u32
-    if gp_regs.eax == 1 {
-        let fd = gp_regs.ebx as usize;
+    else if gp_regs.eax == 1 {
+        let fd = gp_regs.ebx as i32;
         let buf = unsafe {
             slice::from_raw_parts(
                 gp_regs.ecx as *const u8,
                 gp_regs.edx as usize,
             )
         };
+
         println!("[SYS WRITE] fd = {}", fd);
         println!("[SYS WRITE] buf is at 0x{:08X}", &buf as *const _ as usize);
         println!("[SYS WRITE] buf len = {}", buf.len());
 
-        current_process.opened_files[fd].write(&buf);
+        if !current_process.check_fd(fd) {
+            println!("[SYS WRITE] Invalid file descriptor.");
+            return_value = WRITE_EBADF;
+        } else {
+            current_process.opened_file(fd).write(&buf);
+            return_value = 0;
+        }
+    } else {
+        println!("[SYS] Ignoring an invalid syscall number.");
+        return_value = 0;
     }
+
+    gp_regs.eax = return_value as u32;
 }
