@@ -1,5 +1,5 @@
 // ytret's OS - hobby operating system
-// Copyright (C) 2020  Yuri Tretyakov (ytretyakov18@gmail.com)
+// Copyright (C) 2020, 2021  Yuri Tretyakov (ytretyakov18@gmail.com)
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -16,14 +16,14 @@
 
 use core::sync::atomic::{AtomicU32, Ordering};
 
-use crate::arch::interrupts::{InterruptStackFrame, IDT};
+use crate::arch::interrupts::IDT;
 use crate::arch::pic::PIC;
 use crate::arch::port_io;
 
 use crate::scheduler::SCHEDULER;
 
 extern "C" {
-    fn irq0_handler(stack_frame: &InterruptStackFrame); // interrupts.s
+    fn irq0_handler(); // interrupts.s
 }
 
 #[allow(dead_code)]

@@ -1,5 +1,5 @@
 // ytret's OS - hobby operating system
-// Copyright (C) 2020  Yuri Tretyakov (ytretyakov18@gmail.com)
+// Copyright (C) 2020, 2021  Yuri Tretyakov (ytretyakov18@gmail.com)
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -16,12 +16,12 @@
 
 use alloc::vec::Vec;
 
-use crate::arch::interrupts::{InterruptStackFrame, IDT};
+use crate::arch::interrupts::IDT;
 use crate::arch::pic::PIC;
 use crate::port::{Port, PortBuilder};
 
 extern "C" {
-    fn irq1_handler(stack_frame: &InterruptStackFrame); // interrupts.s
+    fn irq1_handler();
 }
 
 const IRQ: u8 = 1;
@@ -30,9 +30,9 @@ const PORT_DATA: u16 = 0x60;
 const PORT_CMD: u16 = 0x64;
 const PORT_STATUS: u16 = 0x64;
 
-const RSP_ACK: u8 = 0xFA;
-const RSP_RESEND: u8 = 0xFE;
-const RSP_ECHO: u8 = 0xEE;
+// const RSP_ACK: u8 = 0xFA;
+// const RSP_RESEND: u8 = 0xFE;
+// const RSP_ECHO: u8 = 0xEE;
 
 #[derive(Debug)]
 #[repr(u8)]

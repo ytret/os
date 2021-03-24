@@ -1,5 +1,5 @@
 // ytret's OS - hobby operating system
-// Copyright (C) 2020  Yuri Tretyakov (ytretyakov18@gmail.com)
+// Copyright (C) 2020, 2021  Yuri Tretyakov (ytretyakov18@gmail.com)
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -21,49 +21,49 @@ use crate::kernel_static::Mutex;
 
 // See interrupts.s
 extern "C" {
-    fn isr_0(stack_frame: &InterruptStackFrame);
-    fn isr_1(stack_frame: &InterruptStackFrame);
-    fn isr_2(stack_frame: &InterruptStackFrame);
-    fn isr_3(stack_frame: &InterruptStackFrame);
-    fn isr_4(stack_frame: &InterruptStackFrame);
-    fn isr_5(stack_frame: &InterruptStackFrame);
-    fn isr_6(stack_frame: &InterruptStackFrame);
-    fn isr_7(stack_frame: &InterruptStackFrame);
-    fn isr_8(stack_frame: &InterruptStackFrame, err_code: u32);
-    fn isr_9(stack_frame: &InterruptStackFrame);
-    fn isr_10(stack_frame: &InterruptStackFrame, err_code: u32);
-    fn isr_11(stack_frame: &InterruptStackFrame, err_code: u32);
-    fn isr_12(stack_frame: &InterruptStackFrame, err_code: u32);
-    fn isr_13(stack_frame: &InterruptStackFrame, err_code: u32);
-    fn isr_14(stack_frame: &InterruptStackFrame, err_code: u32);
-    fn isr_15(stack_frame: &InterruptStackFrame);
-    fn isr_16(stack_frame: &InterruptStackFrame);
-    fn isr_17(stack_frame: &InterruptStackFrame, err_code: u32);
-    fn isr_18(stack_frame: &InterruptStackFrame);
-    fn isr_19(stack_frame: &InterruptStackFrame);
-    fn isr_20(stack_frame: &InterruptStackFrame);
-    fn isr_21(stack_frame: &InterruptStackFrame, err_code: u32);
-    fn isr_22(stack_frame: &InterruptStackFrame);
-    fn isr_23(stack_frame: &InterruptStackFrame);
-    fn isr_24(stack_frame: &InterruptStackFrame);
-    fn isr_25(stack_frame: &InterruptStackFrame);
-    fn isr_26(stack_frame: &InterruptStackFrame);
-    fn isr_27(stack_frame: &InterruptStackFrame);
-    fn isr_28(stack_frame: &InterruptStackFrame);
-    fn isr_29(stack_frame: &InterruptStackFrame);
-    fn isr_30(stack_frame: &InterruptStackFrame);
-    fn isr_31(stack_frame: &InterruptStackFrame);
+    fn isr_0();
+    fn isr_1();
+    fn isr_2();
+    fn isr_3();
+    fn isr_4();
+    fn isr_5();
+    fn isr_6();
+    fn isr_7();
+    fn isr_8();
+    fn isr_9();
+    fn isr_10();
+    fn isr_11();
+    fn isr_12();
+    fn isr_13();
+    fn isr_14();
+    fn isr_15();
+    fn isr_16();
+    fn isr_17();
+    fn isr_18();
+    fn isr_19();
+    fn isr_20();
+    fn isr_21();
+    fn isr_22();
+    fn isr_23();
+    fn isr_24();
+    fn isr_25();
+    fn isr_26();
+    fn isr_27();
+    fn isr_28();
+    fn isr_29();
+    fn isr_30();
+    fn isr_31();
 
     // For all other interrupts.
-    fn common_isr(stack_frame: &InterruptStackFrame);
-    fn common_isr_ec(stack_frame: &InterruptStackFrame, err_code: u32);
+    fn common_isr();
+    fn common_isr_ec();
 
     // Probably spurious IRQs.
-    fn irq7_handler(stack_frame: &InterruptStackFrame);
-    fn irq15_handler(stack_frame: &InterruptStackFrame);
+    fn irq7_handler();
+    fn irq15_handler();
 
     // Syscall.
-    fn int0x88_handler(stack_frame: &InterruptStackFrame);
+    fn int0x88_handler();
 }
 
 #[allow(dead_code)]
@@ -121,49 +121,43 @@ pub struct Gate<T> {
     phantom: core::marker::PhantomData<T>,
 }
 
-macro_rules! impl_gate {
-    ($t:ty, $d:ident) => {
-        impl Gate<$t> {
-            fn new(handler: $t, selector: u16, type_attr: TypeAttr) -> Self {
-                let offset = handler as u32;
-                Gate {
-                    offset_1: (offset & 0xFFFF) as u16,
-                    selector,
-                    zero: 0,
-                    type_attr,
-                    offset_2: ((offset >> 16) & 0xFFFF) as u16,
-                    phantom: core::marker::PhantomData,
-                }
-            }
-
-            fn dummy() -> Self {
-                let type_attr = TypeAttr::new(
-                    true,
-                    Dpl::Kernel,
-                    GateType::InterruptGate32Bit,
-                );
-                Gate::<$t>::new($d, 0x08, type_attr)
-            }
-
-            pub fn set_handler(&mut self, handler: $t) {
-                let offset = handler as u32;
-                self.offset_1 = (offset & 0xFFFF) as u16;
-                self.offset_2 = ((offset >> 16) & 0xFFFF) as u16;
-            }
-
-            pub fn set_dpl(&mut self, new_dpl: Dpl) {
-                self.type_attr.set_dpl(new_dpl);
-            }
+impl Gate<Isr> {
+    fn new(handler: Isr, selector: u16, type_attr: TypeAttr) -> Self {
+        let offset = handler as u32;
+        Gate {
+            offset_1: (offset & 0xFFFF) as u16,
+            selector,
+            zero: 0,
+            type_attr,
+            offset_2: ((offset >> 16) & 0xFFFF) as u16,
+            phantom: core::marker::PhantomData,
         }
-    };
+    }
+
+    fn dummy() -> Self {
+        let type_attr =
+            TypeAttr::new(true, Dpl::Kernel, GateType::InterruptGate32Bit);
+        Self::new(common_isr, 0x08, type_attr)
+    }
+
+    fn dummy_ec() -> Self {
+        let type_attr =
+            TypeAttr::new(true, Dpl::Kernel, GateType::InterruptGate32Bit);
+        Self::new(common_isr_ec, 0x08, type_attr)
+    }
+
+    pub fn set_handler(&mut self, handler: Isr) {
+        let offset = handler as u32;
+        self.offset_1 = (offset & 0xFFFF) as u16;
+        self.offset_2 = ((offset >> 16) & 0xFFFF) as u16;
+    }
+
+    pub fn set_dpl(&mut self, new_dpl: Dpl) {
+        self.type_attr.set_dpl(new_dpl);
+    }
 }
 
-impl_gate!(HandlerFunc, common_isr);
-impl_gate!(HandlerFuncWithErrCode, common_isr_ec);
-
-type HandlerFunc = unsafe extern "C" fn(&InterruptStackFrame);
-type HandlerFuncWithErrCode =
-    unsafe extern "C" fn(&InterruptStackFrame, err_code: u32);
+type Isr = unsafe extern "C" fn();
 
 #[repr(C, packed)]
 pub struct InterruptStackFrame {
@@ -178,59 +172,59 @@ pub struct InterruptStackFrame {
 
 #[repr(C)]
 pub struct InterruptDescriptorTable {
-    divide_error: Gate<HandlerFunc>,
-    debug: Gate<HandlerFunc>,
-    non_maskable_int: Gate<HandlerFunc>,
-    breakpoint: Gate<HandlerFunc>,
-    overflow: Gate<HandlerFunc>,
-    bound_range_exceeded: Gate<HandlerFunc>,
-    invalid_opcode: Gate<HandlerFunc>,
-    device_not_available: Gate<HandlerFunc>,
-    double_fault: Gate<HandlerFuncWithErrCode>,
-    coprocessor_segment_overrun: Gate<HandlerFunc>, // reserved
-    invalid_tss: Gate<HandlerFuncWithErrCode>,
-    segment_not_present: Gate<HandlerFuncWithErrCode>,
-    stack_fault: Gate<HandlerFuncWithErrCode>,
-    general_protection: Gate<HandlerFuncWithErrCode>,
-    page_fault: Gate<HandlerFuncWithErrCode>,
-    reserved_1: Gate<HandlerFunc>, // reserved
-    x87_fpu_floating_point_error: Gate<HandlerFunc>, // reserved
-    alignment_check: Gate<HandlerFuncWithErrCode>,
-    machine_check: Gate<HandlerFunc>,
-    simd_floating_point: Gate<HandlerFunc>,
-    virtualization: Gate<HandlerFunc>,
-    control_protection: Gate<HandlerFuncWithErrCode>,
-    reserved_2: [Gate<HandlerFunc>; 10], // reserved
-    pub interrupts: [Gate<HandlerFunc>; 256 - 32],
+    divide_error: Gate<Isr>,
+    debug: Gate<Isr>,
+    non_maskable_int: Gate<Isr>,
+    breakpoint: Gate<Isr>,
+    overflow: Gate<Isr>,
+    bound_range_exceeded: Gate<Isr>,
+    invalid_opcode: Gate<Isr>,
+    device_not_available: Gate<Isr>,
+    double_fault: Gate<Isr>,
+    coprocessor_segment_overrun: Gate<Isr>, // reserved
+    invalid_tss: Gate<Isr>,
+    segment_not_present: Gate<Isr>,
+    stack_fault: Gate<Isr>,
+    general_protection: Gate<Isr>,
+    page_fault: Gate<Isr>,
+    reserved_1: Gate<Isr>,                   // reserved
+    x87_fpu_floating_point_error: Gate<Isr>, // reserved
+    alignment_check: Gate<Isr>,
+    machine_check: Gate<Isr>,
+    simd_floating_point: Gate<Isr>,
+    virtualization: Gate<Isr>,
+    control_protection: Gate<Isr>,
+    reserved_2: [Gate<Isr>; 10], // reserved
+    pub interrupts: [Gate<Isr>; 256 - 32],
 }
 
 impl InterruptDescriptorTable {
     fn new() -> Self {
         Self {
-            divide_error: Gate::<HandlerFunc>::dummy(),
-            debug: Gate::<HandlerFunc>::dummy(),
-            non_maskable_int: Gate::<HandlerFunc>::dummy(),
-            breakpoint: Gate::<HandlerFunc>::dummy(),
-            overflow: Gate::<HandlerFunc>::dummy(),
-            bound_range_exceeded: Gate::<HandlerFunc>::dummy(),
-            invalid_opcode: Gate::<HandlerFunc>::dummy(),
-            device_not_available: Gate::<HandlerFunc>::dummy(),
-            double_fault: Gate::<HandlerFuncWithErrCode>::dummy(),
-            coprocessor_segment_overrun: Gate::<HandlerFunc>::dummy(),
-            invalid_tss: Gate::<HandlerFuncWithErrCode>::dummy(),
-            segment_not_present: Gate::<HandlerFuncWithErrCode>::dummy(),
-            stack_fault: Gate::<HandlerFuncWithErrCode>::dummy(),
-            general_protection: Gate::<HandlerFuncWithErrCode>::dummy(),
-            page_fault: Gate::<HandlerFuncWithErrCode>::dummy(),
-            reserved_1: Gate::<HandlerFunc>::dummy(),
-            x87_fpu_floating_point_error: Gate::<HandlerFunc>::dummy(),
-            alignment_check: Gate::<HandlerFuncWithErrCode>::dummy(),
-            machine_check: Gate::<HandlerFunc>::dummy(),
-            simd_floating_point: Gate::<HandlerFunc>::dummy(),
-            virtualization: Gate::<HandlerFunc>::dummy(),
-            control_protection: Gate::<HandlerFuncWithErrCode>::dummy(),
-            reserved_2: [Gate::<HandlerFunc>::dummy(); 10],
-            interrupts: [Gate::<HandlerFunc>::dummy(); 256 - 32],
+            divide_error: Gate::dummy(),
+            debug: Gate::dummy(),
+            non_maskable_int: Gate::dummy(),
+            breakpoint: Gate::dummy(),
+            overflow: Gate::dummy(),
+            bound_range_exceeded: Gate::dummy(),
+            invalid_opcode: Gate::dummy(),
+            device_not_available: Gate::dummy(),
+            double_fault: Gate::dummy_ec(),
+            coprocessor_segment_overrun: Gate::dummy(),
+            invalid_tss: Gate::dummy_ec(),
+            segment_not_present: Gate::dummy_ec(),
+            stack_fault: Gate::dummy_ec(),
+            general_protection: Gate::dummy_ec(),
+            page_fault: Gate::dummy_ec(),
+            reserved_1: Gate::dummy(),
+            x87_fpu_floating_point_error: Gate::dummy(),
+            alignment_check: Gate::dummy_ec(),
+            machine_check: Gate::dummy(),
+            simd_floating_point: Gate::dummy(),
+            virtualization: Gate::dummy(),
+            control_protection: Gate::dummy_ec(),
+            reserved_2: [Gate::dummy(); 10],
+            interrupts: [Gate::dummy(); 256 - 32],
         }
     }
 }

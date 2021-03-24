@@ -1,5 +1,5 @@
 // ytret's OS - hobby operating system
-// Copyright (C) 2020  Yuri Tretyakov (ytretyakov18@gmail.com)
+// Copyright (C) 2020, 2021  Yuri Tretyakov (ytretyakov18@gmail.com)
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -29,8 +29,8 @@ use crate::port::{Port, PortBuilder};
 
 extern "C" {
     // See interrupts.s
-    fn irq14_handler(stack_frame: &InterruptStackFrame);
-    fn irq15_handler(stack_frame: &InterruptStackFrame);
+    fn irq14_handler();
+    fn irq15_handler();
 }
 
 pub struct Bus {
