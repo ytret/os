@@ -1,5 +1,5 @@
 // ytret's OS - hobby operating system
-// Copyright (C) 2020  Yuri Tretyakov (ytretyakov18@gmail.com)
+// Copyright (C) 2020, 2021  Yuri Tretyakov (ytretyakov18@gmail.com)
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -23,8 +23,8 @@ use crate::fs::{ReadFileErr, WriteFileErr};
 use crate::kernel_static::Mutex;
 
 pub trait CharDevice {
-    fn read(&self) -> Result<u8, ReadErr>;
-    fn read_many(&self, len: usize) -> Result<Box<[u8]>, ReadErr>;
+    fn read(&mut self) -> Result<u8, ReadErr>;
+    fn read_many(&mut self, len: usize) -> Result<Box<[u8]>, ReadErr>;
 
     fn write(&mut self, byte: u8) -> Result<(), WriteErr>;
     fn write_many(&mut self, bytes: &[u8]) -> Result<(), WriteErr>;
