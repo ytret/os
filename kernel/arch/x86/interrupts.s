@@ -165,6 +165,22 @@ irq0_handler:
     iret
 .size irq0_handler, . - irq0_handler
 
+.global irq1_handler
+.type irq1_handler, @function
+irq1_handler:
+    cli
+    pushl %ebp
+    movl %esp, %ebp
+
+    pusha
+    cld
+    call keyboard_irq_handler
+    popa
+
+    addl $4, %esp
+    iret
+.size irq1_handler, . - irq1_handler
+
 // IRQ 7 may be a spurious IRQ.
 .global irq7_handler
 .type irq7_handler, @function

@@ -94,6 +94,7 @@ pub extern "C" fn main(magic_num: u32, boot_info: *const multiboot::BootInfo) {
 
     heap::init(&kernel_info);
 
+    // FIXME
     arch::pci::init();
 
     let rc_console = Rc::clone(&console::CONSOLE.lock());
@@ -104,7 +105,12 @@ pub extern "C" fn main(magic_num: u32, boot_info: *const multiboot::BootInfo) {
         fs::init_vfs_root_on_disk(0);
     }
 
-    scheduler::init();
+    // FIXME, also FIXME: if this is placed after pci::init() the kernel crashes
+    // if the keys are pressed right after booting.
+    arch::keyboard::init();
+
+    // scheduler::init();
+    loop {}
 
     // println!("Reached the end of main.");
 }

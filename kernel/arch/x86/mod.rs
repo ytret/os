@@ -30,6 +30,8 @@ pub mod pci;
 
 pub mod syscalls;
 
+pub mod keyboard;
+
 use core::ptr;
 
 use crate::memory_region::Region;
