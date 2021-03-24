@@ -545,10 +545,14 @@ pub unsafe fn init() -> Vec<Drive> {
 #[no_mangle]
 pub extern "C" fn ata_irq14_handler(_: &InterruptStackFrame) {
     println!("[ATA] IRQ 14");
-    PIC.send_eoi(14);
+    unsafe {
+        PIC.send_eoi(14);
+    }
 }
 
 pub fn ata_irq15_handler(_: &InterruptStackFrame) {
     println!("[ATA] IRQ 15");
-    PIC.send_eoi(15);
+    unsafe {
+        PIC.send_eoi(15);
+    }
 }

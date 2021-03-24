@@ -337,7 +337,7 @@ pub static mut STAGE2_IRQ15_HANDLER: Option<fn(&InterruptStackFrame)> = None;
 
 #[no_mangle]
 pub extern "C" fn stage1_irq7_handler(stack_frame: &InterruptStackFrame) {
-    if PIC.get_isr() & (1 << 7) == 0 {
+    if unsafe { PIC.get_isr() } & (1 << 7) == 0 {
         println!("Ignoring IRQ 7: a spurious interrupt.");
         let eip = stack_frame.eip;
         println!(" eip: 0x{:08X}", eip);
@@ -357,7 +357,7 @@ pub extern "C" fn stage1_irq7_handler(stack_frame: &InterruptStackFrame) {
 
 #[no_mangle]
 pub extern "C" fn stage1_irq15_handler(stack_frame: &InterruptStackFrame) {
-    if PIC.get_isr() & (1 << 15) == 0 {
+    if unsafe { PIC.get_isr() } & (1 << 15) == 0 {
         println!("Ignoring IRQ 15: a spurious interrupt.");
         let eip = stack_frame.eip;
         println!(" eip: 0x{:08X}", eip);

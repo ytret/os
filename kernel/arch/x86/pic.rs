@@ -169,16 +169,15 @@ impl Pic {
     }
 }
 
-kernel_static! {
-    // FIXME: use static mut, there's no much sense in this.
-    pub static ref PIC: Pic = Pic {
-        master_vector_offset: 32,
-        slave_vector_offset: 40,
-        master_has_slave_at_ir: 0b0000_0100,
-        slave_id: 2,
-    };
-}
+pub static mut PIC: Pic = Pic {
+    master_vector_offset: 32,
+    slave_vector_offset: 40,
+    master_has_slave_at_ir: 0b0000_0100,
+    slave_id: 2,
+};
 
 pub fn init() {
-    PIC.init();
+    unsafe {
+        PIC.init();
+    }
 }

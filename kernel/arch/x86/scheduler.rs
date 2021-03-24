@@ -17,6 +17,8 @@
 use core::sync::atomic::Ordering;
 
 use crate::arch::gdt;
+use crate::arch::pic::PIC;
+use crate::arch::pit::TEMP_SPAWNER_ON;
 use crate::arch::process::{Process, ProcessControlBlock};
 use crate::scheduler::{NO_SCHED_COUNTER, SCHEDULER};
 
@@ -83,10 +85,11 @@ pub fn init() -> ! {
     }
 
     println!("[SCHED] Enabling the spawner.");
-    crate::arch::pit::TEMP_SPAWNER_ON
-        .store(true, core::sync::atomic::Ordering::SeqCst);
+    TEMP_SPAWNER_ON.store(true, core::sync::atomic::Ordering::SeqCst);
 
-    crate::arch::pic::PIC.set_irq_mask(crate::arch::pit::IRQ, false);
+    unsafe {
+        PIC.set_irq_mask(crate::arch::pit::IRQ, false);
+    }
     init_entry_point();
 }
 

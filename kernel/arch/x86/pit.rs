@@ -175,7 +175,7 @@ pub fn init() {
         PIT.init();
     }
 
-    IDT.lock().interrupts[0].set_handler(irq0_handler);
+    IDT.lock().interrupts[IRQ as usize].set_handler(irq0_handler);
     // PIC.set_irq_mask(IRQ, false);
 }
 
@@ -212,7 +212,9 @@ pub extern "C" fn pit_irq_handler() {
     // task.  One might just do an iret as a context switch but why bother if
     // this handler will be executed further (including the iret) when it's time
     // for this task.
-    PIC.send_eoi(0);
+    unsafe {
+        PIC.send_eoi(IRQ);
+    }
 
     if COUNTER_MS.load(Ordering::SeqCst) >= 1000 {
         COUNTER_MS.store(0, Ordering::SeqCst);
