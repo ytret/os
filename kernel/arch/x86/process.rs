@@ -1,5 +1,5 @@
 // ytret's OS - hobby operating system
-// Copyright (C) 2020  Yuri Tretyakov (ytretyakov18@gmail.com)
+// Copyright (C) 2020, 2021  Yuri Tretyakov (ytretyakov18@gmail.com)
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -142,14 +142,14 @@ impl OpenedFile {
         }
     }
 
-    fn read(&mut self, count: usize) -> Vec<u8> {
+    pub fn read(&mut self, buf: &mut [u8]) {
         let fs = self.node.fs();
         let id_in_fs = self.node.0.borrow().id_in_fs.unwrap();
         let res = fs
-            .read_file(id_in_fs, self.offset.unwrap_or(0), count)
+            .read_file(id_in_fs, self.offset.unwrap_or(0), buf.len())
             .unwrap();
-        self.seek(count);
-        res
+        self.seek(buf.len());
+        buf.clone_from_slice(&res);
     }
 
     pub fn write(&mut self, buf: &[u8]) {

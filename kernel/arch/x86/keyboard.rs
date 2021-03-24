@@ -14,7 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use alloc::rc::Rc;
 use alloc::vec::Vec;
+use core::cell::RefCell;
 
 use crate::arch::interrupts::IDT;
 use crate::arch::pic::PIC;
@@ -59,17 +61,19 @@ pub struct Keyboard {
     _cmd: Port,
     _status: Port,
 
-    scseq: Vec<u8>, // scancode sequence
+    scseq: Vec<u8>, // current scancode sequence
+    listener: Option<Rc<RefCell<dyn EventListener>>>,
 }
 
 impl Keyboard {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Keyboard {
             data: PortBuilder::port(PORT_DATA).size(8).done(),
             _cmd: PortBuilder::port(PORT_CMD).write_size(8).done(),
             _status: PortBuilder::port(PORT_STATUS).read_size(8).done(),
 
             scseq: Vec::new(),
+            listener: None,
         }
     }
 
@@ -79,7 +83,16 @@ impl Keyboard {
         // println!("[KBD] scseq = {:02X?}", self.scseq);
         let maybe_event = self.try_resolve();
         if let Some(event) = maybe_event {
-            println!("[KBD] event = {:?}", event);
+            // println!("[KBD] event = {:?}", event);
+            if self.listener.is_some() {
+                self.listener
+                    .as_ref()
+                    .unwrap()
+                    .borrow_mut()
+                    .receive_event(event);
+            } else {
+                println!("[KBD] There is no event listener set.");
+            }
         }
     }
 
@@ -97,7 +110,7 @@ impl Keyboard {
             }
             let maybe_key = match keysc {
                 0x01 => Some(Key::Escape),
-                0x29 => Some(Key::Tilde),
+                0x29 => Some(Key::Backtick),
                 0x0F => Some(Key::Tab),
                 0x3A => Some(Key::CapsLock),
                 0x2A => Some(Key::LeftShift),
@@ -275,18 +288,25 @@ impl Keyboard {
         }
         None
     }
+
+    pub fn set_listener(
+        &mut self,
+        new_listener: Rc<RefCell<dyn EventListener>>,
+    ) {
+        self.listener = Some(new_listener);
+    }
 }
 
 #[derive(Debug)]
-struct Event {
-    key: Key,
-    pressed: bool,
+pub struct Event {
+    pub key: Key,
+    pub pressed: bool,
 }
 
-#[derive(Debug)]
-enum Key {
+#[derive(PartialEq, Debug)]
+pub enum Key {
     Escape,
-    Tilde,
+    Backtick,
     Tab,
     CapsLock,
     LeftShift,
@@ -400,18 +420,21 @@ enum Key {
     NumpadZero,
 }
 
+pub trait EventListener {
+    fn receive_event(&mut self, event: Event);
+}
+
 pub static mut KEYBOARD: Option<Keyboard> = None;
 
 pub fn init() {
+    println!("[KBD] Initializing keyboard.");
     unsafe {
         KEYBOARD = Some(Keyboard::new());
     }
-
     IDT.lock().interrupts[IRQ as usize].set_handler(irq1_handler);
     unsafe {
         PIC.set_irq_mask(IRQ, false);
     }
-    println!("[KBD] Keyboard was initialized.");
 }
 
 #[no_mangle]

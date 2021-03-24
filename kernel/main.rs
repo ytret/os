@@ -1,5 +1,5 @@
 // ytret's OS - hobby operating system
-// Copyright (C) 2020  Yuri Tretyakov (ytretyakov18@gmail.com)
+// Copyright (C) 2020, 2021  Yuri Tretyakov (ytretyakov18@gmail.com)
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -96,8 +96,11 @@ pub extern "C" fn main(magic_num: u32, boot_info: *const multiboot::BootInfo) {
 
     // FIXME
     arch::pci::init();
+    arch::keyboard::init();
 
-    let rc_console = Rc::clone(&console::CONSOLE.lock());
+    console::init();
+
+    let rc_console = Rc::clone(console::CONSOLE.lock().as_ref().unwrap());
     char_device::CHAR_DEVICES.lock().push(rc_console);
 
     if disk::DISKS.lock().len() > 0 {
@@ -105,12 +108,8 @@ pub extern "C" fn main(magic_num: u32, boot_info: *const multiboot::BootInfo) {
         fs::init_vfs_root_on_disk(0);
     }
 
-    // FIXME, also FIXME: if this is placed after pci::init() the kernel crashes
-    // if the keys are pressed right after booting.
-    arch::keyboard::init();
-
-    // scheduler::init();
-    loop {}
+    scheduler::init();
+    // loop {}
 
     // println!("Reached the end of main.");
 }

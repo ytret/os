@@ -1,5 +1,5 @@
 // ytret's OS - hobby operating system
-// Copyright (C) 2020  Yuri Tretyakov (ytretyakov18@gmail.com)
+// Copyright (C) 2020, 2021  Yuri Tretyakov (ytretyakov18@gmail.com)
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -20,21 +20,38 @@ usermode_part:
     pushl %ebp
     movl %esp, %ebp
 
+    // Open /dev/chr0.
     movl $0, %eax
     movl $.pathname, %ebx
     movl $9, %ecx
     int $0x88
 
-    pushl %eax
-    popl %ebx
+    // Save the file descriptor in %ebx.
+    movl %eax, %ebx
 
+    // Read one ASCII character from the console.
+1:  movl $2, %eax
+    movl $.buffer, %ecx
+    movl $1, %edx
+    int $0x88
+    movl $.buffer, %eax
+    cmpb $0, (%eax)
+    je 1b
+
+    // Write that character to the console.
     movl $1, %eax
-    movl $.greeting, %ecx
-    movl $14, %edx
+    movl $.buffer, %ecx
+    movl $1, %edx
     int $0x88
 
-1:  jmp 1b
+    // Write a newline.
+    // movl $1, %eax
+    // movl $.newline, %ecx
+    // int $0x88
+
+    jmp 1b
 .size usermode_part, . - usermode_part
 
 .pathname:  .ascii "/dev/chr0"
-.greeting:  .ascii "Hello, World!\n"
+.buffer:    .skip 1, 0
+.newline:   .ascii "\n"

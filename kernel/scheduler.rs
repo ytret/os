@@ -1,5 +1,5 @@
 // ytret's OS - hobby operating system
-// Copyright (C) 2020  Yuri Tretyakov (ytretyakov18@gmail.com)
+// Copyright (C) 2020, 2021  Yuri Tretyakov (ytretyakov18@gmail.com)
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -79,7 +79,7 @@ impl Scheduler {
         let to_idx = self.current_idx;
         let to = &self.processes[to_idx].pcb as *const ProcessControlBlock;
 
-        println!(" switching from {} to {}", from_idx, to_idx);
+        // println!(" switching from {} to {}", from_idx, to_idx);
         // println!(" to Process struct addr: 0x{:08X}", to as *const _ as u32);
         // println!("  to.cr3 = 0x{:08X}", to.cr3);
         // println!("  to.esp0 = 0x{:08X}", to.esp0);
