@@ -186,7 +186,7 @@ pub static TEMP_SPAWNER_ON: AtomicBool = AtomicBool::new(false);
 static NUM_SPAWNED: AtomicUsize = AtomicUsize::new(0);
 
 #[no_mangle]
-pub extern "C" fn pit_irq0_handler() {
+pub extern "C" fn pit_irq_handler() {
     let period_ms = unsafe { (PIT.period() * 1.0e+3) as u32 };
     assert_ne!(
         period_ms,

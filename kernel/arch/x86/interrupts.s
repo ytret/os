@@ -158,7 +158,7 @@ irq0_handler:
 
     pusha
     cld
-    call pit_irq0_handler
+    call pit_irq_handler
     popa
 
     addl $4, %esp
