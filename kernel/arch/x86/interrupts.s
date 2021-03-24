@@ -30,12 +30,14 @@ isr_\num:
     cli
     pushl %ebp
     movl %esp, %ebp
+
     pusha
     movl %ebp, %ebx
     addl $4, %ebx                   // interrupt stack frame pointer
     CALL_HANDLER \handler $\num $0 %ebx
     popa
-    addl $4, %esp
+
+    popl %ebp
     iret
 .size isr_\num, . - isr_\num
 .endm
@@ -60,7 +62,8 @@ isr_\num:
     CALL_HANDLER \handler $\num %ecx %ebx
     popa
 
-    addl $8, %esp                   // consume the saved %ebp and error code
+    popl %ebp
+    addl $4, %esp                   // consume the error code
     iret
 .size isr_\num, . - isr_\num
 .endm
@@ -122,7 +125,7 @@ common_isr:
     addl $4, %esp
     popa
 
-    addl $4, %esp
+    popl %ebp
     iret
 .size common_isr, . - common_isr
 
@@ -145,7 +148,8 @@ common_isr_ec:
     addl $4, %esp
     popa
 
-    addl $8, %esp                   // consume the saved %ebp and error code
+    popl %ebp
+    addl $4, %esp                   // consume the error code
     iret
 .size common_isr, . - common_isr
 
@@ -161,7 +165,7 @@ irq0_handler:
     call pit_irq_handler
     popa
 
-    addl $4, %esp
+    popl %ebp
     iret
 .size irq0_handler, . - irq0_handler
 
@@ -177,7 +181,7 @@ irq1_handler:
     call keyboard_irq_handler
     popa
 
-    addl $4, %esp
+    popl %ebp
     iret
 .size irq1_handler, . - irq1_handler
 
@@ -198,7 +202,7 @@ irq7_handler:
     addl $4, %esp
     popa
 
-    addl $4, %esp
+    popl %ebp
     iret
 .size irq7_handler, . - irq7_handler
 
@@ -218,7 +222,7 @@ irq14_handler:
     addl $4, %esp
     popa
 
-    addl $4, %esp
+    popl %ebp
     iret
 .size irq14_handler, . - irq14_handler
 
@@ -240,7 +244,7 @@ irq15_handler:
     addl $4, %esp
     popa
 
-    addl $4, %esp
+    popl %ebp
     iret
 .size irq15_handler, . - irq15_handler
 
@@ -263,6 +267,6 @@ int0x88_handler:
     addl $8, %esp
     popa
 
-    addl $4, %esp
+    popl %ebp
     iret
 .size int0x88_handler, . - int0x88_handler
