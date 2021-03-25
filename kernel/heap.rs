@@ -16,7 +16,7 @@
 
 use crate::kernel_static::Mutex;
 use crate::memory_region::Region;
-use crate::KernelInfo;
+use crate::KERNEL_INFO;
 
 use core::alloc::{GlobalAlloc, Layout};
 use core::mem::{align_of, size_of};
@@ -373,8 +373,8 @@ kernel_static! {
     pub static ref KERNEL_HEAP: Mutex<Option<Heap>> = Mutex::new(None);
 }
 
-pub fn init(kernel_info: &KernelInfo) {
-    let heap_region = kernel_info.arch_init_info.heap_region;
+pub fn init() {
+    let heap_region = unsafe { KERNEL_INFO.arch_init_info.heap_region };
     assert!(
         heap_region.size() > 2 * size_of::<Tag>(),
         "heap must be big enough to accomodate at least two tags",

@@ -957,7 +957,6 @@ impl FileSystem for Ext2 {
         let end_block = (offset + len - 1) / self.block_size + 1;
 
         for i in start_block..end_block {
-            print!("{} ", i);
             match self.read_inode_block(&inode, i) {
                 Ok(buf) => res_buf.extend_from_slice(&buf),
                 Err(err) => match err {

@@ -19,7 +19,7 @@ pub mod interrupts;
 pub mod vas;
 pub mod pic;
 mod pit;
-mod pmm_stack;
+pub mod pmm_stack;
 pub mod port_io;
 mod stack_trace;
 
@@ -35,7 +35,7 @@ pub mod keyboard;
 use core::ptr;
 
 use crate::memory_region::Region;
-use crate::KernelInfo;
+use crate::KERNEL_INFO;
 
 pub struct ArchInitInfo {
     pub kernel_region: Region<usize>,
@@ -43,7 +43,7 @@ pub struct ArchInitInfo {
 }
 
 impl ArchInitInfo {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         ArchInitInfo {
             kernel_region: Region { start: 0, end: 0 },
             heap_region: Region { start: 0, end: 0 },
@@ -61,7 +61,7 @@ extern "C" {
     static stack_top: u32;
 }
 
-pub fn init(kernel_info: &mut KernelInfo) {
+pub fn init() {
     let mut aif = ArchInitInfo::new();
 
     gdt::init();
@@ -93,7 +93,7 @@ pub fn init(kernel_info: &mut KernelInfo) {
              options(att_syntax));
     }
 
-    pmm_stack::init(kernel_info);
+    pmm_stack::init();
 
     aif.heap_region = Region {
         start: (aif.kernel_region.end + 0x400_000 - 1) & !(0x400_000 - 1),
@@ -115,7 +115,9 @@ pub fn init(kernel_info: &mut KernelInfo) {
         );
     }
 
-    kernel_info.arch_init_info = aif;
+    unsafe {
+        KERNEL_INFO.arch_init_info = aif;
+    }
 }
 
 #[inline(always)]

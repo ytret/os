@@ -61,7 +61,7 @@ pub struct KernelInfo {
 }
 
 impl KernelInfo {
-    fn new() -> Self {
+    const fn new() -> Self {
         KernelInfo {
             arch_init_info: arch::ArchInitInfo::new(),
             available_memory_regions: [Region { start: 0, end: 0 }; 32],
@@ -69,30 +69,32 @@ impl KernelInfo {
     }
 }
 
+pub static mut KERNEL_INFO: KernelInfo = KernelInfo::new();
+
 #[no_mangle]
 pub extern "C" fn main(magic_num: u32, boot_info: *const multiboot::BootInfo) {
-    let mut kernel_info = KernelInfo::new();
-
     vga::init();
 
     if magic_num == 0x36D76289 {
         println!("Booted by a Multiboot2-compliant bootloader.");
         unsafe {
-            multiboot::parse(boot_info, &mut kernel_info);
+            multiboot::parse(boot_info, &mut KERNEL_INFO);
         }
     } else {
         panic!("Booted by an unknown bootloader.");
     }
 
-    arch::init(&mut kernel_info);
+    arch::init();
 
-    println!(
-        "Kernel size: {} KiB ({} pages)",
-        kernel_info.arch_init_info.kernel_region.size() / 1024,
-        kernel_info.arch_init_info.kernel_region.size() / 4096,
-    );
+    unsafe {
+        println!(
+            "Kernel size: {} KiB ({} pages)",
+            KERNEL_INFO.arch_init_info.kernel_region.size() / 1024,
+            KERNEL_INFO.arch_init_info.kernel_region.size() / 4096,
+        );
+    }
 
-    heap::init(&kernel_info);
+    heap::init();
 
     // FIXME
     arch::pci::init();

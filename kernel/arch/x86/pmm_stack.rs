@@ -16,7 +16,7 @@
 
 use crate::kernel_static::{Mutex, MutexWrapper};
 use crate::memory_region::OverlappingWith;
-use crate::KernelInfo;
+use crate::KERNEL_INFO;
 
 extern "C" {
     // see the linker.ld script
@@ -39,27 +39,27 @@ impl PmmStack {
         }
     }
 
-    fn fill(&mut self, kernel_info: &KernelInfo) {
-        for region in kernel_info.available_memory_regions.iter() {
+    unsafe fn fill(&mut self) {
+        for region in KERNEL_INFO.available_memory_regions.iter() {
             let mut region = region.clone();
             if region.start == 0 && region.end == 0 {
                 // End of slice.
                 break;
             }
             match region
-                .overlapping_with(kernel_info.arch_init_info.kernel_region)
+                .overlapping_with(KERNEL_INFO.arch_init_info.kernel_region)
             {
                 OverlappingWith::Covers => {
                     unimplemented!("a free region covers the kernel");
                 }
                 OverlappingWith::StartsIn => {
-                    region.start = kernel_info.arch_init_info.kernel_region.end;
+                    region.start = KERNEL_INFO.arch_init_info.kernel_region.end;
                 }
                 OverlappingWith::IsIn => {
                     continue;
                 }
                 OverlappingWith::EndsIn => {
-                    region.end = kernel_info.arch_init_info.kernel_region.start;
+                    region.end = KERNEL_INFO.arch_init_info.kernel_region.start;
                 }
                 OverlappingWith::NoOverlap => {}
             }
@@ -109,9 +109,11 @@ kernel_static! {
     });
 }
 
-pub fn init(kernel_info: &mut KernelInfo) {
+pub fn init() {
     let mut stack: MutexWrapper<PmmStack> = PMM_STACK.lock();
-    stack.fill(kernel_info);
+    unsafe {
+        stack.fill();
+    }
     let num_entries = (stack.top as u32 - stack.pointer as u32) / 4;
     println!(
         "[PMM] Stack: top: 0x{:08X}, ptr: 0x{:08X}, bottom: 0x{:08X}, \
