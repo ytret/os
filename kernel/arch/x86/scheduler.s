@@ -97,9 +97,6 @@ jump_into_usermode:
     movw %bx, %fs
     movw %bx, %gs
 
-    // Imitate a call by pushing a return address.
-    pushl 1f
-
     // Make up the iret stack frame.
     movl %esp, %edx
     pushl %ebx                  // ss = data segment selector

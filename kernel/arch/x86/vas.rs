@@ -188,6 +188,8 @@ impl VirtAddrSpace {
         asm!("invlpg ({})", in(reg) virt, options(att_syntax));
     }
 
+    /// Maps the specified region to pages given by the [PMM
+    /// stack](static@super::pmm_stack::PMM_STACK).
     pub unsafe fn allocate_pages_from_stack(&self, start: u32, end: u32) {
         assert_eq!(start & 0xFFF, 0, "start must be page-aligned");
         assert_eq!(end & 0xFFF, 0, "end must be page-aligned");

@@ -17,8 +17,9 @@
 .global usermode_part
 .type usermode_part, @function
 usermode_part:
-    pushl %ebp
-    movl %esp, %ebp
+    // Set up a stack.
+    movl $stack_top, %esp
+    xorl %ebp, %ebp
 
     // Open /dev/chr0.
     movl $0, %eax
@@ -52,6 +53,12 @@ usermode_part:
     jmp 1b
 .size usermode_part, . - usermode_part
 
+.section .data
 .pathname:  .ascii "/dev/chr0"
 .buffer:    .skip 1, 0
 .newline:   .ascii "\n"
+
+.section .bss
+.stack_bottom:
+.skip 131072
+.stack_top:
