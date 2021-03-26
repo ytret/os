@@ -1,5 +1,5 @@
 // ytret's OS - hobby operating system
-// Copyright (C) 2020  Yuri Tretyakov (ytretyakov18@gmail.com)
+// Copyright (C) 2020, 2021  Yuri Tretyakov (ytretyakov18@gmail.com)
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -17,11 +17,13 @@
 #![allow(dead_code)]
 
 use core::fmt;
+use core::mem;
 use core::slice;
 use core::str;
 
+use crate::arch::acpi::{hpet, sdt};
 use crate::memory_region;
-use crate::KernelInfo;
+use crate::KERNEL_INFO;
 
 macro_rules! type_enum {
     (#[repr($REPR:ident)] enum $N:ident { Reserved = $R:literal, $($V:ident = $D:literal,)* }) => {
@@ -310,7 +312,7 @@ fn str_from_ascii(ptr: &[u8], size: u32) -> &str {
     str::from_utf8(slice).unwrap()
 }
 
-pub unsafe fn parse(boot_info: *const BootInfo, kernel_info: &mut KernelInfo) {
+pub unsafe fn parse(boot_info: *const BootInfo) {
     let mut ptr = boot_info as *const u8;
 
     let bi = &*(ptr as *const BootInfo);
@@ -420,11 +422,11 @@ pub unsafe fn parse(boot_info: *const BootInfo, kernel_info: &mut KernelInfo) {
                     match _type {
                         MemoryMapRegionType::Available
                             if added_to_info
-                                < kernel_info
+                                < KERNEL_INFO
                                     .available_memory_regions
                                     .len() =>
                         {
-                            kernel_info.available_memory_regions
+                            KERNEL_INFO.available_memory_regions
                                 [added_to_info] = memory_region::Region {
                                 start: start as usize,
                                 end: start as usize + length as usize,
@@ -499,8 +501,57 @@ pub unsafe fn parse(boot_info: *const BootInfo, kernel_info: &mut KernelInfo) {
                 );
             }
             14 => {
-                //let tag = &*(ptr as *const AcpiOldRsdp);
+                let tag = &*(ptr as *const AcpiOldRsdp);
                 println!("ACPI old RSDP");
+                assert_eq!(
+                    (tag.tag_size - 8) as usize,
+                    mem::size_of::<sdt::OldRsdp>(),
+                );
+
+                let rsdp = (&tag.rsdpv1 as *const _ as *const sdt::OldRsdp)
+                    .read_unaligned();
+                // println!("{:#X?}", rsdp);
+                assert!(rsdp.is_valid(), "invalid RSDP");
+
+                let rsdt =
+                    (rsdp.rsdt_phys_addr as *const sdt::Sdt).read_unaligned();
+                // println!("{:#X?}", rsdt);
+
+                let num_sdts =
+                    (rsdt.length as usize - mem::size_of::<sdt::Sdt>()) / 4;
+                let sdt_ptrs = core::slice::from_raw_parts(
+                    (rsdp.rsdt_phys_addr as usize + mem::size_of::<sdt::Sdt>())
+                        as *const *const sdt::Sdt,
+                    num_sdts,
+                );
+
+                let rsdt_sum = rsdt.sum_fields()
+                    + sdt_ptrs.iter().fold(0, |acc, x| {
+                        acc + ((*x as u32 >> 0) & 0xFF) as usize
+                            + ((*x as u32 >> 8) & 0xFF) as usize
+                            + ((*x as u32 >> 16) & 0xFF) as usize
+                            + ((*x as u32 >> 24) & 0xFF) as usize
+                    });
+                assert_eq!(rsdt_sum as u8, 0, "invalid RSDT");
+
+                for sdt_ptr in sdt_ptrs {
+                    let sdt = sdt_ptr.read_unaligned();
+                    let name = core::str::from_utf8(&sdt.signature).unwrap();
+                    println!(
+                        "{} at 0x{:08X}, length: {} bytes",
+                        name, *sdt_ptr as usize, sdt.length,
+                    );
+
+                    if name == "HPET" {
+                        let hpet_dt = sdt_ptr
+                            .add(1)
+                            .cast::<hpet::HpetDt>()
+                            .read_unaligned();
+                        KERNEL_INFO.arch_init_info.hpet_dt = Some(hpet_dt);
+                    }
+                }
+
+                // KERNEL_INFO.arch_init_info.old_rsdp = Some();
             }
             15 => {
                 //let tag = &*(ptr as *const AcpiNewRsdp);

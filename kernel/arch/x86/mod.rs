@@ -18,7 +18,11 @@ mod gdt;
 pub mod interrupts;
 pub mod vas;
 pub mod pic;
+
+pub mod acpi;
+
 mod pit;
+
 pub mod pmm_stack;
 pub mod port_io;
 mod stack_trace;
@@ -40,6 +44,8 @@ use crate::KERNEL_INFO;
 pub struct ArchInitInfo {
     pub kernel_region: Region<usize>,
     pub heap_region: Region<usize>,
+
+    pub hpet_dt: Option<acpi::hpet::HpetDt>,
 }
 
 impl ArchInitInfo {
@@ -47,6 +53,8 @@ impl ArchInitInfo {
         ArchInitInfo {
             kernel_region: Region { start: 0, end: 0 },
             heap_region: Region { start: 0, end: 0 },
+
+            hpet_dt: None,
         }
     }
 }
@@ -81,7 +89,8 @@ pub fn init() {
 
     pic::init();
     interrupts::init();
-    pit::init();
+    // pit::init();
+    acpi::hpet::init();
 
     // Enable paging.
     unsafe {

@@ -176,7 +176,9 @@ pub fn init() {
     }
 
     IDT.lock().interrupts[IRQ as usize].set_handler(irq0_handler);
-    // PIC.set_irq_mask(IRQ, false);
+    unsafe {
+        PIC.set_irq_mask(IRQ, false);
+    }
 }
 
 static COUNTER_MS: AtomicU32 = AtomicU32::new(0);

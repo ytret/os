@@ -162,7 +162,8 @@ irq0_handler:
 
     pusha
     cld
-    call pit_irq_handler
+    // call pit_irq_handler
+    call hpet_irq_handler
     popa
 
     popl %ebp

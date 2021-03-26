@@ -78,7 +78,7 @@ pub extern "C" fn main(magic_num: u32, boot_info: *const multiboot::BootInfo) {
     if magic_num == 0x36D76289 {
         println!("Booted by a Multiboot2-compliant bootloader.");
         unsafe {
-            multiboot::parse(boot_info, &mut KERNEL_INFO);
+            multiboot::parse(boot_info);
         }
     } else {
         panic!("Booted by an unknown bootloader.");
