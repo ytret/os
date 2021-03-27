@@ -29,21 +29,61 @@ impl OldRsdp {
         if &self.signature != "RSD PTR ".as_bytes() {
             return false;
         }
-        if self.revision != 0 {
+        if self.sum_fields() as u8 != 0 {
             return false;
         }
-        let sum = self.signature.iter().fold(0, |acc, x| acc + *x as usize)
+        true
+    }
+
+    fn sum_fields(&self) -> usize {
+        self.signature.iter().fold(0, |acc, x| acc + *x as usize)
             + self.checksum as usize
             + self.oemid.iter().fold(0, |acc, x| acc + *x as usize)
             + self.revision as usize
             + ((self.rsdt_phys_addr >> 0) & 0xFF) as usize
             + ((self.rsdt_phys_addr >> 8) & 0xFF) as usize
             + ((self.rsdt_phys_addr >> 16) & 0xFF) as usize
-            + ((self.rsdt_phys_addr >> 24) & 0xFF) as usize;
-        if sum as u8 != 0 {
+            + ((self.rsdt_phys_addr >> 24) & 0xFF) as usize
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+#[repr(C, packed)]
+pub struct NewRsdp {
+    old_rsdp: OldRsdp,
+    pub length: u32,
+    pub xsdt_phys_addr: u64,
+    ext_checksum: u8,
+    _reserved: [u8; 3],
+}
+
+impl NewRsdp {
+    pub fn is_valid(&self) -> bool {
+        if !self.old_rsdp.is_valid() {
+            return false;
+        }
+        if self.sum_fields() as u8 != 0 {
             return false;
         }
         true
+    }
+
+    fn sum_fields(&self) -> usize {
+        self.old_rsdp.sum_fields()
+            + ((self.length >> 0) & 0xFF) as usize
+            + ((self.length >> 8) & 0xFF) as usize
+            + ((self.length >> 16) & 0xFF) as usize
+            + ((self.length >> 24) & 0xFF) as usize
+            + ((self.xsdt_phys_addr >> 0) & 0xFF) as usize
+            + ((self.xsdt_phys_addr >> 8) & 0xFF) as usize
+            + ((self.xsdt_phys_addr >> 16) & 0xFF) as usize
+            + ((self.xsdt_phys_addr >> 24) & 0xFF) as usize
+            + ((self.xsdt_phys_addr >> 32) & 0xFF) as usize
+            + ((self.xsdt_phys_addr >> 40) & 0xFF) as usize
+            + ((self.xsdt_phys_addr >> 48) & 0xFF) as usize
+            + ((self.xsdt_phys_addr >> 56) & 0xFF) as usize
+            + self.ext_checksum as usize
+            + self._reserved.iter().fold(0, |acc, x| acc + *x as usize)
     }
 }
 
