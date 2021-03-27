@@ -38,8 +38,14 @@ pub mod keyboard;
 
 use core::ptr;
 
-use crate::memory_region::Region;
+use alloc::boxed::Box;
+
+use crate::timer::TIMER;
 use crate::KERNEL_INFO;
+
+use crate::heap;
+use crate::memory_region::Region;
+use crate::timer::Timer;
 
 pub struct ArchInitInfo {
     pub kernel_region: Region<usize>,
@@ -70,7 +76,7 @@ extern "C" {
 }
 
 pub fn init() {
-    let mut aif = ArchInitInfo::new();
+    let aif = unsafe { &mut KERNEL_INFO.arch_init_info };
 
     gdt::init();
 
@@ -89,8 +95,9 @@ pub fn init() {
 
     pic::init();
     interrupts::init();
-    // pit::init();
-    acpi::hpet::init();
+
+    // FIXME: check if there is an HPET instead of panicking in multiboot.rs.
+    let hpet = acpi::hpet::Hpet::init_with_period_ms(1000);
 
     // Enable paging.
     unsafe {
@@ -124,8 +131,12 @@ pub fn init() {
         );
     }
 
+    heap::init();
+
+    // After the heap is initialized, we can create a Box for the Timer.
     unsafe {
-        KERNEL_INFO.arch_init_info = aif;
+        assert!(TIMER.is_none());
+        TIMER = Some(Box::new(hpet));
     }
 }
 

@@ -16,11 +16,12 @@
 
 use core::sync::atomic::{AtomicU32, Ordering};
 
-use crate::arch::interrupts::IDT;
+use crate::arch::interrupts::{IDT, IRQ0_RUST_HANDLER};
 use crate::arch::pic::PIC;
-use crate::arch::port_io;
-
 use crate::scheduler::SCHEDULER;
+
+use crate::arch::port_io;
+use crate::timer::Timer;
 
 extern "C" {
     fn irq0_handler(); // interrupts.s
@@ -72,7 +73,7 @@ enum OperatingMode {
 pub const IRQ: u8 = 0;
 const BASE_FREQUENCY: f64 = 1.193182e+6; // Hz
 
-struct Pit {
+pub struct Pit {
     reload_value: u16,
     operating_mode: OperatingMode,
     access_mode: AccessMode,
@@ -157,27 +158,36 @@ impl Pit {
     }
 }
 
-static mut PIT: Pit = Pit {
-    reload_value: 0,
-    operating_mode: OperatingMode::SquareWaveGenerator,
-    access_mode: AccessMode::BothBytes,
-};
+impl Timer for Pit {
+    fn init_with_period_ms(period_ms: usize) -> Self {
+        let mut pit = Pit {
+            reload_value: 0,
+            operating_mode: OperatingMode::SquareWaveGenerator,
+            access_mode: AccessMode::BothBytes,
+        };
 
-pub fn init() {
-    unsafe {
-        PIT.set_period(2.0);
+        pit.set_period(period_ms as f64);
         println!(
             "[PIT] Reload value: {}, frequency: {:.1} Hz, period: {:.2e} s",
-            PIT.reload_value,
-            PIT.frequency(),
-            PIT.period(),
+            pit.reload_value,
+            pit.frequency(),
+            pit.period(),
         );
-        PIT.init();
+        pit.init();
+
+        IDT.lock().interrupts[IRQ as usize].set_handler(irq0_handler);
+        unsafe {
+            IRQ0_RUST_HANDLER = pit_irq_handler;
+            PIC.set_irq_mask(IRQ, false);
+        }
+
+        pit
     }
 
-    IDT.lock().interrupts[IRQ as usize].set_handler(irq0_handler);
-    unsafe {
-        PIC.set_irq_mask(IRQ, false);
+    fn period_ms(&self) -> usize {
+        let res = (self.period() * 1e9) as usize;
+        assert_ne!(res, 0);
+        res
     }
 }
 
@@ -189,26 +199,28 @@ static NUM_SPAWNED: AtomicUsize = AtomicUsize::new(0);
 
 #[no_mangle]
 pub extern "C" fn pit_irq_handler() {
-    let period_ms = unsafe { (PIT.period() * 1.0e+3) as u32 };
-    assert_ne!(
-        period_ms,
-        0,
-        "PIT frequency is too high: {:.1} Hz",
-        unsafe { PIT.frequency() },
-    );
-    COUNTER_MS.fetch_add(period_ms, Ordering::SeqCst);
+    print!("P");
 
-    if TEMP_SPAWNER_ON.load(Ordering::SeqCst)
-        && NUM_SPAWNED.load(Ordering::SeqCst) < 2
-    {
-        println!("[PIT] Creating a new process.");
-        use crate::arch::process::Process;
-        let new_process = Process::new();
-        unsafe {
-            SCHEDULER.add_process(new_process);
-        }
-        NUM_SPAWNED.fetch_add(1, Ordering::SeqCst);
-    }
+    // let period_ms = unsafe { (PIT.period() * 1.0e+3) as u32 };
+    // assert_ne!(
+    //     period_ms,
+    //     0,
+    //     "PIT frequency is too high: {:.1} Hz",
+    //     unsafe { PIT.frequency() },
+    // );
+    // COUNTER_MS.fetch_add(period_ms, Ordering::SeqCst);
+
+    // if TEMP_SPAWNER_ON.load(Ordering::SeqCst)
+    //     && NUM_SPAWNED.load(Ordering::SeqCst) < 2
+    // {
+    //     println!("[PIT] Creating a new process.");
+    //     use crate::arch::process::Process;
+    //     let new_process = Process::new();
+    //     unsafe {
+    //         SCHEDULER.add_process(new_process);
+    //     }
+    //     NUM_SPAWNED.fetch_add(1, Ordering::SeqCst);
+    // }
 
     // Send an EOI before scheduling so that the IRQ will interrupt the next
     // task.  One might just do an iret as a context switch but why bother if
@@ -218,11 +230,11 @@ pub extern "C" fn pit_irq_handler() {
         PIC.send_eoi(IRQ);
     }
 
-    if COUNTER_MS.load(Ordering::SeqCst) >= 1000 {
-        COUNTER_MS.store(0, Ordering::SeqCst);
-        // println!("SCHEDULING (period_ms = {})", period_ms);
-        unsafe {
-            SCHEDULER.schedule(period_ms);
-        }
-    }
+    // if COUNTER_MS.load(Ordering::SeqCst) >= 1000 {
+    //     COUNTER_MS.store(0, Ordering::SeqCst);
+    //     // println!("SCHEDULING (period_ms = {})", period_ms);
+    //     unsafe {
+    //         SCHEDULER.schedule(period_ms);
+    //     }
+    // }
 }

@@ -21,6 +21,8 @@ use crate::kernel_static::Mutex;
 
 // See interrupts.s
 extern "C" {
+    pub static mut IRQ0_RUST_HANDLER: extern "C" fn();
+
     fn isr_0();
     fn isr_1();
     fn isr_2();

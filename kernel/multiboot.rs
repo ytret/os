@@ -569,7 +569,8 @@ pub unsafe fn parse(boot_info: *const BootInfo) {
                 let xsdt = (rsdp.xsdt_phys_addr as u32 as *const sdt::Sdt)
                     .read_unaligned();
 
-                let num_sdts = (xsdt.length as usize - mem::size_of::<sdt::Sdt>()) / 8;
+                let num_sdts =
+                    (xsdt.length as usize - mem::size_of::<sdt::Sdt>()) / 8;
                 let sdt_ptrs = core::slice::from_raw_parts(
                     (rsdp.xsdt_phys_addr as usize + mem::size_of::<sdt::Sdt>())
                         as *const u64,

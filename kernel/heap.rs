@@ -374,6 +374,11 @@ kernel_static! {
 }
 
 pub fn init() {
+    if KERNEL_HEAP.lock().is_some() {
+        println!("[HEAP] Kernel heap has already been initialized.");
+        return;
+    }
+
     let heap_region = unsafe { KERNEL_INFO.arch_init_info.heap_region };
     assert!(
         heap_region.size() > 2 * size_of::<Tag>(),

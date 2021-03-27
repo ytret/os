@@ -16,17 +16,18 @@
 
 use core::fmt;
 
-use super::AcpiAddr;
-use crate::arch::interrupts::IDT;
+use crate::arch::interrupts::{IDT, IRQ0_RUST_HANDLER};
 use crate::arch::pic::PIC;
 use crate::KERNEL_INFO;
+
+use super::AcpiAddr;
+use crate::timer::Timer;
 
 extern "C" {
     fn irq0_handler(); // interrupts.s
 }
 
 const IRQ: u8 = 0;
-const PERIOD_MS: u64 = 1000;
 
 #[derive(Clone, Copy, Debug)]
 #[repr(C, packed)]
@@ -54,6 +55,7 @@ impl HpetDt {
 
 pub struct Hpet {
     base_addr: u32,
+    period_ms: Option<u32>,
 }
 
 impl Hpet {
@@ -68,13 +70,16 @@ impl Hpet {
 
         // Check some assumptions about the base address.
         assert_eq!(hpet_dt.base_addr.addr_space_id, 0);
-        assert!(hpet_dt.base_addr.register_bit_width == 0
-                || hpet_dt.base_addr.register_bit_width == 64);
+        assert!(
+            hpet_dt.base_addr.register_bit_width == 0
+                || hpet_dt.base_addr.register_bit_width == 64,
+        );
         assert_eq!(hpet_dt.base_addr.register_bit_offset, 0);
         assert!(hpet_dt.base_addr.address.leading_zeros() >= 32);
 
         Hpet {
             base_addr: hpet_dt.base_addr.address as u32,
+            period_ms: None,
         }
     }
 
@@ -174,7 +179,6 @@ impl Hpet {
 
 #[repr(C, packed)]
 pub struct GenCapsAndIdReg(u64);
-
 impl GenCapsAndIdReg {
     pub fn rev_id(&self) -> u8 {
         self.0 as u8
@@ -438,44 +442,52 @@ pub enum TimerType {
 
 pub static mut HPET: Option<Hpet> = None;
 
-/// Initializes HPET.  Must be called before paging is initialized.
-pub fn init() {
-    let hpet_dt = unsafe { KERNEL_INFO.arch_init_info.hpet_dt.unwrap() };
-    let hpet = Hpet::new(&hpet_dt);
+impl Timer for Hpet {
+    /// Initializes HPET.  Must be called before paging is initialized.
+    fn init_with_period_ms(period_ms: usize) -> Self {
+        let hpet_dt = unsafe { KERNEL_INFO.arch_init_info.hpet_dt.unwrap() };
+        let hpet = Hpet::new(&hpet_dt);
 
-    let mut gen_conf = hpet.gen_conf_reg();
-    gen_conf.set_enabled(true);
-    gen_conf.set_legacy_routing(true);
-    hpet.write_gen_conf_reg(gen_conf);
+        let mut gen_conf = hpet.gen_conf_reg();
+        gen_conf.set_enabled(true);
+        gen_conf.set_legacy_routing(true);
+        hpet.write_gen_conf_reg(gen_conf);
 
-    // Make timer 0 run in periodic mode with interrupts on IRQ0.
-    let mut t0_conf = hpet.timer_conf_and_cap_reg(0);
-    t0_conf.set_int_enabled(true);
-    t0_conf.set_type(TimerType::Periodic);
-    t0_conf.allow_setting_acc_value(true);
-    t0_conf.set_32bit_mode(true);
-    hpet.write_timer_conf_and_cap_reg(0, t0_conf);
+        // Make timer 0 run in periodic mode with interrupts on IRQ0.
+        let mut t0_conf = hpet.timer_conf_and_cap_reg(0);
+        t0_conf.set_int_enabled(true);
+        t0_conf.set_type(TimerType::Periodic);
+        t0_conf.allow_setting_acc_value(true);
+        t0_conf.set_32bit_mode(true);
+        hpet.write_timer_conf_and_cap_reg(0, t0_conf);
 
-    // Calculate the period in ticks.
-    let tick_fs = hpet.gen_caps_and_id_reg().main_counter_tick_period() as u64;
-    let period_fs = PERIOD_MS * 1_000_000_000_000; // PERIOD_MS * 1e12
-    let period_ticks = period_fs / tick_fs;
-    assert_ne!(period_ticks, 0);
-    assert!(period_ticks >= hpet_dt.main_counter_min_tick as u64);
+        // Calculate the period in ticks.
+        let tick_fs =
+            hpet.gen_caps_and_id_reg().main_counter_tick_period() as u64;
+        let period_fs = period_ms as u64 * 1_000_000_000_000; // 1e12
+        let period_ticks = period_fs / tick_fs;
+        assert_ne!(period_ticks, 0);
+        assert!(period_ticks >= hpet_dt.main_counter_min_tick as u64);
 
-    let main_counter = hpet.main_counter_value();
-    hpet.write_timer_comparator_value(0, main_counter + period_ticks);
-    hpet.write_timer_comparator_value(0, period_ticks);
+        let main_counter = hpet.main_counter_value();
+        hpet.write_timer_comparator_value(0, main_counter + period_ticks);
+        hpet.write_timer_comparator_value(0, period_ticks);
 
-    println!("0x{:016X}", hpet.timer_comparator_value(0));
+        println!("[HPET] Registers dump:");
+        hpet.dump_registers();
+        println!("[HPET] End of registers dump.");
 
-    println!("[HPET] Registers dump:");
-    hpet.dump_registers();
-    println!("[HPET] End of registers dump.");
+        IDT.lock().interrupts[IRQ as usize].set_handler(irq0_handler);
+        unsafe {
+            IRQ0_RUST_HANDLER = hpet_irq_handler;
+            PIC.set_irq_mask(IRQ, false);
+        }
 
-    IDT.lock().interrupts[IRQ as usize].set_handler(irq0_handler);
-    unsafe {
-        PIC.set_irq_mask(IRQ, false);
+        hpet
+    }
+
+    fn period_ms(&self) -> usize {
+        self.period_ms.unwrap() as usize
     }
 }
 

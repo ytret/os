@@ -153,6 +153,9 @@ common_isr_ec:
     iret
 .size common_isr, . - common_isr
 
+.global IRQ0_RUST_HANDLER
+IRQ0_RUST_HANDLER:      .long 0
+
 .global irq0_handler
 .type irq0_handler, @function
 irq0_handler:
@@ -161,10 +164,12 @@ irq0_handler:
     movl %esp, %ebp
 
     pusha
+    movl $IRQ0_RUST_HANDLER, %eax
+    cmpl $0, (%eax)
+    je 1f
     cld
-    // call pit_irq_handler
-    call hpet_irq_handler
-    popa
+    call *(%eax)
+1:  popa
 
     popl %ebp
     iret

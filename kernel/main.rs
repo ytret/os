@@ -31,6 +31,8 @@ pub mod port;
 #[macro_use]
 mod vga;
 
+pub mod timer;
+
 #[cfg_attr(target_arch = "x86", path = "arch/x86/mod.rs")]
 pub mod arch;
 
@@ -93,8 +95,6 @@ pub extern "C" fn main(magic_num: u32, boot_info: *const multiboot::BootInfo) {
             KERNEL_INFO.arch_init_info.kernel_region.size() / 4096,
         );
     }
-
-    heap::init();
 
     // FIXME
     arch::pci::init();
