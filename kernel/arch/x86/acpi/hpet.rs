@@ -26,6 +26,7 @@ extern "C" {
 }
 
 const IRQ: u8 = 0;
+const PERIOD_MS: u64 = 1000;
 
 #[derive(Clone, Copy, Debug)]
 #[repr(C, packed)]
@@ -56,8 +57,25 @@ pub struct Hpet {
 }
 
 impl Hpet {
-    pub fn new(base_addr: u32) -> Self {
-        Hpet { base_addr }
+    pub fn new(hpet_dt: &HpetDt) -> Self {
+        println!("[HPET] {:#X?}", hpet_dt);
+        println!("[HPET] Hardware rev ID: {}", hpet_dt.hardware_rev_id());
+        println!(
+            "[HPET] Number of comparators: {}",
+            hpet_dt.num_comparators()
+        );
+        println!("[HPET] PCI vendor ID: 0x{:04X}", hpet_dt.pci_vendor_id());
+
+        // Check some assumptions about the base address.
+        assert_eq!(hpet_dt.base_addr.addr_space_id, 0);
+        assert!(hpet_dt.base_addr.register_bit_width == 0
+                || hpet_dt.base_addr.register_bit_width == 64);
+        assert_eq!(hpet_dt.base_addr.register_bit_offset, 0);
+        assert!(hpet_dt.base_addr.address.leading_zeros() >= 32);
+
+        Hpet {
+            base_addr: hpet_dt.base_addr.address as u32,
+        }
     }
 
     pub fn dump_registers(&self) {
@@ -246,39 +264,12 @@ impl GenIntStatusReg {
 
 impl fmt::Debug for GenIntStatusReg {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut timer_int: u32 = 0;
+        for i in 0..32 {
+            timer_int |= (self.timer_int(i) as u32) << i;
+        }
         f.debug_struct("GenIntStatusReg")
-            .field("timer_0_int", &self.timer_int(0))
-            .field("timer_1_int", &self.timer_int(1))
-            .field("timer_2_int", &self.timer_int(2))
-            .field("timer_3_int", &self.timer_int(3))
-            .field("timer_4_int", &self.timer_int(4))
-            .field("timer_5_int", &self.timer_int(5))
-            .field("timer_6_int", &self.timer_int(6))
-            .field("timer_7_int", &self.timer_int(7))
-            .field("timer_8_int", &self.timer_int(8))
-            .field("timer_9_int", &self.timer_int(9))
-            .field("timer_10_int", &self.timer_int(10))
-            .field("timer_11_int", &self.timer_int(11))
-            .field("timer_12_int", &self.timer_int(12))
-            .field("timer_13_int", &self.timer_int(13))
-            .field("timer_14_int", &self.timer_int(14))
-            .field("timer_15_int", &self.timer_int(15))
-            .field("timer_16_int", &self.timer_int(16))
-            .field("timer_17_int", &self.timer_int(17))
-            .field("timer_18_int", &self.timer_int(18))
-            .field("timer_19_int", &self.timer_int(19))
-            .field("timer_20_int", &self.timer_int(20))
-            .field("timer_21_int", &self.timer_int(21))
-            .field("timer_22_int", &self.timer_int(22))
-            .field("timer_23_int", &self.timer_int(23))
-            .field("timer_24_int", &self.timer_int(24))
-            .field("timer_25_int", &self.timer_int(25))
-            .field("timer_26_int", &self.timer_int(26))
-            .field("timer_27_int", &self.timer_int(27))
-            .field("timer_28_int", &self.timer_int(28))
-            .field("timer_29_int", &self.timer_int(29))
-            .field("timer_30_int", &self.timer_int(30))
-            .field("timer_31_int", &self.timer_int(31))
+            .field("timer_int", &timer_int)
             .finish()
     }
 }
@@ -409,6 +400,11 @@ impl TimerConfAndCapReg {
 
 impl fmt::Debug for TimerConfAndCapReg {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut supports_ioapic_routing: u32 = 0;
+        for i in 0..32 {
+            supports_ioapic_routing |=
+                (self.supports_ioapic_routing(i) as u32) << i;
+        }
         f.debug_struct("TimerConfAndCapReg")
             .field("int_type", &self.int_type())
             .field("has_int_enabled", &self.has_int_enabled())
@@ -423,134 +419,7 @@ impl fmt::Debug for TimerConfAndCapReg {
                 "capable_of_fsb_int_delivery",
                 &self.capable_of_fsb_int_delivery(),
             )
-            .field(
-                "supports_ioapic_routing(0)",
-                &self.supports_ioapic_routing(0),
-            )
-            .field(
-                "supports_ioapic_routing(1)",
-                &self.supports_ioapic_routing(1),
-            )
-            .field(
-                "supports_ioapic_routing(2)",
-                &self.supports_ioapic_routing(2),
-            )
-            .field(
-                "supports_ioapic_routing(3)",
-                &self.supports_ioapic_routing(3),
-            )
-            .field(
-                "supports_ioapic_routing(4)",
-                &self.supports_ioapic_routing(4),
-            )
-            .field(
-                "supports_ioapic_routing(5)",
-                &self.supports_ioapic_routing(5),
-            )
-            .field(
-                "supports_ioapic_routing(6)",
-                &self.supports_ioapic_routing(6),
-            )
-            .field(
-                "supports_ioapic_routing(7)",
-                &self.supports_ioapic_routing(7),
-            )
-            .field(
-                "supports_ioapic_routing(8)",
-                &self.supports_ioapic_routing(8),
-            )
-            .field(
-                "supports_ioapic_routing(9)",
-                &self.supports_ioapic_routing(9),
-            )
-            .field(
-                "supports_ioapic_routing(10)",
-                &self.supports_ioapic_routing(10),
-            )
-            .field(
-                "supports_ioapic_routing(11)",
-                &self.supports_ioapic_routing(11),
-            )
-            .field(
-                "supports_ioapic_routing(12)",
-                &self.supports_ioapic_routing(12),
-            )
-            .field(
-                "supports_ioapic_routing(13)",
-                &self.supports_ioapic_routing(13),
-            )
-            .field(
-                "supports_ioapic_routing(14)",
-                &self.supports_ioapic_routing(14),
-            )
-            .field(
-                "supports_ioapic_routing(15)",
-                &self.supports_ioapic_routing(15),
-            )
-            .field(
-                "supports_ioapic_routing(16)",
-                &self.supports_ioapic_routing(16),
-            )
-            .field(
-                "supports_ioapic_routing(17)",
-                &self.supports_ioapic_routing(17),
-            )
-            .field(
-                "supports_ioapic_routing(18)",
-                &self.supports_ioapic_routing(18),
-            )
-            .field(
-                "supports_ioapic_routing(19)",
-                &self.supports_ioapic_routing(19),
-            )
-            .field(
-                "supports_ioapic_routing(20)",
-                &self.supports_ioapic_routing(20),
-            )
-            .field(
-                "supports_ioapic_routing(21)",
-                &self.supports_ioapic_routing(21),
-            )
-            .field(
-                "supports_ioapic_routing(22)",
-                &self.supports_ioapic_routing(22),
-            )
-            .field(
-                "supports_ioapic_routing(23)",
-                &self.supports_ioapic_routing(23),
-            )
-            .field(
-                "supports_ioapic_routing(24)",
-                &self.supports_ioapic_routing(24),
-            )
-            .field(
-                "supports_ioapic_routing(25)",
-                &self.supports_ioapic_routing(25),
-            )
-            .field(
-                "supports_ioapic_routing(26)",
-                &self.supports_ioapic_routing(26),
-            )
-            .field(
-                "supports_ioapic_routing(27)",
-                &self.supports_ioapic_routing(27),
-            )
-            .field(
-                "supports_ioapic_routing(28)",
-                &self.supports_ioapic_routing(28),
-            )
-            .field(
-                "supports_ioapic_routing(29)",
-                &self.supports_ioapic_routing(29),
-            )
-            .field(
-                "supports_ioapic_routing(30)",
-                &self.supports_ioapic_routing(30),
-            )
-            .field(
-                "supports_ioapic_routing(31)",
-                &self.supports_ioapic_routing(31),
-            )
+            .field("supports_ioapic_routing", &supports_ioapic_routing)
             .finish()
     }
 }
@@ -572,25 +441,14 @@ pub static mut HPET: Option<Hpet> = None;
 /// Initializes HPET.  Must be called before paging is initialized.
 pub fn init() {
     let hpet_dt = unsafe { KERNEL_INFO.arch_init_info.hpet_dt.unwrap() };
-
-    println!("{:#X?}", hpet_dt);
-    println!("Hardware rev ID: {}", hpet_dt.hardware_rev_id());
-    println!("Number of comparators: {}", hpet_dt.num_comparators());
-    println!("PCI vendor ID: 0x{:04X}", hpet_dt.pci_vendor_id());
-
-    assert_eq!(hpet_dt.base_addr.addr_space_id, 0);
-    assert_eq!(hpet_dt.base_addr.register_bit_width, 0);
-    assert_eq!(hpet_dt.base_addr.register_bit_offset, 0);
-    assert!(hpet_dt.base_addr.address.leading_zeros() >= 32);
-
-    let base_addr = hpet_dt.base_addr.address as u32;
-    let hpet = Hpet::new(base_addr);
+    let hpet = Hpet::new(&hpet_dt);
 
     let mut gen_conf = hpet.gen_conf_reg();
     gen_conf.set_enabled(true);
     gen_conf.set_legacy_routing(true);
     hpet.write_gen_conf_reg(gen_conf);
 
+    // Make timer 0 run in periodic mode with interrupts on IRQ0.
     let mut t0_conf = hpet.timer_conf_and_cap_reg(0);
     t0_conf.set_int_enabled(true);
     t0_conf.set_type(TimerType::Periodic);
@@ -598,12 +456,22 @@ pub fn init() {
     t0_conf.set_32bit_mode(true);
     hpet.write_timer_conf_and_cap_reg(0, t0_conf);
 
-    let period = hpet.gen_caps_and_id_reg().main_counter_tick_period() as u64;
-    let mc = hpet.main_counter_value();
-    hpet.write_timer_comparator_value(0, mc + 4 * period);
-    hpet.write_timer_comparator_value(0, 4 * period);
+    // Calculate the period in ticks.
+    let tick_fs = hpet.gen_caps_and_id_reg().main_counter_tick_period() as u64;
+    let period_fs = PERIOD_MS * 1_000_000_000_000; // PERIOD_MS * 1e12
+    let period_ticks = period_fs / tick_fs;
+    assert_ne!(period_ticks, 0);
+    assert!(period_ticks >= hpet_dt.main_counter_min_tick as u64);
 
+    let main_counter = hpet.main_counter_value();
+    hpet.write_timer_comparator_value(0, main_counter + period_ticks);
+    hpet.write_timer_comparator_value(0, period_ticks);
+
+    println!("0x{:016X}", hpet.timer_comparator_value(0));
+
+    println!("[HPET] Registers dump:");
     hpet.dump_registers();
+    println!("[HPET] End of registers dump.");
 
     IDT.lock().interrupts[IRQ as usize].set_handler(irq0_handler);
     unsafe {
@@ -613,7 +481,7 @@ pub fn init() {
 
 #[no_mangle]
 pub extern "C" fn hpet_irq_handler() {
-    println!("HPET");
+    print!("H");
     unsafe {
         PIC.send_eoi(0);
     }

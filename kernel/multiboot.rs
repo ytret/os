@@ -507,9 +507,9 @@ pub unsafe fn parse(boot_info: *const BootInfo) {
                     (tag.tag_size - 8) as usize,
                     mem::size_of::<sdt::OldRsdp>(),
                 );
-
                 let rsdp = (&tag.rsdpv1 as *const _ as *const sdt::OldRsdp)
                     .read_unaligned();
+
                 // println!("{:#X?}", rsdp);
                 assert!(rsdp.is_valid(), "invalid RSDP");
 
@@ -543,6 +543,63 @@ pub unsafe fn parse(boot_info: *const BootInfo) {
                     );
 
                     if name == "HPET" {
+                        if KERNEL_INFO.arch_init_info.hpet_dt.is_none() {
+                            let hpet_dt = sdt_ptr
+                                .add(1)
+                                .cast::<hpet::HpetDt>()
+                                .read_unaligned();
+                            KERNEL_INFO.arch_init_info.hpet_dt = Some(hpet_dt);
+                        } else {
+                            println!("Another HPET timer, ignoring.");
+                        }
+                    }
+                }
+
+                // KERNEL_INFO.arch_init_info.old_rsdp = Some();
+            }
+            15 => {
+                let tag = &*(ptr as *const AcpiNewRsdp);
+                println!("ACPI new RSDP");
+                let rsdp = (&tag.rsdpv2 as *const _ as *const sdt::NewRsdp)
+                    .read_unaligned();
+                assert!(rsdp.is_valid());
+                assert_eq!(tag.tag_size - 8, rsdp.length);
+
+                assert_eq!(rsdp.xsdt_phys_addr >> 32, 0);
+                let xsdt = (rsdp.xsdt_phys_addr as u32 as *const sdt::Sdt)
+                    .read_unaligned();
+
+                let num_sdts = (xsdt.length as usize - mem::size_of::<sdt::Sdt>()) / 8;
+                let sdt_ptrs = core::slice::from_raw_parts(
+                    (rsdp.xsdt_phys_addr as usize + mem::size_of::<sdt::Sdt>())
+                        as *const u64,
+                    num_sdts,
+                );
+
+                let xsdt_sum = xsdt.sum_fields()
+                    + sdt_ptrs.iter().fold(0, |acc, x| {
+                        acc + ((*x >> 0) & 0xFF) as usize
+                            + ((*x >> 8) & 0xFF) as usize
+                            + ((*x >> 16) & 0xFF) as usize
+                            + ((*x >> 24) & 0xFF) as usize
+                            + ((*x >> 32) & 0xFF) as usize
+                            + ((*x >> 40) & 0xFF) as usize
+                            + ((*x >> 48) & 0xFF) as usize
+                            + ((*x >> 56) & 0xFF) as usize
+                    });
+                assert_eq!(xsdt_sum as u8, 0, "invalid XSDT");
+
+                for sdt_ptr in sdt_ptrs {
+                    assert_eq!(*sdt_ptr >> 32, 0);
+                    let sdt_ptr = *sdt_ptr as u32 as *const sdt::Sdt;
+                    let sdt = sdt_ptr.read_unaligned();
+                    let name = core::str::from_utf8(&sdt.signature).unwrap();
+                    println!(
+                        "{} at 0x{:08X}, length: {} bytes",
+                        name, sdt_ptr as usize, sdt.length,
+                    );
+
+                    if name == "HPET" {
                         let hpet_dt = sdt_ptr
                             .add(1)
                             .cast::<hpet::HpetDt>()
@@ -550,12 +607,6 @@ pub unsafe fn parse(boot_info: *const BootInfo) {
                         KERNEL_INFO.arch_init_info.hpet_dt = Some(hpet_dt);
                     }
                 }
-
-                // KERNEL_INFO.arch_init_info.old_rsdp = Some();
-            }
-            15 => {
-                //let tag = &*(ptr as *const AcpiNewRsdp);
-                println!("ACPI new RSDP");
             }
             16 => {
                 //let tag = &*(ptr as *const NetworkingInformation);
