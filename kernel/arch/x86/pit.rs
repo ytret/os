@@ -80,32 +80,31 @@ pub struct Pit {
 }
 
 impl Pit {
-    fn init(&self) {
+    pub fn init(&self) {
         self.send_register();
         self.send_reload_value();
     }
 
-    fn set_period(&mut self, period: f64) {
+    /// Sets the period in seconds.
+    ///
+    /// The biggest possible value is 54 ms due to hardware limitations.
+    /// Trying to set the period to 55 ms or greater will make
+    /// [`Pit::set_frequency()`] panic.
+    pub fn set_period(&mut self, period: f64) {
         self.set_frequency(1.0 / period);
     }
 
-    fn set_frequency(&mut self, freq: f64) {
-        let mut reload_value = (BASE_FREQUENCY / freq) as u32;
-        if reload_value > 65535 {
-            println!(
-                "[PIT] Reload value = {} > 65535, setting to 65535.",
-                reload_value,
-            );
-            reload_value = 65535;
-        }
+    pub fn set_frequency(&mut self, freq: f64) {
+        let reload_value = (BASE_FREQUENCY / freq) as u32;
+        assert!(reload_value <= 65535, "frequency is too low");
         self.reload_value = reload_value as u16;
     }
 
-    fn period(&self) -> f64 {
+    pub fn period(&self) -> f64 {
         1.0 / self.frequency()
     }
 
-    fn frequency(&self) -> f64 {
+    pub fn frequency(&self) -> f64 {
         BASE_FREQUENCY / self.reload_value as f64
     }
 
@@ -166,7 +165,7 @@ impl Timer for Pit {
             access_mode: AccessMode::BothBytes,
         };
 
-        pit.set_period(period_ms as f64);
+        pit.set_period(period_ms as f64 * 1e-3);
         println!(
             "[PIT] Reload value: {}, frequency: {:.1} Hz, period: {:.2e} s",
             pit.reload_value,

@@ -14,18 +14,18 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-mod gdt;
+pub mod gdt;
 pub mod interrupts;
 pub mod vas;
 pub mod pic;
 
 pub mod acpi;
 
-mod pit;
+pub mod pit;
 
 pub mod pmm_stack;
 pub mod port_io;
-mod stack_trace;
+pub mod stack_trace;
 
 pub mod process;
 pub mod scheduler;
@@ -97,7 +97,8 @@ pub fn init() {
     interrupts::init();
 
     // FIXME: check if there is an HPET instead of panicking in multiboot.rs.
-    let hpet = acpi::hpet::Hpet::init_with_period_ms(1000);
+    // let hpet = acpi::hpet::Hpet::init_with_period_ms(54);
+    let hpet = pit::Pit::init_with_period_ms(54);
 
     // Enable paging.
     unsafe {
