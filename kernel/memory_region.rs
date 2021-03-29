@@ -19,28 +19,19 @@ use core::fmt;
 use core::ops;
 
 #[derive(Clone, Copy)]
-pub struct Region<T: Copy + ops::Sub<Output = T> + cmp::PartialOrd = u64> {
+pub struct Region<T: RegionType> {
     pub start: T,
     pub end: T,
 }
 
-impl<T: fmt::UpperHex + Copy + ops::Sub<Output = T> + cmp::PartialOrd>
-    fmt::Debug for Region<T>
-{
-    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt.write_fmt(format_args!("0x{:08X}..0x{:08X}", self.start, self.end))
+impl<T: RegionType> Region<T> {
+    pub fn from_start_len(start: T, len: T) -> Self {
+        Region {
+            start,
+            end: start + len,
+        }
     }
-}
 
-pub enum OverlappingWith {
-    Covers,
-    StartsIn,
-    IsIn,
-    EndsIn,
-    NoOverlap,
-}
-
-impl<T: Copy + ops::Sub<Output = T> + cmp::PartialOrd> Region<T> {
     pub fn size(&self) -> T {
         self.end - self.start
     }
@@ -62,3 +53,26 @@ impl<T: Copy + ops::Sub<Output = T> + cmp::PartialOrd> Region<T> {
         return OverlappingWith::NoOverlap;
     }
 }
+
+impl<T: RegionType + fmt::UpperHex> fmt::Debug for Region<T> {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt.write_fmt(format_args!("0x{:08X}..0x{:08X}", self.start, self.end))
+    }
+}
+
+pub enum OverlappingWith {
+    Covers,
+    StartsIn,
+    IsIn,
+    EndsIn,
+    NoOverlap,
+}
+
+pub trait RegionType:
+    Copy + ops::Add<Output = Self> + ops::Sub<Output = Self> + cmp::PartialOrd
+{
+}
+
+impl RegionType for u32 {}
+impl RegionType for u64 {}
+impl RegionType for usize {}
