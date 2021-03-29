@@ -19,6 +19,7 @@ ARCH_SOURCES := \
 	$(ARCHDIR)/port_io.rs \
 	$(ARCHDIR)/gdt.rs \
 	$(ARCHDIR)/pic.rs \
+	$(ARCHDIR)/acpi/mod.rs \
 	$(ARCHDIR)/acpi/sdt.rs \
 	$(ARCHDIR)/acpi/hpet.rs \
 	$(ARCHDIR)/pit.rs \
