@@ -1,5 +1,5 @@
 # ytret's OS - hobby operating system
-# Copyright (C) 2020  Yuri Tretyakov (ytretyakov18@gmail.com)
+# Copyright (C) 2020, 2021  Yuri Tretyakov (ytretyakov18@gmail.com)
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by

@@ -1,5 +1,5 @@
 // ytret's OS - hobby operating system
-// Copyright (C) 2020  Yuri Tretyakov (ytretyakov18@gmail.com)
+// Copyright (C) 2020, 2021  Yuri Tretyakov (ytretyakov18@gmail.com)
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -455,7 +455,6 @@ pub enum TimerType {
 pub static mut HPET: Option<Hpet> = None;
 
 impl Timer for Hpet {
-    /// Initializes HPET.  Must be called before paging is initialized.
     fn init_with_period_ms(period_ms: usize) -> Self {
         let hpet_dt = unsafe { KERNEL_INFO.arch_init_info.hpet_dt.unwrap() };
         let hpet = Hpet::new(&hpet_dt, period_ms as u32);
