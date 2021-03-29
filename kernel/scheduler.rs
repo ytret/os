@@ -20,7 +20,8 @@ use core::sync::atomic::{AtomicU32, Ordering};
 use crate::timer::TIMER;
 
 use crate::arch;
-use crate::arch::process::{Process, ProcessControlBlock};
+use crate::arch::process::ProcessControlBlock;
+use crate::process::Process;
 
 /// A counter used by the scheduler to count the number of tasks that want
 /// the interrupts to be disabled in order to perform their critical stuff.

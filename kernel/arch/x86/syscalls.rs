@@ -17,10 +17,11 @@
 use core::slice;
 use core::str;
 
-use crate::arch::interrupts::InterruptStackFrame;
-use crate::arch::process::OpenFileErr;
 use crate::fs::VFS_ROOT;
 use crate::scheduler::SCHEDULER;
+
+use crate::arch::interrupts::InterruptStackFrame;
+use crate::process::OpenFileErr;
 
 #[derive(Debug)]
 pub struct GpRegs {

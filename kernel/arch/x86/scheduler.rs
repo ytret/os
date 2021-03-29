@@ -16,9 +16,11 @@
 
 use core::sync::atomic::Ordering;
 
-use crate::arch::gdt;
-use crate::arch::process::{Process, ProcessControlBlock};
 use crate::scheduler::{NO_SCHED_COUNTER, SCHEDULER, TEMP_SPAWNER_ON};
+
+use crate::arch::gdt;
+use crate::arch::process::ProcessControlBlock;
+use crate::process::Process;
 
 extern "C" {
     fn switch_tasks(

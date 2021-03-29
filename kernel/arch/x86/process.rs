@@ -17,10 +17,11 @@
 use alloc::alloc::{alloc, Layout};
 use alloc::vec::Vec;
 
+use crate::scheduler::SCHEDULER;
+
 use crate::arch::gdt;
 use crate::arch::vas::VirtAddrSpace;
-use crate::fs;
-use crate::scheduler::SCHEDULER;
+use crate::process::Process;
 
 extern "C" {
     fn jump_into_usermode(
@@ -30,13 +31,6 @@ extern "C" {
     ) -> !;
 
     fn usermode_part() -> !;
-}
-
-pub const MAX_OPENED_FILES: i32 = 32;
-
-pub struct Process {
-    pub pcb: ProcessControlBlock,
-    pub opened_files: Vec<OpenedFile>,
 }
 
 impl Process {
@@ -76,41 +70,6 @@ impl Process {
             opened_files: Vec::new(),
         }
     }
-
-    pub fn open_file_by_node(
-        &mut self,
-        node: fs::Node,
-    ) -> Result<i32, OpenFileErr> {
-        let file_type = node.0.borrow()._type.clone();
-        if file_type == fs::NodeType::RegularFile
-            || file_type == fs::NodeType::BlockDevice
-            || file_type == fs::NodeType::CharDevice
-        {
-            if self.opened_files.len() == MAX_OPENED_FILES as usize {
-                return Err(OpenFileErr::MaxOpenedFiles);
-            }
-            let fd = self.opened_files.len() as i32;
-            self.opened_files
-                .push(OpenedFile::new(node.clone(), file_type.is_seekable()));
-            Ok(fd)
-        } else {
-            Err(OpenFileErr::UnsupportedFileType)
-        }
-    }
-
-    pub fn opened_file(&mut self, fd: i32) -> &mut OpenedFile {
-        &mut self.opened_files[fd as usize]
-    }
-
-    pub fn check_fd(&self, fd: i32) -> bool {
-        return 0 <= fd && fd < self.opened_files.len() as i32;
-    }
-}
-
-#[derive(Debug)]
-pub enum OpenFileErr {
-    MaxOpenedFiles,
-    UnsupportedFileType,
 }
 
 #[derive(Clone, Copy)]
@@ -121,44 +80,6 @@ pub struct ProcessControlBlock {
     pub cr3: u32,
     pub esp0: u32,
     pub esp: u32,
-}
-
-pub struct OpenedFile {
-    node: fs::Node,
-    offset: Option<usize>,
-}
-
-impl OpenedFile {
-    fn new(node: fs::Node, seekable: bool) -> Self {
-        OpenedFile {
-            node,
-            offset: if seekable { Some(0) } else { None },
-        }
-    }
-
-    fn seek(&mut self, add_offset: usize) {
-        if let Some(offset) = self.offset.as_mut() {
-            *offset += add_offset;
-        }
-    }
-
-    pub fn read(&mut self, buf: &mut [u8]) {
-        let fs = self.node.fs();
-        let id_in_fs = self.node.0.borrow().id_in_fs.unwrap();
-        let res = fs
-            .read_file(id_in_fs, self.offset.unwrap_or(0), buf.len())
-            .unwrap();
-        self.seek(buf.len());
-        buf.clone_from_slice(&res);
-    }
-
-    pub fn write(&mut self, buf: &[u8]) {
-        let fs = self.node.fs();
-        let id_in_fs = self.node.0.borrow().id_in_fs.unwrap();
-        fs.write_file(id_in_fs, self.offset.unwrap_or(0), buf)
-            .unwrap();
-        self.seek(buf.len());
-    }
 }
 
 fn default_entry_point() -> ! {

@@ -14,11 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use crate::arch::port_io;
-use crate::kernel_static::Mutex;
-
 use core::fmt;
 use core::fmt::Write;
+
+use crate::arch::port_io;
+use crate::kernel_static::Mutex;
 
 extern "C" {
     fn get_eflags() -> u32;

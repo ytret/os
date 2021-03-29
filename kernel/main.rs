@@ -21,26 +21,27 @@
 extern crate alloc;
 
 #[macro_use]
-mod bitflags;
+pub mod bitflags;
 
 #[macro_use]
-mod kernel_static;
+pub mod kernel_static;
 
 pub mod port;
 
 #[macro_use]
-mod vga;
+pub mod vga;
 
 pub mod timer;
 
 #[cfg_attr(target_arch = "x86", path = "arch/x86/mod.rs")]
 pub mod arch;
 
-mod heap;
-mod multiboot;
-mod memory_region;
+pub mod heap;
+pub mod multiboot;
+pub mod memory_region;
 
-mod scheduler;
+pub mod process;
+pub mod scheduler;
 
 pub mod block_device;
 pub mod disk;
