@@ -17,10 +17,8 @@
 use core::sync::atomic::Ordering;
 
 use crate::arch::gdt;
-use crate::arch::pic::PIC;
-use crate::arch::pit::TEMP_SPAWNER_ON;
 use crate::arch::process::{Process, ProcessControlBlock};
-use crate::scheduler::{NO_SCHED_COUNTER, SCHEDULER};
+use crate::scheduler::{NO_SCHED_COUNTER, SCHEDULER, TEMP_SPAWNER_ON};
 
 extern "C" {
     fn switch_tasks(
@@ -61,7 +59,7 @@ impl crate::scheduler::Scheduler {
     }
 }
 
-pub fn init() -> ! {
+pub fn init() {
     let mut tss = unsafe { &mut gdt::TSS };
     tss.ss0 = gdt::KERNEL_DATA_SEG;
 
@@ -78,28 +76,10 @@ pub fn init() -> ! {
 
         // Load the TSS.
         asm!("ltr %ax", in("ax") gdt::TSS_SEG, options(att_syntax));
-    }
 
-    unsafe {
         SCHEDULER.add_process(init_process);
+
+        println!("[SCHED] Enabling the spawner.");
+        TEMP_SPAWNER_ON = true;
     }
-
-    println!("[SCHED] Enabling the spawner.");
-    TEMP_SPAWNER_ON.store(true, core::sync::atomic::Ordering::SeqCst);
-
-    unsafe {
-        PIC.set_irq_mask(crate::arch::pit::IRQ, false);
-    }
-    init_entry_point();
-}
-
-fn init_entry_point() -> ! {
-    // If this was an ordinary process, here would be an 'sti' instruction.
-    // But this is the process with index 0 that is called directly from the
-    // kernel and not the scheduler, so the interrupts have been already
-    // enabled.
-
-    println!("[INIT] Init process entry point.");
-    println!("[INIT] End of init process reached.");
-    loop {}
 }
