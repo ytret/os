@@ -52,6 +52,7 @@ pub struct ArchInitInfo {
     pub heap_region: Region<usize>,
 
     pub hpet_dt: Option<acpi::hpet::HpetDt>,
+    pub hpet_region: Option<Region<usize>>,
 }
 
 impl ArchInitInfo {
@@ -61,6 +62,7 @@ impl ArchInitInfo {
             heap_region: Region { start: 0, end: 0 },
 
             hpet_dt: None,
+            hpet_region: None,
         }
     }
 }
@@ -97,8 +99,8 @@ pub fn init() {
     interrupts::init();
 
     // FIXME: check if there is an HPET instead of panicking in multiboot.rs.
-    // let hpet = acpi::hpet::Hpet::init_with_period_ms(54);
-    let hpet = pit::Pit::init_with_period_ms(54);
+
+    acpi::init();
 
     // Enable paging.
     unsafe {
@@ -112,9 +114,14 @@ pub fn init() {
 
     pmm_stack::init();
 
+    let last_region_end = if let Some(hpet_region) = aif.hpet_region {
+        hpet_region.end
+    } else {
+        aif.kernel_region.end
+    };
     aif.heap_region = Region {
-        start: (aif.kernel_region.end + 0x400_000 - 1) & !(0x400_000 - 1),
-        end: ((aif.kernel_region.end + 0x400_000 - 1) & !(0x400_000 - 1))
+        start: (last_region_end + 0x400_000 - 1) & !(0x400_000 - 1),
+        end: ((last_region_end + 0x400_000 - 1) & !(0x400_000 - 1))
             + crate::heap::KERNEL_HEAP_SIZE,
     };
     println!("Heap region: {:?}", aif.heap_region);
@@ -134,10 +141,17 @@ pub fn init() {
 
     heap::init();
 
-    // After the heap is initialized, we can create a Box for the Timer.
+    let timer: Box<dyn Timer> = if aif.hpet_dt.is_some() {
+        println!("Using HPET as the system timer.");
+        Box::new(acpi::hpet::Hpet::init_with_period_ms(54))
+    } else {
+        println!("Using PIT as the system timer.");
+        Box::new(pit::Pit::init_with_period_ms(54))
+    };
+
     unsafe {
         assert!(TIMER.is_none());
-        TIMER = Some(Box::new(hpet));
+        TIMER = Some(timer);
     }
 }
 

@@ -22,6 +22,7 @@ use crate::KERNEL_INFO;
 
 use super::AcpiAddr;
 use crate::timer::Timer;
+use crate::memory_region::Region;
 
 extern "C" {
     fn irq0_handler(); // interrupts.s
@@ -40,6 +41,21 @@ pub struct HpetDt {
 }
 
 impl HpetDt {
+    pub fn region_to_map(&self) -> Region<usize> {
+        // Check some assumptions about the base address.
+        assert_eq!(self.base_addr.addr_space_id, 0);
+        assert!(
+            self.base_addr.register_bit_width == 0
+                || self.base_addr.register_bit_width == 64,
+        );
+        assert_eq!(self.base_addr.register_bit_offset, 0);
+        assert_eq!(self.base_addr.address >> 32, 0);
+
+        let start = self.base_addr.address as usize;
+        let len = 0x117 + 0x20 * self.num_comparators();
+        Region::from_start_len(start, (len + 4095) & !4095)
+    }
+
     pub fn hardware_rev_id(&self) -> u8 {
         self.event_timer_block_id as u8
     }
@@ -68,17 +84,10 @@ impl Hpet {
         );
         println!("[HPET] PCI vendor ID: 0x{:04X}", hpet_dt.pci_vendor_id());
 
-        // Check some assumptions about the base address.
-        assert_eq!(hpet_dt.base_addr.addr_space_id, 0);
-        assert!(
-            hpet_dt.base_addr.register_bit_width == 0
-                || hpet_dt.base_addr.register_bit_width == 64,
-        );
-        assert_eq!(hpet_dt.base_addr.register_bit_offset, 0);
-        assert!(hpet_dt.base_addr.address.leading_zeros() >= 32);
-
         Hpet {
-            base_addr: hpet_dt.base_addr.address as u32,
+            base_addr: unsafe {
+                KERNEL_INFO.arch_init_info.hpet_region.unwrap().start as u32
+            },
             period_ms: None,
         }
     }

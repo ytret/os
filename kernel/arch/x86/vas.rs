@@ -342,6 +342,8 @@ kernel_static! {
     static ref KERNEL_PGTBLS_VIRT: Mutex<[*mut Table; 1024]> = Mutex::new([ptr::null_mut(); 1024]);
     static ref KERNEL_PGTBLS_PHYS: Mutex<[u32; 1024]> = Mutex::new([0; 1024]);
 
+    pub static ref ACPI_PGTBL: Mutex<Table> = Mutex::new(Table::new());
+
     pub static ref KERNEL_HEAP_PGTBL: Mutex<Table> = Mutex::new(Table::new());
 
     pub static ref KERNEL_VAS: Mutex<VirtAddrSpace> = Mutex::new(unsafe {
