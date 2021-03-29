@@ -29,7 +29,7 @@ ARCH_SOURCES := \
 	$(ARCHDIR)/process.rs \
 	$(ARCHDIR)/scheduler.rs \
 	$(ARCHDIR)/pci.rs \
-	$(ARCHDIR)/syscalls.rs \
+	$(ARCHDIR)/syscall.rs \
 	$(ARCHDIR)/keyboard.rs
 
 ARCH_OBJECTS := \

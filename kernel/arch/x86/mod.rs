@@ -32,7 +32,7 @@ pub mod scheduler;
 
 pub mod pci;
 
-pub mod syscalls;
+pub mod syscall;
 
 pub mod keyboard;
 

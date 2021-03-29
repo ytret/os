@@ -41,6 +41,9 @@ pub mod multiboot;
 pub mod memory_region;
 
 pub mod process;
+
+pub mod syscall;
+
 pub mod scheduler;
 
 pub mod block_device;

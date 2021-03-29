@@ -42,6 +42,7 @@ SOURCES := \
 	kernel/multiboot.rs \
 	kernel/heap.rs \
 	kernel/scheduler.rs \
+	kernel/syscall.rs \
 	kernel/block_device.rs \
 	kernel/disk/mod.rs \
 	kernel/disk/ata.rs \

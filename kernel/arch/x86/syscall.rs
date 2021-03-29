@@ -17,11 +17,8 @@
 use core::slice;
 use core::str;
 
-use crate::fs::VFS_ROOT;
-use crate::scheduler::SCHEDULER;
-
 use crate::arch::interrupts::InterruptStackFrame;
-use crate::process::OpenFileErr;
+use crate::syscall;
 
 #[derive(Debug)]
 pub struct GpRegs {
@@ -50,7 +47,6 @@ pub extern "C" fn syscall_handler(
 ) {
     // println!("[SYS] Syscall number: {}", gp_regs.eax);
     // println!("{:#010X?}", gp_regs);
-    let current_process = unsafe { SCHEDULER.current_process() };
     let return_value: i32;
 
     // 0 open
@@ -65,26 +61,14 @@ pub extern "C" fn syscall_handler(
             );
             str::from_utf8(&bytes).unwrap()
         };
-        println!("[SYS OPEN] pathname = {:?}", pathname);
-        let maybe_node = VFS_ROOT.lock().as_mut().unwrap().path(pathname);
-        if let Some(node) = maybe_node {
-            match current_process.open_file_by_node(node) {
-                Ok(fd) => {
-                    println!("[SYS OPEN] fd = {}", fd);
-                    return_value = fd;
-                }
-                Err(err) => {
-                    println!("[SYS OPEN] Could not open the node: {:?}", err);
-                    return_value = match err {
-                        OpenFileErr::MaxOpenedFiles => OPEN_EMFILE,
-                        OpenFileErr::UnsupportedFileType => OPEN_EINVAL,
-                    };
-                }
-            }
-        } else {
-            println!("[SYS OPEN] Node not found.");
-            return_value = OPEN_ENOENT;
-        }
+        return_value = match syscall::open(pathname) {
+            Ok(fd) => fd,
+            Err(err) => match err {
+                syscall::OpenErr::NotFound => OPEN_ENOENT,
+                syscall::OpenErr::MaxOpenedFiles => OPEN_EMFILE,
+                syscall::OpenErr::UnsupportedFileType => OPEN_EINVAL,
+            },
+        };
     }
     // 1 write
     // ebx: fd, i32
@@ -99,18 +83,12 @@ pub extern "C" fn syscall_handler(
                 gp_regs.edx as usize,
             )
         };
-
-        // println!("[SYS WRITE] fd = {}", fd);
-        // println!("[SYS WRITE] buf is at 0x{:08X}", &buf as *const _ as usize);
-        // println!("[SYS WRITE] buf len = {}", buf.len());
-
-        if !current_process.check_fd(fd) {
-            println!("[SYS WRITE] Invalid file descriptor.");
-            return_value = WRITE_EBADF;
-        } else {
-            current_process.opened_file(fd).write(&buf);
-            return_value = 0;
-        }
+        return_value = match syscall::write(fd, buf) {
+            Ok(_) => 0,
+            Err(err) => match err {
+                syscall::WriteErr::BadFd => WRITE_EBADF,
+            },
+        };
     }
     // 2 read
     // ebx: fd, i32
@@ -119,24 +97,18 @@ pub extern "C" fn syscall_handler(
     // returns FIXME
     else if gp_regs.eax == 2 {
         let fd = gp_regs.ebx as i32;
-        let mut buf = unsafe {
+        let buf = unsafe {
             slice::from_raw_parts_mut(
                 gp_regs.ecx as *mut u8,
                 gp_regs.edx as usize,
             )
         };
-
-        // println!("[SYS READ] fd = {}", fd);
-        // println!("[SYS READ] buf is at 0x{:08X}", &buf as *const _ as usize);
-        // println!("[SYS READ] buf len = {}", buf.len());
-
-        if !current_process.check_fd(fd) {
-            println!("[SYS READ] Invalid file descriptor.");
-            return_value = READ_EBADF;
-        } else {
-            current_process.opened_file(fd).read(&mut buf);
-            return_value = 0;
-        }
+        return_value = match syscall::read(fd, buf) {
+            Ok(_) => 0,
+            Err(err) => match err {
+                syscall::ReadErr::BadFd => READ_EBADF,
+            },
+        };
     } else {
         println!("[SYS] Ignoring an invalid syscall number.");
         return_value = 0;
