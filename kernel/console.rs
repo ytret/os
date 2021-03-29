@@ -103,7 +103,9 @@ impl Console {
         };
         match event.key {
             Key::CapsLock => {
-                self.caps_lock = event.pressed;
+                if !event.pressed {
+                    self.caps_lock = !self.caps_lock;
+                }
                 ResolveEvent::FlagUpdate
             }
             Key::LeftShift | Key::RightShift => {
