@@ -18,11 +18,12 @@ use core::fmt;
 
 use crate::arch::interrupts::{IDT, IRQ0_RUST_HANDLER};
 use crate::arch::pic::PIC;
+use crate::timer::TIMER;
 use crate::KERNEL_INFO;
 
 use super::AcpiAddr;
-use crate::timer::Timer;
 use crate::memory_region::Region;
+use crate::timer::{Timer, TimerCallback};
 
 extern "C" {
     fn irq0_handler(); // interrupts.s
@@ -71,11 +72,12 @@ impl HpetDt {
 
 pub struct Hpet {
     base_addr: u32,
-    period_ms: Option<u32>,
+    period_ms: u32,
+    callback: Option<TimerCallback>,
 }
 
 impl Hpet {
-    pub fn new(hpet_dt: &HpetDt) -> Self {
+    pub fn new(hpet_dt: &HpetDt, period_ms: u32) -> Self {
         println!("[HPET] {:#X?}", hpet_dt);
         println!("[HPET] Hardware rev ID: {}", hpet_dt.hardware_rev_id());
         println!(
@@ -88,7 +90,8 @@ impl Hpet {
             base_addr: unsafe {
                 KERNEL_INFO.arch_init_info.hpet_region.unwrap().start as u32
             },
-            period_ms: None,
+            period_ms,
+            callback: None,
         }
     }
 
@@ -455,7 +458,7 @@ impl Timer for Hpet {
     /// Initializes HPET.  Must be called before paging is initialized.
     fn init_with_period_ms(period_ms: usize) -> Self {
         let hpet_dt = unsafe { KERNEL_INFO.arch_init_info.hpet_dt.unwrap() };
-        let hpet = Hpet::new(&hpet_dt);
+        let hpet = Hpet::new(&hpet_dt, period_ms as u32);
 
         let mut gen_conf = hpet.gen_conf_reg();
         gen_conf.set_enabled(true);
@@ -496,14 +499,27 @@ impl Timer for Hpet {
     }
 
     fn period_ms(&self) -> usize {
-        self.period_ms.unwrap() as usize
+        self.period_ms as usize
+    }
+
+    fn set_callback(&mut self, callback: TimerCallback) {
+        self.callback = Some(callback);
+    }
+
+    fn callback(&self) -> Option<TimerCallback> {
+        self.callback
     }
 }
 
 #[no_mangle]
 pub extern "C" fn hpet_irq_handler() {
-    print!("H");
     unsafe {
         PIC.send_eoi(0);
+
+        if let Some(timer) = TIMER.as_ref() {
+            if let Some(callback) = timer.callback() {
+                callback();
+            }
+        }
     }
 }

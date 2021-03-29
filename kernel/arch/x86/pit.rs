@@ -14,14 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use core::sync::atomic::{AtomicU32, Ordering};
-
 use crate::arch::interrupts::{IDT, IRQ0_RUST_HANDLER};
 use crate::arch::pic::PIC;
-use crate::scheduler::SCHEDULER;
+use crate::timer::TIMER;
 
 use crate::arch::port_io;
-use crate::timer::Timer;
+use crate::timer::{Timer, TimerCallback};
 
 extern "C" {
     fn irq0_handler(); // interrupts.s
@@ -77,6 +75,8 @@ pub struct Pit {
     reload_value: u16,
     operating_mode: OperatingMode,
     access_mode: AccessMode,
+
+    callback: Option<TimerCallback>,
 }
 
 impl Pit {
@@ -163,6 +163,8 @@ impl Timer for Pit {
             reload_value: 0,
             operating_mode: OperatingMode::SquareWaveGenerator,
             access_mode: AccessMode::BothBytes,
+
+            callback: None,
         };
 
         pit.set_period(period_ms as f64 * 1e-3);
@@ -188,52 +190,25 @@ impl Timer for Pit {
         assert_ne!(res, 0);
         res
     }
+
+    fn set_callback(&mut self, callback: TimerCallback) {
+        self.callback = Some(callback);
+    }
+
+    fn callback(&self) -> Option<TimerCallback> {
+        self.callback
+    }
 }
-
-static COUNTER_MS: AtomicU32 = AtomicU32::new(0);
-
-use core::sync::atomic::{AtomicBool, AtomicUsize};
-pub static TEMP_SPAWNER_ON: AtomicBool = AtomicBool::new(false);
-static NUM_SPAWNED: AtomicUsize = AtomicUsize::new(0);
 
 #[no_mangle]
 pub extern "C" fn pit_irq_handler() {
-    print!("P");
-
-    // let period_ms = unsafe { (PIT.period() * 1.0e+3) as u32 };
-    // assert_ne!(
-    //     period_ms,
-    //     0,
-    //     "PIT frequency is too high: {:.1} Hz",
-    //     unsafe { PIT.frequency() },
-    // );
-    // COUNTER_MS.fetch_add(period_ms, Ordering::SeqCst);
-
-    // if TEMP_SPAWNER_ON.load(Ordering::SeqCst)
-    //     && NUM_SPAWNED.load(Ordering::SeqCst) < 2
-    // {
-    //     println!("[PIT] Creating a new process.");
-    //     use crate::arch::process::Process;
-    //     let new_process = Process::new();
-    //     unsafe {
-    //         SCHEDULER.add_process(new_process);
-    //     }
-    //     NUM_SPAWNED.fetch_add(1, Ordering::SeqCst);
-    // }
-
-    // Send an EOI before scheduling so that the IRQ will interrupt the next
-    // task.  One might just do an iret as a context switch but why bother if
-    // this handler will be executed further (including the iret) when it's time
-    // for this task.
     unsafe {
         PIC.send_eoi(IRQ);
-    }
 
-    // if COUNTER_MS.load(Ordering::SeqCst) >= 1000 {
-    //     COUNTER_MS.store(0, Ordering::SeqCst);
-    //     // println!("SCHEDULING (period_ms = {})", period_ms);
-    //     unsafe {
-    //         SCHEDULER.schedule(period_ms);
-    //     }
-    // }
+        if let Some(timer) = TIMER.as_ref() {
+            if let Some(callback) = timer.callback() {
+                callback();
+            }
+        }
+    }
 }

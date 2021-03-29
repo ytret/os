@@ -20,8 +20,12 @@ pub trait Timer {
     fn init_with_period_ms(period_ms: usize) -> Self
     where
         Self: Sized;
-
     fn period_ms(&self) -> usize;
+
+    fn set_callback(&mut self, callback: TimerCallback);
+    fn callback(&self) -> Option<TimerCallback>;
 }
+
+pub type TimerCallback = fn();
 
 pub static mut TIMER: Option<Box<dyn Timer>> = None;

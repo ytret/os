@@ -143,10 +143,10 @@ pub fn init() {
 
     let timer: Box<dyn Timer> = if aif.hpet_dt.is_some() {
         println!("Using HPET as the system timer.");
-        Box::new(acpi::hpet::Hpet::init_with_period_ms(54))
+        Box::new(acpi::hpet::Hpet::init_with_period_ms(10))
     } else {
         println!("Using PIT as the system timer.");
-        Box::new(pit::Pit::init_with_period_ms(54))
+        Box::new(pit::Pit::init_with_period_ms(10))
     };
 
     unsafe {

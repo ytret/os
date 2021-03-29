@@ -17,6 +17,8 @@
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU32, Ordering};
 
+use crate::timer::TIMER;
+
 use crate::arch;
 use crate::arch::process::{Process, ProcessControlBlock};
 
@@ -93,4 +95,40 @@ pub static mut SCHEDULER: Scheduler = Scheduler::new();
 
 pub fn init() -> ! {
     arch::scheduler::init();
+
+    unsafe {
+        TIMER.as_mut().unwrap().set_callback(schedule);
+    }
+
+    init_entry_point();
+}
+
+static mut COUNTER_MS: u32 = 0;
+pub static mut TEMP_SPAWNER_ON: bool = false;
+static mut NUM_SPAWNED: usize = 0;
+
+fn schedule() {
+    unsafe {
+        let period_ms = TIMER.as_ref().unwrap().period_ms() as u32;
+        COUNTER_MS += period_ms;
+
+        if TEMP_SPAWNER_ON && NUM_SPAWNED < 2 {
+            println!("[PIT] Creating a new process.");
+            let new_process = Process::new();
+            SCHEDULER.add_process(new_process);
+            NUM_SPAWNED += 1;
+        }
+
+        if COUNTER_MS >= 25 {
+            COUNTER_MS = 0;
+            // println!("SCHEDULING (period_ms = {})", period_ms);
+            SCHEDULER.schedule(period_ms);
+        }
+    }
+}
+
+fn init_entry_point() -> ! {
+    println!("[INIT] Init process entry point.");
+    println!("[INIT] End of init process reached.");
+    loop {}
 }
