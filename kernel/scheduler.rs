@@ -109,6 +109,10 @@ impl Scheduler {
         }
     }
 
+    pub fn block_running_thread(&mut self) {
+        self.schedule(0, false);
+    }
+
     pub fn schedule(&mut self, add_count: u32, still_runnable: bool) {
         self.counter += add_count as u64;
         if NO_SCHED_COUNTER.load(Ordering::SeqCst) == 0
@@ -203,11 +207,7 @@ fn schedule() {
 
         if COUNTER_MS >= SCHEDULING_PERIOD_MS {
             COUNTER_MS = 0;
-            if SCHEDULER.running_process().id == 0 {
-                SCHEDULER.schedule(SCHEDULING_PERIOD_MS, true);
-            } else {
-                SCHEDULER.schedule(SCHEDULING_PERIOD_MS, false);
-            }
+            SCHEDULER.schedule(SCHEDULING_PERIOD_MS, true);
         }
     }
 }

@@ -34,6 +34,7 @@ pub trait CharDevice {
 pub enum ReadErr {
     NotReadable,
     InvalidLen,
+    Block,
 }
 
 impl From<ReadErr> for ReadFileErr {
@@ -41,6 +42,7 @@ impl From<ReadErr> for ReadFileErr {
         match err {
             ReadErr::NotReadable => ReadFileErr::NotReadable,
             ReadErr::InvalidLen => ReadFileErr::InvalidOffsetOrLen,
+            ReadErr::Block => ReadFileErr::Block,
         }
     }
 }

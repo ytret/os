@@ -17,6 +17,7 @@
 use crate::fs::VFS_ROOT;
 use crate::scheduler::SCHEDULER;
 
+use crate::fs;
 use crate::process::OpenFileErr;
 
 macro_rules! running_process {
@@ -99,7 +100,15 @@ pub fn read(fd: i32, buf: &mut [u8]) -> Result<(), ReadErr> {
         );
         Err(ReadErr::BadFd)
     } else {
-        running_process!().opened_file(fd).read(buf);
+        match running_process!().opened_file(fd).read(buf) {
+            Ok(_) => {}
+            Err(err) => match err {
+                fs::ReadFileErr::Block => unsafe {
+                    SCHEDULER.block_running_thread();
+                },
+                other => panic!("{:?}", other),
+            },
+        }
         Ok(())
     }
 }

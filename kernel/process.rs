@@ -97,14 +97,14 @@ impl OpenedFile {
         }
     }
 
-    pub fn read(&mut self, buf: &mut [u8]) {
+    pub fn read(&mut self, buf: &mut [u8]) -> Result<(), fs::ReadFileErr> {
         let fs = self.node.fs();
         let id_in_fs = self.node.0.borrow().id_in_fs.unwrap();
-        let res = fs
-            .read_file(id_in_fs, self.offset.unwrap_or(0), buf.len())
-            .unwrap();
+        let res =
+            fs.read_file(id_in_fs, self.offset.unwrap_or(0), buf.len())?;
         self.seek(buf.len());
         buf.clone_from_slice(&res);
+        Ok(())
     }
 
     pub fn write(&mut self, buf: &[u8]) {

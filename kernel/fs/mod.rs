@@ -326,6 +326,7 @@ pub enum ReadFileErr {
     InvalidBlockNum, // FIXME: is this ext2-specific?
     InvalidOffsetOrLen,
     NotReadable,
+    Block,
 }
 
 #[derive(Debug)]

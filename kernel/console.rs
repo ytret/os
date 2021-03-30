@@ -19,6 +19,8 @@ use alloc::collections::vec_deque::VecDeque;
 use alloc::rc::Rc;
 use core::cell::RefCell;
 
+use crate::scheduler::SCHEDULER;
+
 use crate::arch::keyboard::{Event, EventListener, Key, KEYBOARD};
 use crate::char_device::{CharDevice, ReadErr, WriteErr};
 use crate::kernel_static::Mutex;
@@ -33,6 +35,8 @@ pub struct Console {
     shift: bool,
     caps_lock: bool,
     num_lock: bool,
+
+    pid_tid_blocked_by_read: Option<(usize, usize)>,
 }
 
 impl Console {
@@ -51,6 +55,8 @@ impl Console {
             shift: false,
             caps_lock: false,
             num_lock: false,
+
+            pid_tid_blocked_by_read: None,
         }
     }
 
@@ -218,16 +224,25 @@ impl CharDevice for Console {
             // println!("[CONSOLE] ascii = 0x{:02X}", ascii);
             Ok(ascii)
         } else {
-            // FIXME: block the thread
-            Ok(0x00)
-            // Err(ReadErr::NotReadable)
+            if self.pid_tid_blocked_by_read.is_none() {
+                unsafe {
+                    let pid = SCHEDULER.running_process().id;
+                    let tid = SCHEDULER.running_thread().id;
+                    self.pid_tid_blocked_by_read = Some((pid, tid));
+                }
+                Err(ReadErr::Block)
+            } else {
+                Err(ReadErr::NotReadable)
+            }
         }
-        // Err(ReadErr::NotReadable)
     }
 
     fn read_many(&mut self, len: usize) -> Result<Box<[u8]>, ReadErr> {
         assert_eq!(len, 1);
-        Ok(Box::new([self.read().unwrap()]))
+        match self.read() {
+            Ok(byte) => Ok(Box::new([byte])),
+            Err(err) => Err(err),
+        }
         // Err(ReadErr::NotReadable)
     }
 
