@@ -20,6 +20,7 @@ use crate::scheduler::{NO_SCHED_COUNTER, SCHEDULER, TEMP_SPAWNER_ON};
 
 use crate::arch::gdt;
 use crate::arch::thread::ThreadControlBlock;
+use crate::process::Process;
 use crate::thread::Thread;
 
 extern "C" {
@@ -65,14 +66,19 @@ pub fn init() {
     let mut tss = unsafe { &mut gdt::TSS };
     tss.ss0 = gdt::KERNEL_DATA_SEG;
 
-    // This thread has no entry point like an ordinary one, as it is simply
-    // the code that is executing now.  The first thread switch that happens
-    // after enablig the spawner will save the current context as a context
-    // of the thread with index 0.
-    let init_thread = Thread::new();
-    tss.esp0 = init_thread.pcb.esp0;
-
     unsafe {
+        let init_process_id = SCHEDULER.allocate_process_id();
+        let mut init_process = Process::new(init_process_id);
+        let init_thread_id = init_process.allocate_thread_id();
+        SCHEDULER.add_process(init_process);
+
+        // This thread has no entry point like an ordinary one, as it is simply
+        // the code that is executing now.  The first thread switch that happens
+        // after enablig the spawner will save the current context as a context
+        // of the thread with index 0.
+        let init_thread = Thread::new(init_process_id, init_thread_id);
+        tss.esp0 = init_thread.tcb.esp0;
+
         // Load the GDT with the new entries.
         gdt::GDT.lock().load();
 

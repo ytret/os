@@ -17,17 +17,19 @@
 use crate::fs::VFS_ROOT;
 use crate::scheduler::SCHEDULER;
 
-use crate::thread::{OpenFileErr, Thread};
+use crate::process::OpenFileErr;
 
-fn current_thread<'a>() -> &'a mut Thread {
-    unsafe { SCHEDULER.current_thread() }
+macro_rules! current_process {
+    () => {
+        unsafe { SCHEDULER.current_process() }
+    };
 }
 
 pub fn open(pathname: &str) -> Result<i32, OpenErr> {
     println!("[SYS OPEN] pathname = {:?}", pathname);
     let maybe_node = VFS_ROOT.lock().as_mut().unwrap().path(pathname);
     if let Some(node) = maybe_node {
-        match current_thread().open_file_by_node(node) {
+        match current_process!().open_file_by_node(node) {
             Ok(fd) => {
                 println!("[SYS OPEN] fd = {}", fd);
                 Ok(fd)
@@ -63,11 +65,11 @@ pub fn write(fd: i32, buf: &[u8]) -> Result<(), WriteErr> {
     // println!("[SYS WRITE] buf is at 0x{:08X}", &buf as *const _ as usize);
     // println!("[SYS WRITE] buf len = {}", buf.len());
 
-    if !current_thread().check_fd(fd) {
+    if !current_process!().check_fd(fd) {
         println!("[SYS WRITE] Invalid file descriptor.");
         Err(WriteErr::BadFd)
     } else {
-        current_thread().opened_file(fd).write(&buf);
+        current_process!().opened_file(fd).write(&buf);
         Ok(())
     }
 }
@@ -81,11 +83,11 @@ pub fn read(fd: i32, buf: &mut [u8]) -> Result<(), ReadErr> {
     // println!("[SYS READ] buf is at 0x{:08X}", &buf as *const _ as usize);
     // println!("[SYS READ] buf len = {}", buf.len());
 
-    if !current_thread().check_fd(fd) {
+    if !current_process!().check_fd(fd) {
         println!("[SYS READ] Invalid file descriptor.");
         Err(ReadErr::BadFd)
     } else {
-        current_thread().opened_file(fd).read(buf);
+        current_process!().opened_file(fd).read(buf);
         Ok(())
     }
 }

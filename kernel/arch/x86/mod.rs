@@ -27,6 +27,7 @@ pub mod pmm_stack;
 pub mod port_io;
 pub mod stack_trace;
 
+pub mod process;
 pub mod thread;
 
 pub mod scheduler;

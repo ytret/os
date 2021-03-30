@@ -40,9 +40,10 @@ pub mod heap;
 pub mod multiboot;
 pub mod memory_region;
 
-pub mod thread;
-
 pub mod syscall;
+
+pub mod process;
+pub mod thread;
 
 pub mod scheduler;
 
