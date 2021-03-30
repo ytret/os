@@ -46,7 +46,11 @@ pub extern "C" fn syscall_handler(
     _stack_frame: &InterruptStackFrame,
     gp_regs: &mut GpRegs,
 ) {
-    // println!("[SYS] Syscall number: {}", gp_regs.eax);
+    // println!(
+    //     "[SYS] Syscall number {} by PID {}",
+    //     gp_regs.eax,
+    //     unsafe { SCHEDULER.running_process().id },
+    // );
     // println!("{:#010X?}", gp_regs);
     let return_value: i32;
 

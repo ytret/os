@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use alloc::collections::vec_deque::VecDeque;
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU32, Ordering};
 
@@ -25,6 +26,8 @@ use crate::arch::thread::ThreadControlBlock;
 use crate::process::Process;
 use crate::thread::Thread;
 
+const SCHEDULING_PERIOD_MS: u32 = 50;
+
 /// A counter used by the scheduler to count the number of threads that want the
 /// interrupts to be disabled in order to perform their critical stuff.
 pub static NO_SCHED_COUNTER: AtomicU32 = AtomicU32::new(0);
@@ -33,10 +36,10 @@ pub struct Scheduler {
     counter: u64, // ms
 
     processes: Vec<Process>,
-    threads: Vec<Thread>,
 
-    current_process_id: usize,
-    current_thread_id: usize,
+    runnable_threads: Option<VecDeque<Thread>>,
+    blocked_threads: Option<VecDeque<Thread>>,
+    running_thread: Option<Thread>,
 
     new_process_id: usize,
 }
@@ -47,13 +50,20 @@ impl Scheduler {
             counter: 0,
 
             processes: Vec::new(),
-            threads: Vec::new(),
 
-            current_process_id: 0,
-            current_thread_id: 0,
+            runnable_threads: None,
+            blocked_threads: None,
+            running_thread: None,
 
             new_process_id: 0,
         }
+    }
+
+    pub fn init_vec_deques(&mut self) {
+        assert!(self.runnable_threads.is_none());
+        assert!(self.blocked_threads.is_none());
+        self.runnable_threads = Some(VecDeque::new());
+        self.blocked_threads = Some(VecDeque::new());
     }
 
     pub fn allocate_process_id(&mut self) -> usize {
@@ -66,94 +76,95 @@ impl Scheduler {
         self.processes.push(process)
     }
 
-    pub fn add_thread(&mut self, thread: Thread) {
-        self.threads.push(thread)
+    pub fn next_runnable_thread(&mut self) -> Thread {
+        self.runnable_threads.as_mut().unwrap().pop_front().unwrap()
     }
 
-    pub fn current_process(&mut self) -> &mut Process {
-        let current_process_id = self.current_thread().process_id;
-        self.process_by_id(current_process_id).unwrap()
+    pub fn add_runnable_thread(&mut self, thread: Thread) {
+        self.runnable_threads.as_mut().unwrap().push_back(thread)
     }
 
-    pub fn current_thread(&mut self) -> &mut Thread {
-        self.thread_by_ids(self.current_process_id, self.current_thread_id)
-            .unwrap()
+    pub fn add_blocked_thread(&mut self, thread: Thread) {
+        self.blocked_threads.as_mut().unwrap().push_back(thread)
+    }
+
+    pub fn run_thread(&mut self, thread: Thread) {
+        self.running_thread = Some(thread);
+    }
+
+    pub fn running_process(&mut self) -> &mut Process {
+        let id = self.running_thread().process_id;
+        self.process_by_id(id).unwrap()
+    }
+
+    pub fn running_thread(&mut self) -> &mut Thread {
+        self.running_thread.as_mut().unwrap()
     }
 
     pub fn process_by_id(&mut self, id: usize) -> Option<&mut Process> {
-        if let Some(id_in_vec) = self.processes.iter().position(|x| x.id == id)
-        {
-            Some(&mut self.processes[id_in_vec])
+        if let Some(idx) = self.processes.iter().position(|x| x.id == id) {
+            Some(&mut self.processes[idx])
         } else {
             None
         }
     }
 
-    pub fn thread_by_ids(
-        &mut self,
-        process_id: usize,
-        thread_id: usize,
-    ) -> Option<&mut Thread> {
-        if let Some(id_in_vec) = self
-            .threads
-            .iter()
-            .position(|x| x.process_id == process_id && x.id == thread_id)
-        {
-            Some(&mut self.threads[id_in_vec])
-        } else {
-            None
-        }
-    }
-
-    pub fn schedule(&mut self, add_count: u32) {
+    pub fn schedule(&mut self, add_count: u32, still_runnable: bool) {
         self.counter += add_count as u64;
         if NO_SCHED_COUNTER.load(Ordering::SeqCst) == 0
-            && self.threads.len() > 1
+            && self.runnable_threads.as_ref().unwrap().len() > 0
         {
-            // println!("[SCHED] Next thread, total: {}", self.threads.len());
-            self.next_thread();
+            let old_thread = self.running_thread.take().unwrap();
+            let new_thread = self.next_runnable_thread();
+
+            self.run_thread(new_thread);
+            let from_tcb = if still_runnable {
+                self.add_runnable_thread(old_thread);
+                &mut self
+                    .runnable_threads
+                    .as_mut()
+                    .unwrap()
+                    .back_mut()
+                    .unwrap()
+                    .tcb as *mut ThreadControlBlock
+            } else {
+                println!(
+                    "[SCHED] Blocking thread {} of pid {}.",
+                    old_thread.id, old_thread.process_id,
+                );
+                self.add_blocked_thread(old_thread);
+                &mut self
+                    .blocked_threads
+                    .as_mut()
+                    .unwrap()
+                    .back_mut()
+                    .unwrap()
+                    .tcb as *mut ThreadControlBlock
+            };
+
+            let to_tcb =
+                &mut self.running_thread().tcb as *const ThreadControlBlock;
+
+            self.switch_threads(from_tcb, to_tcb);
         } else {
-            println!(
-                "[SCHED] Not scheduling. (There are {} threads.)",
-                self.threads.len(),
-            );
+            if self.counter % 1000 == 0 {
+                println!(
+                    "[SCHED] Not scheduling. (There are {} runnable and {} blocked threads.)",
+                    self.runnable_threads.as_ref().unwrap().len(),
+                    self.blocked_threads.as_ref().unwrap().len(),
+                );
+            }
         }
-    }
-
-    fn next_thread(&mut self) {
-        let from = &mut self.current_thread().tcb as *mut ThreadControlBlock;
-
-        let next_idx = match self
-            .threads
-            .iter()
-            .position(|x| {
-                x.process_id == self.current_process_id
-                    && x.id == self.current_thread_id
-            })
-            .unwrap()
-            + 1
-        {
-            max if max == self.threads.len() => 0,
-            not_max => not_max,
-        };
-        self.current_process_id = self.threads[next_idx].process_id;
-        self.current_thread_id = self.threads[next_idx].id;
-        let to = &self.current_thread().tcb as *const ThreadControlBlock;
-
-        // println!(" switching from {} to {}", from_idx, to_idx);
-        // println!(" to Thread struct addr: 0x{:08X}", to as *const _ as u32);
-        // println!("  to.cr3 = 0x{:08X}", to.cr3);
-        // println!("  to.esp0 = 0x{:08X}", to.esp0);
-        // println!("  to.esp = 0x{:08X}", to.esp);
-
-        assert_ne!(from as *const ThreadControlBlock, to);
-        self.switch_threads(from, to);
     }
 }
 
 pub static mut SCHEDULER: Scheduler = Scheduler::new();
 
 pub fn init() -> ! {
+    unsafe {
+        SCHEDULER.init_vec_deques();
+    }
+
     arch::scheduler::init();
 
     unsafe {
@@ -184,16 +195,19 @@ fn schedule() {
                 thread_id,
                 default_entry_point,
             );
-            SCHEDULER.add_thread(new_thread);
+            SCHEDULER.add_runnable_thread(new_thread);
             println!("[SCHED] Created a thread with ID {}.", thread_id);
 
             NUM_SPAWNED += 1;
         }
 
-        if COUNTER_MS >= 25 {
+        if COUNTER_MS >= SCHEDULING_PERIOD_MS {
             COUNTER_MS = 0;
-            // println!("SCHEDULING (period_ms = {})", period_ms);
-            SCHEDULER.schedule(period_ms);
+            if SCHEDULER.running_process().id == 0 {
+                SCHEDULER.schedule(SCHEDULING_PERIOD_MS, true);
+            } else {
+                SCHEDULER.schedule(SCHEDULING_PERIOD_MS, false);
+            }
         }
     }
 }

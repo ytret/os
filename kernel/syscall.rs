@@ -19,9 +19,9 @@ use crate::scheduler::SCHEDULER;
 
 use crate::process::OpenFileErr;
 
-macro_rules! current_process {
+macro_rules! running_process {
     () => {
-        unsafe { SCHEDULER.current_process() }
+        unsafe { SCHEDULER.running_process() }
     };
 }
 
@@ -29,13 +29,17 @@ pub fn open(pathname: &str) -> Result<i32, OpenErr> {
     println!("[SYS OPEN] pathname = {:?}", pathname);
     let maybe_node = VFS_ROOT.lock().as_mut().unwrap().path(pathname);
     if let Some(node) = maybe_node {
-        match current_process!().open_file_by_node(node) {
+        match running_process!().open_file_by_node(node) {
             Ok(fd) => {
-                println!("[SYS OPEN] fd = {}", fd);
+                println!(
+                    "[SYS OPEN] fd = {} for pid {}",
+                    fd,
+                    running_process!().id,
+                );
                 Ok(fd)
             }
             Err(err) => {
-                println!("[SYS OPEN] Could not open the node: {:?}", err);
+                println!("[SYS OPEN] Could not open the node: {:?}.", err);
                 Err(err.into())
             }
         }
@@ -65,11 +69,15 @@ pub fn write(fd: i32, buf: &[u8]) -> Result<(), WriteErr> {
     // println!("[SYS WRITE] buf is at 0x{:08X}", &buf as *const _ as usize);
     // println!("[SYS WRITE] buf len = {}", buf.len());
 
-    if !current_process!().check_fd(fd) {
-        println!("[SYS WRITE] Invalid file descriptor.");
+    if !running_process!().check_fd(fd) {
+        println!(
+            "[SYS WRITE] Invalid file descriptor {} for PID {}.",
+            fd,
+            running_process!().id,
+        );
         Err(WriteErr::BadFd)
     } else {
-        current_process!().opened_file(fd).write(&buf);
+        running_process!().opened_file(fd).write(&buf);
         Ok(())
     }
 }
@@ -83,11 +91,15 @@ pub fn read(fd: i32, buf: &mut [u8]) -> Result<(), ReadErr> {
     // println!("[SYS READ] buf is at 0x{:08X}", &buf as *const _ as usize);
     // println!("[SYS READ] buf len = {}", buf.len());
 
-    if !current_process!().check_fd(fd) {
-        println!("[SYS READ] Invalid file descriptor.");
+    if !running_process!().check_fd(fd) {
+        println!(
+            "[SYS READ] Invalid file descriptor {} for PID {}.",
+            fd,
+            running_process!().id,
+        );
         Err(ReadErr::BadFd)
     } else {
-        current_process!().opened_file(fd).read(buf);
+        running_process!().opened_file(fd).read(buf);
         Ok(())
     }
 }

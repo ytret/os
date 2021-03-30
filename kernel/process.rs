@@ -24,8 +24,6 @@ pub const MAX_OPENED_FILES: i32 = 32;
 pub struct Process {
     pub id: usize,
     pub opened_files: Vec<OpenedFile>,
-
-    threads: Vec<usize>,
     new_thread_id: usize,
 }
 
@@ -34,8 +32,6 @@ impl Process {
         Process {
             id,
             opened_files: Vec::new(),
-
-            threads: Vec::new(),
             new_thread_id: 0,
         }
     }

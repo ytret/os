@@ -85,7 +85,7 @@ pub fn init() {
         // Load the TSS.
         asm!("ltr %ax", in("ax") gdt::TSS_SEG, options(att_syntax));
 
-        SCHEDULER.add_thread(init_thread);
+        SCHEDULER.run_thread(init_thread);
 
         println!("[SCHED] Enabling the spawner.");
         TEMP_SPAWNER_ON = true;

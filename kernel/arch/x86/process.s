@@ -30,6 +30,10 @@ usermode_part:
     // Save the file descriptor in %ebx.
     movl %eax, %ebx
 
+    // Any errors?
+    cmpl $0, %ebx
+    jne 2f
+
     // Read one ASCII character from the console.
 1:  movl $2, %eax
     movl $.buffer, %ecx
@@ -51,6 +55,8 @@ usermode_part:
     // int $0x88
 
     jmp 1b
+
+2:  jmp 2b
 .size usermode_part, . - usermode_part
 
 .section .data
