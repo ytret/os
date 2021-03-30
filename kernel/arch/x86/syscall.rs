@@ -20,7 +20,8 @@ use core::str;
 use crate::arch::interrupts::InterruptStackFrame;
 use crate::syscall;
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
+#[repr(C, packed)]
 pub struct GpRegs {
     edi: u32,
     esi: u32,
