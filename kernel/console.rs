@@ -112,6 +112,12 @@ impl Console {
                 self.shift = event.pressed;
                 ResolveEvent::FlagUpdate
             }
+            Key::NumLock => {
+                if !event.pressed {
+                    self.num_lock = !self.num_lock;
+                }
+                ResolveEvent::FlagUpdate
+            }
 
             Key::Backtick => symbol("`", "~"),
             Key::Space => symbol(" ", " "),
