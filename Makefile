@@ -41,6 +41,7 @@ SOURCES := \
 	kernel/vga.rs \
 	kernel/multiboot.rs \
 	kernel/heap.rs \
+	kernel/process.rs \
 	kernel/scheduler.rs \
 	kernel/syscall.rs \
 	kernel/block_device.rs \
