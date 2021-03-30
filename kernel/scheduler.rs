@@ -20,16 +20,16 @@ use core::sync::atomic::{AtomicU32, Ordering};
 use crate::timer::TIMER;
 
 use crate::arch;
-use crate::arch::process::ProcessControlBlock;
-use crate::process::Process;
+use crate::arch::thread::ThreadControlBlock;
+use crate::thread::Thread;
 
-/// A counter used by the scheduler to count the number of tasks that want
-/// the interrupts to be disabled in order to perform their critical stuff.
+/// A counter used by the scheduler to count the number of threads that want the
+/// interrupts to be disabled in order to perform their critical stuff.
 pub static NO_SCHED_COUNTER: AtomicU32 = AtomicU32::new(0);
 
 pub struct Scheduler {
     counter: u64, // ms
-    processes: Vec<Process>,
+    threads: Vec<Thread>,
     current_idx: usize,
 }
 
@@ -37,58 +37,58 @@ impl Scheduler {
     pub const fn new() -> Self {
         Scheduler {
             counter: 0,
-            processes: Vec::new(),
+            threads: Vec::new(),
             current_idx: 0,
         }
     }
 
-    pub fn add_process(&mut self, process: Process) {
-        self.processes.push(process);
+    pub fn add_thread(&mut self, thread: Thread) {
+        self.threads.push(thread);
     }
 
-    pub fn current_process(&mut self) -> &mut Process {
-        &mut self.processes[self.current_idx]
+    pub fn current_thread(&mut self) -> &mut Thread {
+        &mut self.threads[self.current_idx]
     }
 
     pub fn schedule(&mut self, add_count: u32) {
         self.counter += add_count as u64;
         if NO_SCHED_COUNTER.load(Ordering::SeqCst) == 0
-            && self.processes.len() > 1
+            && self.threads.len() > 1
         {
-            // println!("[SCHED] Next process, total: {}", self.processes.len());
-            self.next_process();
+            // println!("[SCHED] Next thread, total: {}", self.threads.len());
+            self.next_thread();
         } else {
             println!(
-                "[SCHED] Not scheduling. (There are {} processes.)",
-                self.processes.len(),
+                "[SCHED] Not scheduling. (There are {} threads.)",
+                self.threads.len(),
             );
         }
     }
 
-    fn next_process(&mut self) {
+    fn next_thread(&mut self) {
         assert!(
-            self.current_idx < self.processes.len(),
-            "current process index is outside the vector of processes",
+            self.current_idx < self.threads.len(),
+            "current thread index is outside the vector of threads",
         );
 
         let from_idx = self.current_idx;
         let from =
-            &mut self.processes[from_idx].pcb as *mut ProcessControlBlock;
+            &mut self.threads[from_idx].pcb as *mut ThreadControlBlock;
 
         self.current_idx = match self.current_idx {
-            max if max + 1 == self.processes.len() => 0,
+            max if max + 1 == self.threads.len() => 0,
             not_max => not_max + 1,
         };
         let to_idx = self.current_idx;
-        let to = &self.processes[to_idx].pcb as *const ProcessControlBlock;
+        let to = &self.threads[to_idx].pcb as *const ThreadControlBlock;
 
         // println!(" switching from {} to {}", from_idx, to_idx);
-        // println!(" to Process struct addr: 0x{:08X}", to as *const _ as u32);
+        // println!(" to Thread struct addr: 0x{:08X}", to as *const _ as u32);
         // println!("  to.cr3 = 0x{:08X}", to.cr3);
         // println!("  to.esp0 = 0x{:08X}", to.esp0);
         // println!("  to.esp = 0x{:08X}", to.esp);
 
-        self.switch_tasks(from, to);
+        self.switch_threads(from, to);
     }
 }
 
@@ -114,9 +114,9 @@ fn schedule() {
         COUNTER_MS += period_ms;
 
         if TEMP_SPAWNER_ON && NUM_SPAWNED < 2 {
-            println!("[PIT] Creating a new process.");
-            let new_process = Process::new();
-            SCHEDULER.add_process(new_process);
+            println!("[PIT] Creating a new thread.");
+            let new_thread = Thread::new();
+            SCHEDULER.add_thread(new_thread);
             NUM_SPAWNED += 1;
         }
 
@@ -129,7 +129,7 @@ fn schedule() {
 }
 
 fn init_entry_point() -> ! {
-    println!("[INIT] Init process entry point.");
-    println!("[INIT] End of init process reached.");
+    println!("[INIT] Init thread entry point.");
+    println!("[INIT] End of init thread reached.");
     loop {}
 }

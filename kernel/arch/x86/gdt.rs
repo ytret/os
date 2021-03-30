@@ -244,7 +244,6 @@ impl Into<Entry> for GdtDescriptor {
     }
 }
 
-// This is not a mutex due to the way the task switching works.
 pub static mut TSS: TaskStateSegment = TaskStateSegment::new();
 
 pub const KERNEL_CODE_IDX: usize = 1;

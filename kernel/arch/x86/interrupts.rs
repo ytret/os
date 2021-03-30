@@ -273,8 +273,7 @@ kernel_static! {
         idt.reserved_2[8].set_handler(isr_30);
         idt.reserved_2[9].set_handler(isr_31);
 
-        // Spurios interrupts (probably).  Those may happen because the kernel
-        // sends an EOI to the PIT before iret so that it can switch tasks.
+        // Spurios interrupts (probably).
         idt.interrupts[7].set_handler(irq7_handler);
         idt.interrupts[15].set_handler(irq15_handler);
 

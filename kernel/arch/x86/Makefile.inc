@@ -26,7 +26,7 @@ ARCH_SOURCES := \
 	$(ARCHDIR)/interrupts.rs \
 	$(ARCHDIR)/vas.rs \
 	$(ARCHDIR)/pmm_stack.rs \
-	$(ARCHDIR)/process.rs \
+	$(ARCHDIR)/thread.rs \
 	$(ARCHDIR)/scheduler.rs \
 	$(ARCHDIR)/pci.rs \
 	$(ARCHDIR)/syscall.rs \
@@ -38,4 +38,4 @@ ARCH_OBJECTS := \
 	$(ARCHDIR)/gdt.o \
 	$(ARCHDIR)/interrupts.o \
 	$(ARCHDIR)/scheduler.o \
-	$(ARCHDIR)/process.o
+	$(ARCHDIR)/thread.o

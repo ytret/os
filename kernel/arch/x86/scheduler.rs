@@ -19,28 +19,28 @@ use core::sync::atomic::Ordering;
 use crate::scheduler::{NO_SCHED_COUNTER, SCHEDULER, TEMP_SPAWNER_ON};
 
 use crate::arch::gdt;
-use crate::arch::process::ProcessControlBlock;
-use crate::process::Process;
+use crate::arch::thread::ThreadControlBlock;
+use crate::thread::Thread;
 
 extern "C" {
-    fn switch_tasks(
-        from: *mut ProcessControlBlock,
-        to: *const ProcessControlBlock,
+    fn switch_threads(
+        from: *mut ThreadControlBlock,
+        to: *const ThreadControlBlock,
         tss: *mut gdt::TaskStateSegment,
     );
 }
 
 impl crate::scheduler::Scheduler {
-    pub fn switch_tasks(
+    pub fn switch_threads(
         &self,
-        from: *mut ProcessControlBlock,
-        to: *const ProcessControlBlock,
+        from: *mut ThreadControlBlock,
+        to: *const ThreadControlBlock,
     ) {
         // NOTE: call this method with interrupts disabled and enable them after
         // it returns.
         unsafe {
             let tss = &mut gdt::TSS as *mut gdt::TaskStateSegment;
-            switch_tasks(from, to, tss);
+            switch_threads(from, to, tss);
         }
     }
 
@@ -65,12 +65,12 @@ pub fn init() {
     let mut tss = unsafe { &mut gdt::TSS };
     tss.ss0 = gdt::KERNEL_DATA_SEG;
 
-    // This process has no entry point like an ordinary one, as it is simply
-    // the code that is executing now.  The first task switch that happens
+    // This thread has no entry point like an ordinary one, as it is simply
+    // the code that is executing now.  The first thread switch that happens
     // after enablig the spawner will save the current context as a context
-    // of the process with index 0.
-    let init_process = Process::new();
-    tss.esp0 = init_process.pcb.esp0;
+    // of the thread with index 0.
+    let init_thread = Thread::new();
+    tss.esp0 = init_thread.pcb.esp0;
 
     unsafe {
         // Load the GDT with the new entries.
@@ -79,7 +79,7 @@ pub fn init() {
         // Load the TSS.
         asm!("ltr %ax", in("ax") gdt::TSS_SEG, options(att_syntax));
 
-        SCHEDULER.add_process(init_process);
+        SCHEDULER.add_thread(init_thread);
 
         println!("[SCHED] Enabling the spawner.");
         TEMP_SPAWNER_ON = true;

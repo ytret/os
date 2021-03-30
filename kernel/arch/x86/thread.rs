@@ -21,7 +21,7 @@ use crate::scheduler::SCHEDULER;
 
 use crate::arch::gdt;
 use crate::arch::vas::VirtAddrSpace;
-use crate::process::Process;
+use crate::thread::Thread;
 
 extern "C" {
     fn jump_into_usermode(
@@ -33,14 +33,14 @@ extern "C" {
     fn usermode_part() -> !;
 }
 
-impl Process {
+impl Thread {
     pub fn new() -> Self {
         let kernel_stack_bottom =
             unsafe { alloc(Layout::from_size_align(65536, 4096).unwrap()) }
                 .wrapping_offset(65536) as *mut u32;
 
-        // Make an initial stack frame that will be popped on a task switch (see
-        // scheduler.s).
+        // Make an initial stack frame that will be popped on a thread switch
+        // (see scheduler.s).
         let kernel_stack_top = kernel_stack_bottom.wrapping_sub(8);
         unsafe {
             *kernel_stack_top.wrapping_add(0) = 0; // edi
@@ -59,13 +59,13 @@ impl Process {
             // may serve as a return address for default_entry_point().
         }
 
-        let pcb = ProcessControlBlock {
+        let pcb = ThreadControlBlock {
             cr3: crate::arch::vas::KERNEL_VAS.lock().pgdir_phys,
             esp0: kernel_stack_bottom as u32,
             esp: kernel_stack_top as u32,
         };
 
-        Process {
+        Thread {
             pcb,
             opened_files: Vec::new(),
         }
@@ -74,8 +74,8 @@ impl Process {
 
 #[derive(Clone, Copy)]
 #[repr(C, packed)]
-pub struct ProcessControlBlock {
-    // NOTE: when changing the order of these fields, also edit switch_tasks()
+pub struct ThreadControlBlock {
+    // NOTE: when changing the order of these fields, also edit switch_threads()
     // in scheduler.s.
     pub cr3: u32,
     pub esp0: u32,
@@ -83,18 +83,18 @@ pub struct ProcessControlBlock {
 }
 
 fn default_entry_point() -> ! {
-    // This function must always be a result of ret from switch_tasks (see
+    // This function must always be a result of ret from switch_threads (see
     // scheduler.s) which requires that interrupts be enabled after it returns
     // so that task switching remains possible.
     unsafe {
         asm!("sti");
     }
 
-    println!("[PROC] Default process entry. Starting initialization.");
+    println!("[PROC] Default thread entry. Starting initialization.");
 
     unsafe {
         SCHEDULER.stop_scheduling();
-        println!("[PROC] Creating a new VAS for the process.");
+        println!("[PROC] Creating a new VAS for the thread.");
         let vas = VirtAddrSpace::kvas_copy_on_heap();
         println!("[PROC] Loading the VAS.");
         vas.load();

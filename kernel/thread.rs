@@ -16,17 +16,17 @@
 
 use alloc::vec::Vec;
 
-use crate::arch::process::ProcessControlBlock;
+use crate::arch::thread::ThreadControlBlock;
 use crate::fs;
 
 pub const MAX_OPENED_FILES: i32 = 32;
 
-pub struct Process {
-    pub pcb: ProcessControlBlock,
+pub struct Thread {
+    pub pcb: ThreadControlBlock,
     pub opened_files: Vec<OpenedFile>,
 }
 
-impl Process {
+impl Thread {
     pub fn open_file_by_node(
         &mut self,
         node: fs::Node,
