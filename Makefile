@@ -74,7 +74,7 @@ ISOFILE := kernel.iso
 HDIMG := hd.img
 SYSROOT := sysroot
 
-.PHONY: all get-libs doc iso sysroot hd clean clean-all run check-fmt
+.PHONY: all get-libs doc iso sysroot hd sync clean clean-all run check-fmt
 
 all: $(OUTPUT)
 
@@ -131,6 +131,14 @@ hd:
 	test -f $(HDIMG) && rm -i $(HDIMG)
 	bximage -q -func=create -hd=2048M -imgmode=flat $(HDIMG)
 	mkfs.ext2 $(HDIMG) -d $(SYSROOT)
+
+# Sync the contents of the hard disk with the $(SYSROOT) directory.
+sync:
+	mkdir mnt
+	sudo mount $(HDIMG) mnt
+	sudo rsync -avu --delete $(SYSROOT)/ mnt/
+	sudo umount mnt
+	rmdir mnt
 
 clean:
 	rm -rf $(ISOFILE) $(ISODIR) $(LINKLIST) $(OUTPUT)
