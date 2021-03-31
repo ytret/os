@@ -81,8 +81,8 @@ impl Thread {
 #[derive(Clone, Copy)]
 #[repr(C, packed)]
 pub struct ThreadControlBlock {
-    // NOTE: when changing the order of these fields, also edit switch_threads()
-    // in scheduler.s.
+    // NOTE: if you change the order of these fields, you'll also need to edit
+    // switch_threads() in scheduler.s accordingly.
     pub cr3: u32,
     pub esp0: u32,
     pub esp: u32,
