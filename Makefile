@@ -128,7 +128,7 @@ sysroot:
 	ln -s local/include $(SYSROOT)/usr/include
 
 hd:
-	test -f $(HDIMG) && rm -i $(HDIMG)
+	test -f $(HDIMG) && rm -i $(HDIMG) || true
 	bximage -q -func=create -hd=2048M -imgmode=flat $(HDIMG)
 	mkfs.ext2 $(HDIMG) -d $(SYSROOT)
 
