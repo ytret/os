@@ -17,7 +17,6 @@
 pub mod devfs;
 pub mod ext2;
 
-use alloc::boxed::Box;
 use alloc::rc::{Rc, Weak};
 use alloc::string::{FromUtf8Error, String};
 use alloc::vec::Vec;
@@ -89,7 +88,7 @@ impl Node {
     }
 
     /// Returns a [`FileSystem`] which this node resides on.
-    pub fn fs(&self) -> Rc<Box<dyn FileSystem>> {
+    pub fn fs(&self) -> Rc<dyn FileSystem> {
         let mp_node = self.mount_point();
         let mp_node_internals = mp_node.borrow();
         if let NodeType::MountPoint(mountable) = mp_node_internals._type.clone()
@@ -281,7 +280,7 @@ impl fmt::Debug for NodeType {
 }
 
 pub trait Mountable {
-    fn fs(&self) -> Rc<Box<dyn FileSystem>>;
+    fn fs(&self) -> Rc<dyn FileSystem>;
 }
 
 pub trait FileSystem {
@@ -334,10 +333,10 @@ pub enum WriteFileErr {
     NotWritable,
 }
 
-pub struct FsWrapper(Rc<Box<dyn FileSystem>>);
+pub struct FsWrapper(Rc<dyn FileSystem>);
 
 impl Mountable for FsWrapper {
-    fn fs(&self) -> Rc<Box<dyn FileSystem>> {
+    fn fs(&self) -> Rc<dyn FileSystem> {
         Rc::clone(&self.0)
     }
 }
@@ -373,9 +372,9 @@ pub fn init_vfs_root_on_disk(disk_id: usize) {
 
     // Initialize devfs on /dev.
     println!("[VFS] Initializing devfs on /dev.");
-    *DEV_FS.lock() = Some(Rc::new(RefCell::new(FsWrapper(Rc::new(Box::new(
+    *DEV_FS.lock() = Some(Rc::new(RefCell::new(FsWrapper(Rc::new(
         devfs::DevFs::init(),
-    ))))));
+    )))));
     let mountable = Rc::clone(DEV_FS.lock().as_ref().unwrap());
     root_node.mount_on_child("dev", mountable);
 

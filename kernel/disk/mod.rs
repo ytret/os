@@ -28,8 +28,8 @@ use crate::kernel_static::Mutex;
 
 pub struct Disk {
     pub id: usize,
-    pub rw_interface: Rc<Box<dyn ReadWriteInterface>>,
-    pub file_system: Option<Rc<Box<dyn FileSystem>>>,
+    pub rw_interface: Rc<dyn ReadWriteInterface>,
+    pub file_system: Option<Rc<dyn FileSystem>>,
 }
 
 impl Disk {
@@ -82,7 +82,7 @@ impl Disk {
                         Rc::downgrade(&rwif),
                     )?
                 };
-                self.file_system = Some(Rc::new(Box::new(ext2)));
+                self.file_system = Some(Rc::new(ext2));
                 Ok(self.file_system.as_ref().unwrap().root_dir()?)
             }
         }
@@ -139,7 +139,7 @@ impl block_device::BlockDevice for Disk {
 }
 
 impl Mountable for Disk {
-    fn fs(&self) -> Rc<Box<dyn FileSystem>> {
+    fn fs(&self) -> Rc<dyn FileSystem> {
         self.file_system.as_ref().unwrap().clone()
     }
 }

@@ -177,9 +177,13 @@ impl FileSystem for DevFs {
                 let end_block = (offset + len - 1) / blkdev.block_size() + 1;
                 let num_blocks = end_block - start_block;
 
-                for block in blkdev.read_blocks(start_block, num_blocks) {
-                    res_buf.extend_from_slice(&block);
-                }
+                res_buf.extend_from_slice(
+                    // FIXME: don't unwrap.
+                    blkdev
+                        .read_blocks(start_block, num_blocks)
+                        .as_ref()
+                        .unwrap(),
+                );
 
                 res_buf.drain(0..offset % blkdev.block_size());
                 res_buf.truncate(len);

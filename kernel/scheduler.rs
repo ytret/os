@@ -165,7 +165,9 @@ impl Scheduler {
             let to_tcb =
                 &mut self.running_thread().tcb as *const ThreadControlBlock;
 
-            self.switch_threads(from_tcb, to_tcb);
+            unsafe {
+                self.switch_threads(from_tcb, to_tcb);
+            }
         } else {
             // if self.counter % 1000 == 0 {
             //     println!(

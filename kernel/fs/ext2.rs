@@ -330,7 +330,7 @@ impl TryFrom<u8> for DirEntryType {
 
 #[allow(dead_code)]
 pub struct Ext2 {
-    rw_interface: Weak<Box<dyn disk::ReadWriteInterface>>,
+    rw_interface: Weak<dyn disk::ReadWriteInterface>,
 
     version: (u32, u16), // major, minor
     optional_features: BitFlags<u32, OptionalFeature>,
@@ -358,7 +358,7 @@ impl Ext2 {
     pub unsafe fn from_raw(
         raw_superblock: &[u8],
         raw_block_group_descriptor: &[u8],
-        rw_interface: Weak<Box<dyn disk::ReadWriteInterface>>,
+        rw_interface: Weak<dyn disk::ReadWriteInterface>,
     ) -> Result<Self, FromRawErr> {
         // SAFETY: argument alignment is not checked.
         // FIXME: add else.

@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use alloc::boxed::Box;
 use alloc::rc::Rc;
 use alloc::vec::Vec;
 use core::cell::RefCell;
@@ -714,7 +713,7 @@ pub fn init() {
                         for drive in drives {
                             let disk = RefCell::new(disk::Disk {
                                 id: disk::DISKS.lock().len(),
-                                rw_interface: Rc::new(Box::new(drive)),
+                                rw_interface: Rc::new(drive),
                                 file_system: None,
                             });
                             let rc_disk = Rc::new(disk);

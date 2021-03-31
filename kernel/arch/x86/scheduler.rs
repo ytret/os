@@ -32,17 +32,15 @@ extern "C" {
 }
 
 impl crate::scheduler::Scheduler {
-    pub fn switch_threads(
+    pub unsafe fn switch_threads(
         &self,
         from: *mut ThreadControlBlock,
         to: *const ThreadControlBlock,
     ) {
         // NOTE: call this method with interrupts disabled and enable them after
         // it returns.
-        unsafe {
-            let tss = &mut gdt::TSS as *mut gdt::TaskStateSegment;
-            switch_threads(from, to, tss);
-        }
+        let tss = &mut gdt::TSS as *mut gdt::TaskStateSegment;
+        switch_threads(from, to, tss);
     }
 
     pub fn stop_scheduling(&self) {
