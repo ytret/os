@@ -32,6 +32,10 @@ impl<T: RegionType> Region<T> {
         }
     }
 
+    pub fn range(&self) -> ops::Range<T> {
+        self.start..self.end
+    }
+
     pub fn size(&self) -> T {
         self.end - self.start
     }
