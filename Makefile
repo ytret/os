@@ -129,7 +129,7 @@ sysroot:
 
 hd:
 	test -f $(HDIMG) && rm -i $(HDIMG)
-	bximage -q -mode=create -hd=4096M -imgmode=flat $(HDIMG)
+	bximage -q -func=create -hd=2048M -imgmode=flat $(HDIMG)
 	mkfs.ext2 $(HDIMG) -d $(SYSROOT)
 
 clean:
