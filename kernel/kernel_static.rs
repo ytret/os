@@ -69,12 +69,11 @@ impl<T> Mutex<T> {
     }
 
     pub fn lock(&self) -> MutexWrapper<T> {
-        while let Err(_) = self.locked.compare_exchange(
-            false,
-            true,
-            Ordering::Acquire,
-            Ordering::Relaxed,
-        ) {
+        while self
+            .locked
+            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .is_err()
+        {
             let mut color: u8 = 0;
             while self.locked.load(Ordering::Relaxed) {
                 unsafe {
@@ -97,12 +96,11 @@ impl<T> Mutex<T> {
     }
 
     pub fn try_lock(&self) -> Option<MutexWrapper<T>> {
-        if let Ok(_) = self.locked.compare_exchange(
-            false,
-            true,
-            Ordering::Acquire,
-            Ordering::Relaxed,
-        ) {
+        if self
+            .locked
+            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .is_ok()
+        {
             Some(MutexWrapper {
                 locked: &self.locked,
                 data: unsafe { &mut *self.data.get() },

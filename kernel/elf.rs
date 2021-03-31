@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::mem::size_of;
@@ -49,7 +48,7 @@ pub enum ElfHeaderErr {
 }
 
 impl ElfHeader {
-    fn from_raw_data(data: &Box<[u8]>) -> Result<Self, ElfHeaderErr> {
+    fn from_raw_data(data: &[u8]) -> Result<Self, ElfHeaderErr> {
         let (head, body, _tail) = unsafe { data.align_to::<ElfHeader>() };
         assert!(head.is_empty(), "Improper alignment of the data argument.");
         assert!(!body.is_empty(), "Improper size of the data argument.");
@@ -160,7 +159,7 @@ struct SectionHeader {
 
 impl SectionHeader {
     fn from_raw_data(
-        data: &Box<[u8]>,
+        data: &[u8],
         elf_header: &ElfHeader,
         section_num: usize,
     ) -> Self {
@@ -209,7 +208,7 @@ struct ProgHeader {
 
 impl ProgHeader {
     fn from_raw_data(
-        data: &Box<[u8]>,
+        data: &[u8],
         elf_header: &ElfHeader,
         ph_num: usize,
     ) -> Self {
@@ -254,7 +253,7 @@ impl From<ElfHeaderErr> for ElfInfoErr {
 }
 
 impl ElfInfo {
-    pub fn from_raw_data(data: &Box<[u8]>) -> Result<Self, ElfInfoErr> {
+    pub fn from_raw_data(data: &[u8]) -> Result<Self, ElfInfoErr> {
         let elf_header = ElfHeader::from_raw_data(data)?;
         Ok(ElfInfo {
             sections: {
@@ -285,7 +284,7 @@ pub struct SectionInfo {
 
 impl SectionInfo {
     fn from_raw_data(
-        data: &Box<[u8]>,
+        data: &[u8],
         elf_header: &ElfHeader,
         section_num: usize,
     ) -> Self {
@@ -330,7 +329,7 @@ pub struct ProgInfo {
 
 impl ProgInfo {
     fn from_raw_data(
-        data: &Box<[u8]>,
+        data: &[u8],
         elf_header: &ElfHeader,
         ph_idx: usize,
     ) -> Self {

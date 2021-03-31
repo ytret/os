@@ -114,7 +114,10 @@ pub extern "C" fn main(magic_num: u32, boot_info: *const multiboot::BootInfo) {
         println!("Initializing the VFS root on disk 0.");
         fs::init_vfs_root_on_disk(0);
     }
-    assert!(fs::VFS_ROOT.lock().is_some(), "VFS has not been initialized");
+    assert!(
+        fs::VFS_ROOT.lock().is_some(),
+        "VFS has not been initialized",
+    );
 
     scheduler::init();
     // loop {}

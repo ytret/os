@@ -99,11 +99,9 @@ impl Console {
             }
         };
         let no_numlock_symbol = |s: &str| {
-            if event.pressed {
-                if !self.num_lock {
-                    let ch = s.as_bytes()[0];
-                    return ResolveEvent::Ascii(ch);
-                }
+            if event.pressed && !self.num_lock {
+                let ch = s.as_bytes()[0];
+                return ResolveEvent::Ascii(ch);
             }
             ResolveEvent::None
         };

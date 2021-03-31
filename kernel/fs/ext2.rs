@@ -1040,7 +1040,7 @@ impl Iterator for DirEntryIter {
             unreachable!();
         }
         unsafe {
-            let entry_size = (&*self.current).total_size as usize;
+            let entry_size = (*self.current).total_size as usize;
             let align = align_of::<DirEntry>() - 1;
             self.current = ((self.current as usize + entry_size + align)
                 & !align) as *const DirEntry;

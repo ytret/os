@@ -435,7 +435,7 @@ pub unsafe fn parse(boot_info: *const BootInfo) {
                         }
                         _ => {}
                     }
-                    println!("");
+                    println!();
                     i += 1;
                 }
             }
