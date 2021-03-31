@@ -203,7 +203,7 @@ fn schedule() {
         let period_ms = TIMER.as_ref().unwrap().period_ms() as u32;
         COUNTER_MS += period_ms;
 
-        if TEMP_SPAWNER_ON && NUM_SPAWNED < 20 {
+        if TEMP_SPAWNER_ON && NUM_SPAWNED < 1 {
             let process_id = SCHEDULER.allocate_process_id();
             let mut process = Process::new(process_id);
             let thread_id = process.allocate_thread_id();
