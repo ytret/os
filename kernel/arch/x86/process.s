@@ -18,7 +18,7 @@
 .type usermode_part, @function
 usermode_part:
     // Set up a stack.
-    movl $stack_top, %esp
+    movl $.stack_top, %esp
     xorl %ebp, %ebp
 
     // Open /dev/chr0.
