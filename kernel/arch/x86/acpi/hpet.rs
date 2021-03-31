@@ -387,7 +387,7 @@ impl TimerConfAndCapReg {
         assert_eq!(new_route >> 5, 0, "new_route must be less than 32");
         assert!(self.supports_ioapic_routing(new_route));
         self.0 &= !(0b11111 << 9);
-        self.0 |= ((new_route << 9) & 0b11111) as u64;
+        self.0 |= ((new_route as u64) << 9) & 0b11111;
     }
 
     pub fn uses_fsb_int_delivery(&self) -> bool {
