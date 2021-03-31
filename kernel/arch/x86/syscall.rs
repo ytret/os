@@ -100,7 +100,7 @@ pub extern "C" fn syscall_handler(
     // ebx: fd, i32
     // ecx: buffer pointer, *mut u8
     // edx: buffer size in bytes, u32
-    // returns FIXME
+    // returns 0 or error number, i32
     else if gp_regs.eax == 2 {
         let fd = gp_regs.ebx as i32;
         let buf = unsafe {
