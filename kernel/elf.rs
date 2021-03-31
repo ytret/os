@@ -237,8 +237,9 @@ enum ProgHeaderType {
 
 #[derive(Clone, Debug)]
 pub struct ElfInfo {
-    sections: Vec<SectionInfo>,
-    program_headers: Vec<ProgInfo>,
+    pub sections: Vec<SectionInfo>,
+    pub program_headers: Vec<ProgInfo>,
+    pub entry_point: usize,
 }
 
 #[derive(Debug)]
@@ -270,6 +271,7 @@ impl ElfInfo {
                 }
                 vec
             },
+            entry_point: elf_header.entry as usize,
         })
     }
 }
@@ -319,9 +321,11 @@ impl SectionInfo {
 
 #[derive(Clone, Debug)]
 pub struct ProgInfo {
-    in_file_at: usize,
-    load_at: usize,
-    size: usize,
+    pub in_file_at: usize,
+    pub in_file_size: usize,
+
+    pub in_mem_at: usize,
+    pub in_mem_size: usize,
 }
 
 impl ProgInfo {
@@ -331,13 +335,15 @@ impl ProgInfo {
         ph_idx: usize,
     ) -> Self {
         let ph = ProgHeader::from_raw_data(data, &elf_header, ph_idx);
-        if { ph._type } != ProgHeaderType::Load || ph.filesz != ph.memsz {
-            unimplemented!();
+        if { ph._type } != ProgHeaderType::Load {
+            unimplemented!("ProgHeaderType::{:?}", { ph._type });
         }
         ProgInfo {
             in_file_at: ph.offset as usize,
-            load_at: ph.vaddr as usize,
-            size: ph.filesz as usize,
+            in_file_size: ph.filesz as usize,
+
+            in_mem_at: ph.vaddr as usize,
+            in_mem_size: ph.memsz as usize,
         }
     }
 }
