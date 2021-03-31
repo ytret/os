@@ -64,6 +64,7 @@ impl<T: RegionType + fmt::UpperHex> fmt::Debug for Region<T> {
     }
 }
 
+#[derive(PartialEq, Debug)]
 pub enum OverlappingWith {
     Covers,
     StartsIn,
