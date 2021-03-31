@@ -80,14 +80,6 @@ impl Scheduler {
         self.runnable_threads.as_mut().unwrap().pop_front().unwrap()
     }
 
-    pub fn add_runnable_thread(&mut self, thread: Thread) {
-        self.runnable_threads.as_mut().unwrap().push_back(thread)
-    }
-
-    pub fn add_blocked_thread(&mut self, thread: Thread) {
-        self.blocked_threads.as_mut().unwrap().push_back(thread)
-    }
-
     pub fn unblock_thread_by_id(
         &mut self,
         process_id: usize,
@@ -102,7 +94,7 @@ impl Scheduler {
             .unwrap();
         let thread =
             self.blocked_threads.as_mut().unwrap().remove(idx).unwrap();
-        self.add_runnable_thread(thread);
+        self.runnable_threads.as_mut().unwrap().push_front(thread);
         // println!(
         //     "[SCHED] Unblocked thread {} of pid {}.",
         //     thread_id, process_id,
@@ -144,7 +136,10 @@ impl Scheduler {
 
             self.run_thread(new_thread);
             let from_tcb = if still_runnable {
-                self.add_runnable_thread(old_thread);
+                self.runnable_threads
+                    .as_mut()
+                    .unwrap()
+                    .push_back(old_thread);
                 &mut self
                     .runnable_threads
                     .as_mut()
@@ -157,7 +152,7 @@ impl Scheduler {
                 //     "[SCHED] Blocking thread {} of pid {}.",
                 //     old_thread.id, old_thread.process_id,
                 // );
-                self.add_blocked_thread(old_thread);
+                self.blocked_threads.as_mut().unwrap().push_back(old_thread);
                 &mut self
                     .blocked_threads
                     .as_mut()
@@ -220,7 +215,11 @@ fn schedule() {
                 thread_id,
                 default_entry_point,
             );
-            SCHEDULER.add_runnable_thread(new_thread);
+            SCHEDULER
+                .runnable_threads
+                .as_mut()
+                .unwrap()
+                .push_back(new_thread);
             println!("[SCHED] Created a thread with ID {}.", thread_id);
 
             NUM_SPAWNED += 1;
