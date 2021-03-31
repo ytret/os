@@ -273,7 +273,7 @@ impl VirtAddrSpace {
         &mut (*pgtbl_virt).0[pte_idx]
     }
 
-    unsafe fn pgtbl_virt_of(&self, virt: u32) -> *mut Table {
+    pub unsafe fn pgtbl_virt_of(&self, virt: u32) -> *mut Table {
         let pde_idx = (virt >> 22) as usize;
         *self.pgtbls_virt.add(pde_idx)
     }
