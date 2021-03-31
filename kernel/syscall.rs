@@ -66,7 +66,7 @@ impl From<OpenFileErr> for OpenErr {
 }
 
 pub fn write(fd: i32, buf: &[u8]) -> Result<(), WriteErr> {
-    // println!("[SYS WRITE] fd = {}", fd);
+    // println!("[SYS WRITE] fd = {} by pid {}", fd, running_process!().id);
     // println!("[SYS WRITE] buf is at 0x{:08X}", &buf as *const _ as usize);
     // println!("[SYS WRITE] buf len = {}", buf.len());
 
@@ -88,31 +88,36 @@ pub enum WriteErr {
 }
 
 pub fn read(fd: i32, buf: &mut [u8]) -> Result<(), ReadErr> {
-    // println!("[SYS READ] fd = {}", fd);
+    // println!("[SYS READ] fd = {} by pid {}", fd, running_process!().id);
     // println!("[SYS READ] buf is at 0x{:08X}", &buf as *const _ as usize);
     // println!("[SYS READ] buf len = {}", buf.len());
 
-    if !running_process!().check_fd(fd) {
-        println!(
-            "[SYS READ] Invalid file descriptor {} for PID {}.",
-            fd,
-            running_process!().id,
-        );
-        Err(ReadErr::BadFd)
-    } else {
-        match running_process!().opened_file(fd).read(buf) {
-            Ok(_) => {}
-            Err(err) => match err {
-                fs::ReadFileErr::Block => unsafe {
-                    SCHEDULER.block_running_thread();
+    loop {
+        if !running_process!().check_fd(fd) {
+            println!(
+                "[SYS READ] Invalid file descriptor {} for PID {}.",
+                fd,
+                running_process!().id,
+            );
+            return Err(ReadErr::BadFd);
+        } else {
+            match running_process!().opened_file(fd).read(buf) {
+                Ok(_) => return Ok(()),
+                Err(err) => match err {
+                    fs::ReadFileErr::Block => unsafe {
+                        SCHEDULER.block_running_thread();
+                    },
+                    fs::ReadFileErr::NotReadable => {
+                        return Err(ReadErr::NotReadable);
+                    }
+                    other => unimplemented!("FIXME: handle {:?}", other),
                 },
-                other => panic!("{:?}", other),
-            },
+            }
         }
-        Ok(())
     }
 }
 
 pub enum ReadErr {
     BadFd,
+    NotReadable,
 }

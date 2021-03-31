@@ -39,9 +39,8 @@ usermode_part:
     movl $.buffer, %ecx
     movl $1, %edx
     int $0x88
-    movl $.buffer, %eax
-    cmpb $0, (%eax)
-    je 1b
+    cmpl $0, %eax
+    jl 2f
 
     // Write that character to the console.
     movl $1, %eax

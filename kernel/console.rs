@@ -211,6 +211,12 @@ impl EventListener for Console {
     fn receive_event(&mut self, event: Event) {
         if self.kbd_events.len() < MAX_KBD_EVENTS {
             self.kbd_events.push_back(event);
+            if let Some((pid, tid)) = self.pid_tid_blocked_by_read {
+                self.pid_tid_blocked_by_read = None;
+                unsafe {
+                    SCHEDULER.unblock_thread_by_id(pid, tid);
+                }
+            }
         } else {
             println!("[CONSOLE] Keyboard event buffer is full.");
         }
@@ -219,21 +225,19 @@ impl EventListener for Console {
 
 impl CharDevice for Console {
     fn read(&mut self) -> Result<u8, ReadErr> {
+        let pid = unsafe { SCHEDULER.running_process().id };
+        let tid = unsafe { SCHEDULER.running_thread().id };
+
         let maybe_ascii = self.try_resolve_into_ascii();
-        if let Some(ascii) = maybe_ascii {
-            // println!("[CONSOLE] ascii = 0x{:02X}", ascii);
-            Ok(ascii)
-        } else {
-            if self.pid_tid_blocked_by_read.is_none() {
-                unsafe {
-                    let pid = SCHEDULER.running_process().id;
-                    let tid = SCHEDULER.running_thread().id;
-                    self.pid_tid_blocked_by_read = Some((pid, tid));
-                }
-                Err(ReadErr::Block)
+        if self.pid_tid_blocked_by_read.is_none() {
+            if let Some(ascii) = maybe_ascii {
+                Ok(ascii)
             } else {
-                Err(ReadErr::NotReadable)
+                self.pid_tid_blocked_by_read = Some((pid, tid));
+                Err(ReadErr::Block)
             }
+        } else {
+            Err(ReadErr::NotReadable)
         }
     }
 

@@ -88,6 +88,27 @@ impl Scheduler {
         self.blocked_threads.as_mut().unwrap().push_back(thread)
     }
 
+    pub fn unblock_thread_by_id(
+        &mut self,
+        process_id: usize,
+        thread_id: usize,
+    ) {
+        let idx = self
+            .blocked_threads
+            .as_ref()
+            .unwrap()
+            .iter()
+            .position(|x| x.process_id == process_id && x.id == thread_id)
+            .unwrap();
+        let thread =
+            self.blocked_threads.as_mut().unwrap().remove(idx).unwrap();
+        self.add_runnable_thread(thread);
+        // println!(
+        //     "[SCHED] Unblocked thread {} of pid {}.",
+        //     thread_id, process_id,
+        // );
+    }
+
     pub fn run_thread(&mut self, thread: Thread) {
         self.running_thread = Some(thread);
     }
@@ -132,10 +153,10 @@ impl Scheduler {
                     .unwrap()
                     .tcb as *mut ThreadControlBlock
             } else {
-                println!(
-                    "[SCHED] Blocking thread {} of pid {}.",
-                    old_thread.id, old_thread.process_id,
-                );
+                // println!(
+                //     "[SCHED] Blocking thread {} of pid {}.",
+                //     old_thread.id, old_thread.process_id,
+                // );
                 self.add_blocked_thread(old_thread);
                 &mut self
                     .blocked_threads
@@ -151,13 +172,13 @@ impl Scheduler {
 
             self.switch_threads(from_tcb, to_tcb);
         } else {
-            if self.counter % 1000 == 0 {
-                println!(
-                    "[SCHED] Not scheduling. (There are {} runnable and {} blocked threads.)",
-                    self.runnable_threads.as_ref().unwrap().len(),
-                    self.blocked_threads.as_ref().unwrap().len(),
-                );
-            }
+            // if self.counter % 1000 == 0 {
+            //     println!(
+            //         "[SCHED] Not scheduling. (There are {} runnable and {} blocked threads.)",
+            //         self.runnable_threads.as_ref().unwrap().len(),
+            //         self.blocked_threads.as_ref().unwrap().len(),
+            //     );
+            // }
         }
     }
 }
@@ -187,7 +208,7 @@ fn schedule() {
         let period_ms = TIMER.as_ref().unwrap().period_ms() as u32;
         COUNTER_MS += period_ms;
 
-        if TEMP_SPAWNER_ON && NUM_SPAWNED < 2 {
+        if TEMP_SPAWNER_ON && NUM_SPAWNED < 20 {
             let process_id = SCHEDULER.allocate_process_id();
             let mut process = Process::new(process_id);
             let thread_id = process.allocate_thread_id();

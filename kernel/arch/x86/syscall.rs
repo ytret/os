@@ -40,6 +40,7 @@ const OPEN_EINVAL: i32 = -3;
 const WRITE_EBADF: i32 = -1;
 
 const READ_EBADF: i32 = -1;
+const READ_EINVAL: i32 = -2;
 
 #[no_mangle]
 pub extern "C" fn syscall_handler(
@@ -112,6 +113,7 @@ pub extern "C" fn syscall_handler(
             Ok(_) => 0,
             Err(err) => match err {
                 syscall::ReadErr::BadFd => READ_EBADF,
+                syscall::ReadErr::NotReadable => READ_EINVAL,
             },
         };
     } else {
