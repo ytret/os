@@ -91,7 +91,13 @@ impl OpenedFile {
         }
     }
 
-    fn seek(&mut self, add_offset: usize) {
+    pub fn seek_abs(&mut self, new_offset: usize) {
+        if let Some(offset) = self.offset.as_mut() {
+            *offset = new_offset;
+        }
+    }
+
+    pub fn seek_rel(&mut self, add_offset: usize) {
         if let Some(offset) = self.offset.as_mut() {
             *offset += add_offset;
         }
@@ -102,7 +108,7 @@ impl OpenedFile {
         let id_in_fs = self.node.0.borrow().id_in_fs.unwrap();
         let res =
             fs.read_file(id_in_fs, self.offset.unwrap_or(0), buf.len())?;
-        self.seek(buf.len());
+        self.seek_rel(buf.len());
         buf.clone_from_slice(&res);
         Ok(())
     }
@@ -112,6 +118,6 @@ impl OpenedFile {
         let id_in_fs = self.node.0.borrow().id_in_fs.unwrap();
         fs.write_file(id_in_fs, self.offset.unwrap_or(0), buf)
             .unwrap();
-        self.seek(buf.len());
+        self.seek_rel(buf.len());
     }
 }

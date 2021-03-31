@@ -50,6 +50,7 @@ pub fn open(pathname: &str) -> Result<i32, OpenErr> {
     }
 }
 
+#[derive(Debug)]
 pub enum OpenErr {
     NotFound,
     MaxOpenedFiles,
@@ -83,6 +84,7 @@ pub fn write(fd: i32, buf: &[u8]) -> Result<(), WriteErr> {
     }
 }
 
+#[derive(Debug)]
 pub enum WriteErr {
     BadFd,
 }
@@ -117,7 +119,36 @@ pub fn read(fd: i32, buf: &mut [u8]) -> Result<(), ReadErr> {
     }
 }
 
+#[derive(Debug)]
 pub enum ReadErr {
     BadFd,
     NotReadable,
+}
+
+pub fn seek(variant: Seek, fd: i32, offset: usize) -> Result<(), SeekErr> {
+    if !running_process!().check_fd(fd) {
+        println!(
+            "[SYS SEEK] Invalid file descriptor {} for PID {}.",
+            fd,
+            running_process!().id,
+        );
+        Err(SeekErr::BadFd)
+    } else {
+        match variant {
+            Seek::Abs => running_process!().opened_file(fd).seek_abs(offset),
+            Seek::Rel => running_process!().opened_file(fd).seek_rel(offset),
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub enum Seek {
+    Abs,
+    Rel,
+}
+
+#[derive(Debug)]
+pub enum SeekErr {
+    BadFd,
 }

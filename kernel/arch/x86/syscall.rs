@@ -42,6 +42,8 @@ const WRITE_EBADF: i32 = -1;
 const READ_EBADF: i32 = -1;
 const READ_EINVAL: i32 = -2;
 
+const SEEK_EBADF: i32 = -1;
+
 #[no_mangle]
 pub extern "C" fn syscall_handler(
     _stack_frame: &InterruptStackFrame,
@@ -58,7 +60,7 @@ pub extern "C" fn syscall_handler(
     // 0 open
     // ebx: pathname, *const u8
     // ecx: pathname len, u32
-    // returns: fd or error number, i32
+    // returns fd or error number, i32
     if gp_regs.eax == 0 {
         let pathname = unsafe {
             let bytes = slice::from_raw_parts(
@@ -116,6 +118,35 @@ pub extern "C" fn syscall_handler(
                 syscall::ReadErr::NotReadable => READ_EINVAL,
             },
         };
+    }
+    // 3 seek_abs
+    // ebx: fd, i32
+    // ecx: new offset, u32
+    // returns 0 or error number, i32
+    else if gp_regs.eax == 3 {
+        let fd = gp_regs.ebx as i32;
+        let new_offset = gp_regs.ecx as usize;
+        return_value = match syscall::seek(syscall::Seek::Abs, fd, new_offset) {
+            Ok(_) => 0,
+            Err(err) => match err {
+                syscall::SeekErr::BadFd => SEEK_EBADF,
+            },
+        };
+    }
+    // 4 seek_rel
+    // ebx: fd, i32
+    // ecx: add to offset, u32
+    // returns 0 or error number, i32
+    else if gp_regs.eax == 4 {
+        let fd = gp_regs.ebx as i32;
+        let add_to_offset = gp_regs.ecx as usize;
+        return_value =
+            match syscall::seek(syscall::Seek::Rel, fd, add_to_offset) {
+                Ok(_) => 0,
+                Err(err) => match err {
+                    syscall::SeekErr::BadFd => SEEK_EBADF,
+                },
+            };
     } else {
         println!("[SYS] Ignoring an invalid syscall number.");
         return_value = 0;
