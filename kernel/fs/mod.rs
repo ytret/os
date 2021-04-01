@@ -118,8 +118,33 @@ impl Node {
             let fs = self.fs();
             let id_in_fs = self.0.borrow().id_in_fs.unwrap();
             let node = fs.read_dir(id_in_fs).unwrap(); // FIXME: no panic
-            let some_clone = node.0.borrow().maybe_children.clone();
-            self.0.borrow_mut().maybe_children = some_clone;
+
+            // Set the parent of the node.
+            node.0.borrow_mut().parent = self.0.borrow().parent.clone();
+
+            // We don't clone the maybe_children Vec of node, but rather make
+            // self an Rc to node's RefCell.  That's because in the first case
+            // one would not only add a clone overhead, but also have to update
+            // the parent field of each node's child.  In the second case,
+            // however, one simply updates the Rc pointing to self in the self's
+            // parent, as it is done below.
+            let old_rc = self.0.clone();
+            self.0 = node.0;
+
+            if let Some(parent_weak) = &self.0.borrow().parent {
+                let parent = parent_weak.upgrade().unwrap();
+                let mut parent_internals = parent.borrow_mut();
+
+                // Find the index of self among the parent's children.
+                let parent_children =
+                    parent_internals.maybe_children.as_mut().unwrap();
+                let self_idx = parent_children
+                    .iter()
+                    .position(|x| Rc::ptr_eq(&x.0, &old_rc))
+                    .unwrap();
+                parent_children[self_idx] = self.clone();
+            }
+
             self.0.borrow().maybe_children.as_ref().unwrap().clone()
         }
     }
