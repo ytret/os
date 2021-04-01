@@ -59,7 +59,7 @@ pub fn default_entry_point() -> ! {
 
         SCHEDULER.running_thread().tcb.cr3 = vas.pgdir_phys;
 
-        let fd = syscall::open("/test").unwrap();
+        let fd = syscall::open("/bin/test-syscalls").unwrap();
         let mut pre_buf = Vec::with_capacity(10240);
         for _ in 0..10240 {
             pre_buf.push(0);

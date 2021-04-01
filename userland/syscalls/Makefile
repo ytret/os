@@ -18,7 +18,9 @@ AS := i686-elf-as
 LD := i686-elf-ld
 
 OUTPUT := main
-SYSROOT := $(shell pwd)/../../sysroot
+INSTALLAS := test-syscalls
+SYSROOT := $(PWD)/../../sysroot
+DESTDIR := $(SYSROOT)/bin
 
 .PHONY: all install clean
 
@@ -31,7 +33,7 @@ $(OUTPUT): main.o
 	$(AS) -c $< -o $@
 
 install:
-	cp main $(SYSROOT)/test
+	cp $(OUTPUT) $(DESTDIR)/$(INSTALLAS)
 
 clean:
-	rm -rf $(OUTPUT) main.o $(SYSROOT)/test
+	rm -rf $(OUTPUT) main.o $(DESTDIR)/$(INSTALLAS)
