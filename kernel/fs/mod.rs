@@ -256,38 +256,15 @@ impl NodeType {
 
 impl cmp::PartialEq for NodeType {
     fn eq(&self, other: &Self) -> bool {
-        if let NodeType::MountPoint(rc1) = self {
-            if let NodeType::MountPoint(rc2) = other {
-                Rc::as_ptr(&rc1) == Rc::as_ptr(&rc2)
-            } else {
-                false
-            }
-        } else if let NodeType::Dir = self {
-            if let NodeType::Dir = other {
-                true
-            } else {
-                false
-            }
-        } else if let NodeType::RegularFile = self {
-            if let NodeType::RegularFile = other {
-                true
-            } else {
-                false
-            }
-        } else if let NodeType::BlockDevice = self {
-            if let NodeType::BlockDevice = other {
-                true
-            } else {
-                false
-            }
-        } else if let NodeType::CharDevice = self {
-            if let NodeType::CharDevice = other {
-                true
-            } else {
-                false
-            }
-        } else {
-            unreachable!();
+        match self {
+            NodeType::MountPoint(rc1) => match other {
+                NodeType::MountPoint(rc2) => Rc::ptr_eq(&rc1, &rc2),
+                _ => false,
+            },
+            NodeType::Dir => matches!(other, NodeType::Dir),
+            NodeType::RegularFile => matches!(other, NodeType::RegularFile),
+            NodeType::BlockDevice => matches!(other, NodeType::BlockDevice),
+            NodeType::CharDevice => matches!(other, NodeType::CharDevice),
         }
     }
 }
