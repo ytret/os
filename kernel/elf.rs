@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::mem::size_of;
@@ -48,10 +49,10 @@ pub enum ElfHeaderErr {
 }
 
 impl ElfHeader {
-    fn from_raw_data(data: &[u8]) -> Result<Self, ElfHeaderErr> {
-        let (head, body, _tail) = unsafe { data.align_to::<ElfHeader>() };
-        assert!(head.is_empty(), "Improper alignment of the data argument.");
-        assert!(!body.is_empty(), "Improper size of the data argument.");
+    unsafe fn from_bytes(bytes: &[u8]) -> Result<Self, ElfHeaderErr> {
+        let (head, body, _tail) = bytes.align_to::<ElfHeader>();
+        assert!(head.is_empty(), "improper alignment of bytes");
+        assert!(!body.is_empty(), "improper size of bytes");
         let header = body[0];
 
         if header.ident.must_be_0x7f != 0x7f
@@ -158,16 +159,10 @@ struct SectionHeader {
 }
 
 impl SectionHeader {
-    fn from_raw_data(
-        data: &[u8],
-        elf_header: &ElfHeader,
-        section_num: usize,
-    ) -> Self {
-        let sh_idx = elf_header.section_header_idx(section_num);
-        let (head, body, _tail) =
-            unsafe { (&data[sh_idx..]).align_to::<SectionHeader>() };
-        assert!(head.is_empty(), "Improper alignment of the data argument.");
-        assert!(!body.is_empty(), "Improper size of the data argument.");
+    unsafe fn from_bytes(bytes: &[u8]) -> Self {
+        let (head, body, _tail) = bytes.align_to::<SectionHeader>();
+        assert!(head.is_empty(), "improper alignment of bytes");
+        assert!(!body.is_empty(), "improper size of bytes");
         body[0]
     }
 }
@@ -207,16 +202,10 @@ struct ProgHeader {
 }
 
 impl ProgHeader {
-    fn from_raw_data(
-        data: &[u8],
-        elf_header: &ElfHeader,
-        ph_num: usize,
-    ) -> Self {
-        let ph_idx = elf_header.program_header_idx(ph_num);
-        let (head, body, _tail) =
-            unsafe { (&data[ph_idx..]).align_to::<ProgHeader>() };
-        assert!(head.is_empty(), "Improper alignment of the data argument.");
-        assert!(!body.is_empty(), "Improper size of the data argument.");
+    unsafe fn from_bytes(bytes: &[u8]) -> Self {
+        let (head, body, _tail) = bytes.align_to::<ProgHeader>();
+        assert!(head.is_empty(), "improper alignment of bytes");
+        assert!(!body.is_empty(), "improper size of bytes");
         body[0]
     }
 }
@@ -230,49 +219,109 @@ enum ProgHeaderType {
     Dynamic = 2,
     Interp = 3,
     Note = 4,
+    Tls = 7,
 }
 
-// Above are standard ELF structures.  Below are structures specific to this OS.
+// Above are standard ELF structures.  Below are structures used by the kernel.
 
 #[derive(Clone, Debug)]
-pub struct ElfInfo {
+pub struct ElfObj {
     pub sections: Vec<SectionInfo>,
-    pub program_headers: Vec<ProgInfo>,
+    pub program_segments: Vec<ProgSegment>,
     pub entry_point: usize,
 }
 
 #[derive(Debug)]
-pub enum ElfInfoErr {
+pub enum ElfObjErr {
     ElfHeaderErr(ElfHeaderErr),
 }
 
-impl From<ElfHeaderErr> for ElfInfoErr {
+impl From<ElfHeaderErr> for ElfObjErr {
     fn from(e: ElfHeaderErr) -> Self {
-        ElfInfoErr::ElfHeaderErr(e)
+        ElfObjErr::ElfHeaderErr(e)
     }
 }
 
-impl ElfInfo {
-    pub fn from_raw_data(data: &[u8]) -> Result<Self, ElfInfoErr> {
-        let elf_header = ElfHeader::from_raw_data(data)?;
-        Ok(ElfInfo {
+impl ElfObj {
+    /// Constructs an ELF object using the giving byte `feeder`.
+    ///
+    /// The feeder's first argument is a byte offset in the raw ELF, the second
+    /// argument is the number of bytes to read.  If the second argument is
+    /// zero, it means reading until a null byte.
+    pub unsafe fn from_feeder<F>(feeder: F) -> Result<Self, ElfObjErr>
+    where
+        F: Fn(usize, usize) -> Box<[u8]>,
+    {
+        let elf_header =
+            ElfHeader::from_bytes(&feeder(0, size_of::<ElfHeader>()))?;
+
+        let names_section = SectionHeader::from_bytes(&feeder(
+            elf_header.section_header_idx(elf_header.shstrndx as usize),
+            size_of::<SectionHeader>(),
+        ));
+        let names_section_start = names_section.offset as usize;
+
+        Ok(ElfObj {
             sections: {
                 let mut vec = Vec::new();
                 for i in 0..elf_header.shnum as usize {
-                    vec.push(SectionInfo::from_raw_data(data, &elf_header, i));
+                    let sh = SectionHeader::from_bytes(&feeder(
+                        elf_header.section_header_idx(i),
+                        size_of::<SectionHeader>(),
+                    ));
+
+                    vec.push(SectionInfo {
+                        name: if elf_header.shstrndx != 0 && sh.name != 0 {
+                            let name_start =
+                                names_section_start + sh.name as usize;
+                            let name_bytes = feeder(name_start, 0);
+                            Some(
+                                String::from_utf8(name_bytes.to_vec()).unwrap(),
+                            )
+                        } else {
+                            None
+                        },
+                        offset: sh.offset as usize,
+                        size: sh.size as usize,
+                    });
                 }
                 vec
             },
-            program_headers: {
+            program_segments: {
                 let mut vec = Vec::new();
                 for i in 0..elf_header.phnum as usize {
-                    vec.push(ProgInfo::from_raw_data(data, &elf_header, i));
+                    let ph = ProgHeader::from_bytes(&feeder(
+                        elf_header.program_header_idx(i),
+                        size_of::<ProgHeader>(),
+                    ));
+                    vec.push(ProgSegment::from_prog_header(&ph));
                 }
                 vec
             },
             entry_point: elf_header.entry as usize,
         })
     }
+
+    // pub unsafe fn from_bytes(data: &[u8]) -> Result<Self, ElfObjErr> {
+    //     let elf_header = ElfHeader::from_bytes(data)?;
+    //     Ok(ElfObj {
+    //         sections: {
+    //             let mut vec = Vec::new();
+    //             for i in 0..elf_header.shnum as usize {
+    //                 vec.push(SectionInfo::from_bytes(data, &elf_header, i));
+    //             }
+    //             vec
+    //         },
+    //         program_segments: {
+    //             let mut vec = Vec::new();
+    //             for i in 0..elf_header.phnum as usize {
+    //                 vec.push(ProgSegment::from_bytes(data, &elf_header, i));
+    //             }
+    //             vec
+    //         },
+    //         entry_point: elf_header.entry as usize,
+    //     })
+    // }
 }
 
 #[derive(Clone, Debug)]
@@ -282,44 +331,10 @@ pub struct SectionInfo {
     size: usize,
 }
 
-impl SectionInfo {
-    fn from_raw_data(
-        data: &[u8],
-        elf_header: &ElfHeader,
-        section_num: usize,
-    ) -> Self {
-        let section =
-            SectionHeader::from_raw_data(data, &elf_header, section_num);
-        SectionInfo {
-            name: {
-                if elf_header.shstrndx != 0 && section.name != 0 {
-                    let names_section = SectionHeader::from_raw_data(
-                        data,
-                        &elf_header,
-                        elf_header.shstrndx as usize,
-                    );
-                    let names_section_start = names_section.offset as usize;
-                    let name_start =
-                        names_section_start + section.name as usize;
-                    let end_of_string = name_start
-                        + data[name_start..]
-                            .iter()
-                            .position(|&x| x == 0)
-                            .unwrap();
-                    let name_bytes = &data[name_start..end_of_string];
-                    Some(String::from_utf8(name_bytes.to_vec()).unwrap())
-                } else {
-                    None
-                }
-            },
-            offset: section.offset as usize,
-            size: section.size as usize,
-        }
-    }
-}
-
 #[derive(Clone, Debug)]
-pub struct ProgInfo {
+pub struct ProgSegment {
+    pub _type: ProgSegmentType,
+
     pub in_file_at: usize,
     pub in_file_size: usize,
 
@@ -327,17 +342,16 @@ pub struct ProgInfo {
     pub in_mem_size: usize,
 }
 
-impl ProgInfo {
-    fn from_raw_data(
-        data: &[u8],
-        elf_header: &ElfHeader,
-        ph_idx: usize,
-    ) -> Self {
-        let ph = ProgHeader::from_raw_data(data, &elf_header, ph_idx);
-        if { ph._type } != ProgHeaderType::Load {
-            unimplemented!("ProgHeaderType::{:?}", { ph._type });
-        }
-        ProgInfo {
+impl ProgSegment {
+    unsafe fn from_prog_header(ph: &ProgHeader) -> Self {
+        let _type = { ph._type };
+        ProgSegment {
+            _type: match _type {
+                ProgHeaderType::Load => ProgSegmentType::Load,
+                ProgHeaderType::Tls => ProgSegmentType::Tls,
+                _ => unimplemented!("ProgHeaderType::{:?}", _type as u32),
+            },
+
             in_file_at: ph.offset as usize,
             in_file_size: ph.filesz as usize,
 
@@ -345,4 +359,10 @@ impl ProgInfo {
             in_mem_size: ph.memsz as usize,
         }
     }
+}
+
+#[derive(PartialEq, Clone, Debug)]
+pub enum ProgSegmentType {
+    Load,
+    Tls,
 }
