@@ -381,9 +381,27 @@ pub extern "C" fn page_fault_handler(
     }
     println!(" cr2: 0x{:08X}", cr2);
 
-    let page = cr2 & !0xFFF;
+    print!("Details: ");
+    match (err_code >> 0) & 1 {
+        0 => print!("non-present page, "),
+        _ => print!("page-protection violation, "),
+    }
+    match (err_code >> 1) & 1 {
+        0 => print!("read, "),
+        _ => print!("write, "),
+    }
+    match (err_code >> 2) & 1 {
+        0 => print!("kernel"),
+        _ => print!("userspace"),
+    }
+    match (err_code >> 3) & 1 {
+        0 => {}
+        _ => print!(", instruction fetch"),
+    }
+    println!(".");
 
     if let Some(kvas) = KERNEL_VAS.try_lock() {
+        let page = cr2 & !0xFFF;
         let pgtbl_virt = unsafe { kvas.pgtbl_virt_of(page) };
         if pgtbl_virt.is_null() {
             println!("No page table for 0x{:08X}.", cr2);
