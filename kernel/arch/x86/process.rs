@@ -23,7 +23,7 @@ use crate::scheduler::SCHEDULER;
 
 use crate::arch::gdt;
 use crate::arch::vas::{Table, VirtAddrSpace};
-use crate::elf::ElfInfo;
+use crate::elf::{ElfObj, ProgSegmentType};
 use crate::memory_region::{OverlappingWith, Region};
 use crate::syscall;
 
@@ -36,8 +36,8 @@ extern "C" {
 ///
 /// Its start and end must be aligned at 4 MiB.
 pub const PROGRAM_REGION: Region<u32> = Region {
-    start: 1 * 1024 * 1024 * 1024, // 1 GiB
-    end: 2 * 1024 * 1024 * 1024,   // 2 GiB
+    start: 128 * 1024 * 1024,    // 128 MiB
+    end: 1 * 1024 * 1024 * 1024, // 1 GiB
 };
 
 pub fn default_entry_point() -> ! {
@@ -59,15 +59,28 @@ pub fn default_entry_point() -> ! {
 
         SCHEDULER.running_thread().tcb.cr3 = vas.pgdir_phys;
 
-        let fd = syscall::open("/bin/test-syscalls").unwrap();
-        let mut pre_buf = Vec::with_capacity(10240);
-        for _ in 0..10240 {
-            pre_buf.push(0);
-        }
-        let mut buf = pre_buf.into_boxed_slice();
-        syscall::read(fd, &mut buf).unwrap();
-
-        let elf = ElfInfo::from_raw_data(&buf).unwrap();
+        let fd = syscall::open("/bin/test-hello-world").unwrap();
+        let elf = ElfObj::from_feeder(|offset, len| {
+            let buf_len = match len {
+                0 => 64,
+                other => other,
+            };
+            let mut pre_buf = Vec::with_capacity(buf_len);
+            for _ in 0..pre_buf.capacity() {
+                pre_buf.push(0);
+            }
+            let mut buf = pre_buf.into_boxed_slice();
+            syscall::seek(syscall::Seek::Abs, fd, offset).unwrap();
+            if len == 0 {
+                syscall::read(fd, &mut buf).unwrap();
+                let null_at = buf.iter().position(|&x| x == 0).unwrap();
+                buf.into_vec().drain(0..null_at).collect()
+            } else {
+                syscall::read(fd, &mut buf).unwrap();
+                buf
+            }
+        })
+        .unwrap();
         println!("[PROC] {:#X?}", elf);
 
         assert!(PROGRAM_REGION.start.trailing_zeros() >= 22);
@@ -82,7 +95,11 @@ pub fn default_entry_point() -> ! {
         }
         println!("done.");
 
-        for load in elf.program_headers {
+        for load in elf.program_segments {
+            if load._type != ProgSegmentType::Load {
+                continue;
+            }
+
             let mem_reg = Region::from_start_len(
                 load.in_mem_at as u32,
                 load.in_mem_size as u32,
