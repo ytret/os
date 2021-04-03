@@ -20,7 +20,7 @@ ENTRY(_entry)
 
 SECTIONS
 {
-    . = 1024M;
+    . = 0x8000000;
 
     .text : ALIGN(4K)
     {
