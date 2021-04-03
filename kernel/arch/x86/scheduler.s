@@ -75,6 +75,7 @@ switch_threads:
  * Arguments: 1) usermode code segment (not a selector)
  *            2) usermode data segment (not a selector)
  *            3) the address to jump to
+ *            4) usermode esp value
  * This function does not return.
  */
 .global jump_into_usermode
@@ -98,9 +99,8 @@ jump_into_usermode:
     movw %bx, %gs
 
     // Make up the iret stack frame.
-    movl %esp, %edx
     pushl %ebx                  // ss = data segment selector
-    pushl %edx                  // esp
+    pushl 20(%ebp)              // esp
     pushf
     pushl %eax                  // cs = code segment selector
     pushl %ecx                  // eip

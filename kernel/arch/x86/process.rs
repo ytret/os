@@ -28,7 +28,12 @@ use crate::memory_region::{OverlappingWith, Region};
 use crate::syscall;
 
 extern "C" {
-    fn jump_into_usermode(code_seg: u16, data_seg: u16, jump_to: u32) -> !;
+    fn jump_into_usermode(
+        code_seg: u16,
+        data_seg: u16,
+        jump_to: u32,
+        esp: u32,
+    ) -> !;
 }
 
 /// Region of program's virtual memory intended to be used by the process itself
@@ -38,6 +43,16 @@ extern "C" {
 pub const PROGRAM_REGION: Region<u32> = Region {
     start: 128 * 1024 * 1024,    // 128 MiB
     end: 1 * 1024 * 1024 * 1024, // 1 GiB
+};
+
+pub const USERMODE_STACK: Region<u32> = Region {
+    start: 3 * 1024 * 1024 * 1024,      // 3 GiB
+    end: 3 * 1024 * 1024 * 1024 + 4096, // 3 GiB + 4 KiB
+};
+
+pub const ARGV_ENVIRON: Region<u32> = Region {
+    start: 3 * 1024 * 1024 * 1024 + 4096,   // 3 GiB + 4 KiB
+    end: 3 * 1024 * 1024 * 1024 + 2 * 4096, // 3 GiB + 8 KiB
 };
 
 pub fn default_entry_point() -> ! {
@@ -132,6 +147,7 @@ pub fn default_entry_point() -> ! {
                 if vas.virt_to_phys(virt_page).unwrap() == 0 {
                     let phys = PMM_STACK.lock().pop_page();
                     vas.map_page(virt_page, phys);
+                    (virt_page as *mut u8).write_bytes(0, 4096);
                     println!(" has been mapped to 0x{:08X}.", phys);
                 } else {
                     println!(" has been mapped already.");
@@ -151,6 +167,49 @@ pub fn default_entry_point() -> ! {
             elf.entry_point,
         );
 
+        assert_eq!(USERMODE_STACK.start % 4096, 0);
+        assert_eq!(USERMODE_STACK.end % 4096, 0);
+        assert!(USERMODE_STACK.size() <= 4 * 1024 * 1024);
+
+        let pde_idx = (USERMODE_STACK.start >> 22) as usize;
+        let pgtbl_virt =
+            alloc(Layout::from_size_align(4096, 4096).unwrap()) as *mut Table;
+        pgtbl_virt.write_bytes(0, 1);
+        vas.set_pde_addr(pde_idx, pgtbl_virt);
+        println!(
+            "[PROC] Allocated a page table for a usermode stack at {:?}.",
+            USERMODE_STACK,
+        );
+
+        assert_eq!(USERMODE_STACK.size(), 4096);
+        let mut phys = PMM_STACK.lock().pop_page();
+        vas.map_page(USERMODE_STACK.start, phys);
+        (USERMODE_STACK.start as *mut u8).write_bytes(0, 4096);
+        println!(
+            "[PROC] Page 0x{:08X} has been mapped to 0x{:08X}.",
+            USERMODE_STACK.start, phys,
+        );
+
+        phys = PMM_STACK.lock().pop_page();
+        vas.map_page(ARGV_ENVIRON.start, phys);
+        (ARGV_ENVIRON.start as *mut u8).write_bytes(0, 4096);
+        println!(
+            "[PROC] Page 0x{:08X} has been mapped to 0x{:08X}.",
+            ARGV_ENVIRON.start, phys,
+        );
+
+        let argc = 0;
+        let argv = ARGV_ENVIRON.start as *mut u32;
+        *argv = 0; // argv[argc] = NULL
+        let environ = argv.wrapping_add(1);
+        *environ = 0; // environ[0] = NULL
+
+        let usermode_stack_top = (USERMODE_STACK.end as *mut u32)
+            .wrapping_sub(3);
+        *usermode_stack_top.wrapping_add(0) = environ as u32; // environ
+        *usermode_stack_top.wrapping_add(1) = argv as u32; // argv
+        *usermode_stack_top.wrapping_add(2) = argc; // argc
+
         SCHEDULER.keep_scheduling();
 
         println!("[PROC] Entering usermode.");
@@ -158,6 +217,7 @@ pub fn default_entry_point() -> ! {
             gdt::USERMODE_CODE_SEG,
             gdt::USERMODE_DATA_SEG,
             elf.entry_point as u32,
+            usermode_stack_top as u32,
         );
     }
 }
