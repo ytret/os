@@ -19,7 +19,7 @@ LD := i686-elf-ld
 
 OUTPUT := main
 INSTALLAS := test-syscalls
-SYSROOT := $(PWD)/../../sysroot
+SYSROOT := $(CURDIR)/../../sysroot
 DESTDIR := $(SYSROOT)/bin
 
 .PHONY: all install clean

@@ -18,20 +18,22 @@ ARCH ?= x86
 ARCHDIR := $(PWD)/kernel/arch/$(ARCH)
 include $(ARCHDIR)/Makefile.inc
 
-LIBDIR ?= $(PWD)/lib
-ISODIR ?= $(PWD)/isodir
-
 AS := i686-elf-as
 LD := i686-elf-ld
 RUST := rustc
 RUSTFMT := rustfmt
 RUSTDOC := rustdoc
+SHELL := /bin/bash
+
+LIBDIR ?= $(PWD)/lib
+ISODIR ?= $(PWD)/isodir
+USERDIR ?= $(PWD)/userland
 
 RUSTFLAGS := --target $(ARCHDIR)/target.json -L $(LIBDIR)
 RUSTFMTFLAGS := --check --edition 2018 \
 	--config max_width=80,reorder_modules=false
 
-# kernel/main.rs must be first (e.g. see the $(LIBKERNEL) rule)
+# kernel/main.rs must be first (see the $(LIBKERNEL) rule)
 SOURCES := \
 	kernel/main.rs \
 	kernel/bitflags.rs \
@@ -74,9 +76,23 @@ ISOFILE := kernel.iso
 HDIMG := hd.img
 SYSROOT := sysroot
 
-.PHONY: all get-libs doc iso sysroot hd sync clean clean-all run check-fmt
+USERPROGS ?= syscalls hello-world
 
-all: $(OUTPUT)
+.DEFAULT_GOAL := kernel
+.PHONY: all kernel userland \
+	get-libs \
+        iso sysroot hd sync run \
+	clean-all clean-libdir clean-kernel clean-userland \
+	check-fmt doc
+
+all: kernel userland
+
+get-libs:
+	mkdir $(LIBDIR)
+	cp -R $(RUSTLIBS)/core $(RUSTLIBS)/stdarch $(RUSTLIBS)/alloc $(LIBDIR)/
+	cd $(LIBDIR) && git clone "https://github.com/rust-lang/compiler-builtins"
+
+kernel: $(OUTPUT)
 
 $(OUTPUT): $(LINKLIST) $(ARCHDIR)/linker.ld
 	$(LD) -T $(ARCHDIR)/linker.ld $(LINKLIST) -o $@
@@ -103,14 +119,11 @@ $(LIBALLOC): $(LIBCORE) $(LIBCOMP)
 	$(RUST) -O $(RUSTFLAGS) --edition 2018 --out-dir $(LIBDIR) \
 	--crate-name alloc --crate-type rlib $(LIBDIR)/alloc/src/lib.rs
 
-doc: $(SOURCES)
-	$(RUSTDOC) $(RUSTFLAGS) --edition 2018 --crate-name kernel \
-	--crate-type staticlib $<
-
-get-libs:
-	mkdir -p $(LIBDIR)
-	cp -R $(RUSTLIBS)/core $(RUSTLIBS)/stdarch $(RUSTLIBS)/alloc $(LIBDIR)/
-	cd $(LIBDIR) && git clone "https://github.com/rust-lang/compiler-builtins"
+userland:
+	userprogs=($(USERPROGS));					\
+	for userprog in $${userprogs[@]}; do				\
+		make -C $(USERDIR)/$$userprog all install || exit 1;	\
+	done
 
 iso: $(ISOFILE)
 
@@ -128,7 +141,6 @@ sysroot:
 	ln -s local/include $(SYSROOT)/usr/include
 
 hd:
-	test -f $(HDIMG) && rm -i $(HDIMG) || true
 	bximage -q -func=create -hd=2048M -imgmode=flat $(HDIMG)
 	mkfs.ext2 $(HDIMG) -d $(SYSROOT)
 
@@ -140,17 +152,29 @@ sync:
 	sudo umount mnt
 	rmdir mnt
 
-clean:
-	rm -rf $(ISOFILE) $(ISODIR) $(LINKLIST) $(OUTPUT)
+run:
+	qemu-system-i386 -m 32								\
+	                 -drive if=ide,index=0,media=cdrom,file=$(ISOFILE)		\
+	                 -drive if=ide,index=1,media=disk,file=hd.img,format=raw	\
+	                 -serial stdio
 
-clean-all: clean
+clean-all: clean-libdir clean-kernel clean-userland
+
+clean-libdir:
 	rm -rf $(LIBDIR)
 
-run:
-	qemu-system-i386 -m 32 \
-	                 -drive if=ide,index=0,media=cdrom,file=$(ISOFILE) \
-	                 -drive if=ide,index=1,media=disk,file=hd.img,format=raw \
-	                 -serial stdio
+clean-kernel:
+	rm -rf $(ISOFILE) $(ISODIR) $(LINKLIST) $(OUTPUT)
+
+clean-userland:
+	userprogs=($(USERPROGS));				\
+	for userprog in $${userprogs[@]}; do			\
+		make -C $(USERDIR)/$$userprog clean || exit 1;	\
+	done
 
 check-fmt: $(SOURCES)
 	$(RUSTFMT) $(RUSTFMTFLAGS) $<
+
+doc: $(SOURCES)
+	$(RUSTDOC) $(RUSTFLAGS) --edition 2018 --crate-name kernel \
+	--crate-type staticlib $<

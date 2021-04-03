@@ -19,7 +19,7 @@ CFLAGS := -c
 
 OUTPUT := main
 INSTALLAS := test-hello-world
-SYSROOT := $(PWD)/../../sysroot
+SYSROOT := $(CURDIR)/../../sysroot
 DESTDIR := $(SYSROOT)/bin
 
 .PHONY: all install clean
