@@ -27,7 +27,7 @@ DESTDIR := $(SYSROOT)/bin
 all: $(OUTPUT)
 
 $(OUTPUT): main.o
-	$(CC) -s -static $^ -o $@
+	$(CC) -static $^ -o $@
 
 %.o: %.c
 	$(CC) $(CFLAGS) $^ -o $@
