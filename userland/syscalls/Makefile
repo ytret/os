@@ -26,8 +26,8 @@ DESTDIR := $(SYSROOT)/bin
 
 all: $(OUTPUT)
 
-$(OUTPUT): main.o
-	$(LD) -T linker.ld $^ -o $@
+$(OUTPUT): main.o linker.ld
+	$(LD) -T linker.ld $< -o $@
 
 %.o: %.s
 	$(AS) -c $< -o $@
