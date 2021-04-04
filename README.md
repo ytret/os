@@ -1,45 +1,72 @@
-## Compilation
+## Building
 
-_This assumes you have installed [the GNU binutils for
-cross-compiling][gcc_cross_comp]._
+### Dependencies
 
-If you are building the kernel for the first time, you have to compile
-`libcore`, `liballoc` and their dependency `libcompiler_builtins` for the
-selected target (set in `Makefile`).  The first two become available in your
-`rustc` sysroot directory (see `rustc --print sysroot`) after adding the
-`rust-src` component, and the latter is fetched from
-[rust-lang/compiler-builtins][libcomp_github].  To have these three ready in the
-`lib/` subdirectory, simply run:
+* `i686-elf-as`, `i686-elf-ld`
+
+* `libcore`, `liballoc`
+
+      $ rustup toolchain install nightly
+      $ rustup component add rust-src
+
+* [`libcompiler_builtins`](https://github.com/rust-lang/compiler-builtins)
+
+To copy these into `lib/`, run:
 
     $ make get-libs
 
-Once you have the source code for `libcore`, `liballoc` and
-`libcompiler_builtins`, you can compile these crates and the kernel and link
-everything together:
+These libraries will be built the first time you run `make kernel`.
 
-    $ make
+### Kernel
 
-The final ELF binary is called `kernel.bin`.  If you ever need to recompile the
-three dependencies, you can safely delete the `lib/` directory and run the
-`get-libs` recipe again.
+    $ make kernel  # or just `make'
 
-[gcc_cross_comp]: https://wiki.osdev.org/GCC_Cross-Compiler
-[libcomp_github]: https://github.com/rust-lang/compiler-builtins
+### Userland
+
+To build and run userspace C programs, one has to have a C standard library and
+a GCC cross-compiler using that library.  For instructions on building and
+installing the latter, see [toolchain/README.md](toolchain/README.md).  myos
+userspace programs use a statically linked [port of
+mlibc](https://github.com/ytret/mlibc).  Prepare a system root:
+
+    $ make sysroot
+
+And install the static libraries there after building them.
+
+To build the userspace programs and install them into the system root, run:
+
+    $ make userland
 
 ## Running
 
-The kernel is booted according to [the Multiboot2
-specification][multiboot2_spec] by GRUB2.  The disk image `kernel.iso` is
-created with `grub-mkrescue`, so you need to have that tool installed.  To
-create the ISO and jump into the QEMU emulator, run:
+### Hard disk image
 
-    $ make iso run
+A hard disk image is created using `bximage` from Bochs:
 
-Alternatively, you can run the kernel in Bochs:
+    $ make hd
 
-    $ make iso && bochs
+It creates a raw image with an ext2 file system inside and copies there
+everything from the system root.  To sort of synchronize the contents of the
+image with the system root, run:
 
-See `.bochsrc` for the configuration options.
+    $ make sync
 
-[multiboot2_spec]:
-https://www.gnu.org/software/grub/manual/multiboot2/multiboot.html
+It copies new files to the disk image, but also removes files that are not
+present in the system root from it.
+
+### ISO
+
+`kernel.iso` is created with `grub-mkrescue`, so you must have that tool
+installed.
+
+    $ make iso
+
+### QEMU
+
+    $ make run
+
+### Bochs
+
+    $ bochs -q
+
+See `.bochsrc` for configuration options.
