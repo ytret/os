@@ -116,6 +116,12 @@ pub fn init() {
 
     pmm_stack::init();
 
+    // Place a guard page at 0x00000000 to detect null pointer dereference.
+    unsafe {
+        let mut kvas = vas::KERNEL_VAS.lock();
+        kvas.place_guard_page(0x00000000);
+    }
+
     let last_region_end = if let Some(hpet_region) = aif.hpet_region {
         hpet_region.end
     } else {
