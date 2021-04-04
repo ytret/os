@@ -36,13 +36,13 @@ extern "C" {
     ) -> !;
 }
 
-/// Region of program's virtual memory intended to be used by the process itself
+/// Region of program's virtual memory intended to be used by the program itself
 /// and not the kernel.
 ///
 /// Its start and end must be aligned at 4 MiB.
 pub const PROGRAM_REGION: Region<u32> = Region {
-    start: 128 * 1024 * 1024,    // 128 MiB
-    end: 1 * 1024 * 1024 * 1024, // 1 GiB
+    start: 128 * 1024 * 1024,                      // 128 MiB
+    end: 3 * 1024 * 1024 * 1024 + 4 * 1024 * 1024, // 3 GiB + 4 MiB
 };
 
 pub const USERMODE_STACK: Region<u32> = Region {
@@ -51,8 +51,8 @@ pub const USERMODE_STACK: Region<u32> = Region {
 };
 
 pub const ARGV_ENVIRON: Region<u32> = Region {
-    start: 3 * 1024 * 1024 * 1024 + 4096,   // 3 GiB + 4 KiB
-    end: 3 * 1024 * 1024 * 1024 + 2 * 4096, // 3 GiB + 8 KiB
+    start: 3 * 1024 * 1024 * 1024 + 1 * 4096, // 3 GiB + 4 KiB
+    end: 3 * 1024 * 1024 * 1024 + 2 * 4096,   // 3 GiB + 8 KiB
 };
 
 pub fn default_entry_point() -> ! {
@@ -74,7 +74,7 @@ pub fn default_entry_point() -> ! {
 
         SCHEDULER.running_thread().tcb.cr3 = vas.pgdir_phys;
 
-        let fd = syscall::open("/bin/test-hello-world").unwrap();
+        let fd = syscall::open("/bin/test-syscalls").unwrap();
         let elf = ElfObj::from_feeder(|offset, len| {
             let buf_len = match len {
                 0 => 64,
@@ -122,6 +122,14 @@ pub fn default_entry_point() -> ! {
             assert_eq!(
                 mem_reg.overlapping_with(PROGRAM_REGION),
                 OverlappingWith::IsIn,
+            );
+            assert_eq!(
+                mem_reg.overlapping_with(USERMODE_STACK),
+                OverlappingWith::NoOverlap,
+            );
+            assert_eq!(
+                mem_reg.overlapping_with(ARGV_ENVIRON),
+                OverlappingWith::NoOverlap,
             );
 
             if vas.pgtbl_virt_of(mem_reg.start).is_null() {
@@ -204,11 +212,11 @@ pub fn default_entry_point() -> ! {
         let environ = argv.wrapping_add(1);
         *environ = 0; // environ[0] = NULL
 
-        let usermode_stack_top = (USERMODE_STACK.end as *mut u32)
-            .wrapping_sub(3);
-        *usermode_stack_top.wrapping_add(0) = environ as u32; // environ
-        *usermode_stack_top.wrapping_add(1) = argv as u32; // argv
-        *usermode_stack_top.wrapping_add(2) = argc; // argc
+        let usermode_stack_top =
+            (USERMODE_STACK.end as *mut u32).wrapping_sub(3);
+        *usermode_stack_top.wrapping_add(0) = environ as u32;
+        *usermode_stack_top.wrapping_add(1) = argv as u32;
+        *usermode_stack_top.wrapping_add(2) = argc;
 
         SCHEDULER.keep_scheduling();
 
