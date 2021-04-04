@@ -33,7 +33,7 @@
 .global _entry
 .type _entry, @function
 _entry:
-    movl %esp, %ebp
+    movl $0, %ebp
 
     call open_console
 
@@ -44,9 +44,11 @@ _entry:
     // Save the file descriptor.
     movl %eax, (console_fd)
 
-0:  PRINT $entry_hello (entry_hello_len)
+0:  // Print the prompt.
+    PRINT $entry_hello (entry_hello_len)
     PRINT $entry_list (entry_list_len)
 
+    // Read the answer.
     READ $entry_buf $1
     cmpl $0, %eax
     jl 1f
@@ -56,7 +58,7 @@ _entry:
     cmpb $0x32, (entry_buf)     // 2
     je 3f
 
-    jmp 1f
+    jmp 0b
 
 2:  call test_console
     jmp 0b
