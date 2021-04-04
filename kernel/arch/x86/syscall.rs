@@ -18,6 +18,7 @@ use core::slice;
 use core::str;
 
 use crate::arch::interrupts::InterruptStackFrame;
+use crate::bitflags::BitFlags;
 use crate::syscall;
 
 #[derive(Clone, Copy, Debug)]
@@ -55,13 +56,14 @@ pub extern "C" fn syscall_handler(
     //     unsafe { SCHEDULER.running_process().id },
     // );
     // println!("{:#010X?}", gp_regs);
+    let syscall_num: u32 = { gp_regs.eax };
     let return_value: i32;
 
     // 0 open
     // ebx: pathname, *const u8
     // ecx: pathname len, u32
     // returns fd or error number, i32
-    if gp_regs.eax == 0 {
+    if syscall_num == 0 {
         let pathname = unsafe {
             let bytes = slice::from_raw_parts(
                 gp_regs.ebx as *const u8,
@@ -83,7 +85,7 @@ pub extern "C" fn syscall_handler(
     // ecx: buffer pointer, *const u8
     // edx: buffer size in bytes, u32
     // returns 0 or error number, i32
-    else if gp_regs.eax == 1 {
+    else if syscall_num == 1 {
         let fd = gp_regs.ebx as i32;
         let buf = unsafe {
             slice::from_raw_parts(
@@ -103,7 +105,7 @@ pub extern "C" fn syscall_handler(
     // ecx: buffer pointer, *mut u8
     // edx: buffer size in bytes, u32
     // returns 0 or error number, i32
-    else if gp_regs.eax == 2 {
+    else if syscall_num == 2 {
         let fd = gp_regs.ebx as i32;
         let buf = unsafe {
             slice::from_raw_parts_mut(
@@ -123,7 +125,7 @@ pub extern "C" fn syscall_handler(
     // ebx: fd, i32
     // ecx: new offset, u32
     // returns 0 or error number, i32
-    else if gp_regs.eax == 3 {
+    else if syscall_num == 3 {
         let fd = gp_regs.ebx as i32;
         let new_offset = gp_regs.ecx as usize;
         return_value = match syscall::seek(syscall::Seek::Abs, fd, new_offset) {
@@ -137,7 +139,7 @@ pub extern "C" fn syscall_handler(
     // ebx: fd, i32
     // ecx: add to offset, u32
     // returns 0 or error number, i32
-    else if gp_regs.eax == 4 {
+    else if syscall_num == 4 {
         let fd = gp_regs.ebx as i32;
         let add_to_offset = gp_regs.ecx as usize;
         return_value =
@@ -147,8 +149,34 @@ pub extern "C" fn syscall_handler(
                     syscall::SeekErr::BadFd => SEEK_EBADF,
                 },
             };
+    }
+    // 5 mem_map
+    // ebx: args, *const struct, where struct is:
+    //     addr, u32
+    //     len, u32
+    //     prot, u32
+    //     flags, u32
+    //     fd, i32
+    //     offset, u32
+    // return value: FIXME:
+    else if syscall_num == 5 {
+        let args =
+            unsafe { slice::from_raw_parts(gp_regs.ebx as *const u32, 6) };
+
+        let addr = args[0];
+        let len = args[1];
+        let prot = BitFlags::<u32, syscall::MemMapProt>::new(args[2]);
+        let flags = BitFlags::<u32, syscall::MemMapFlags>::new(args[3]);
+        let fd = args[4] as i32;
+        let offset = args[5] as usize;
+
+        return_value =
+            match syscall::mem_map(addr, len, prot, flags, fd, offset) {
+                Ok(ptr) => ptr as i32,
+                Err(_) => unimplemented!(),
+            };
     } else {
-        println!("[SYS] Ignoring an invalid syscall number.");
+        println!("[SYS] Ignoring an invalid syscall number {}.", syscall_num);
         return_value = 0;
     }
 

@@ -17,6 +17,7 @@
 use crate::fs::VFS_ROOT;
 use crate::scheduler::SCHEDULER;
 
+use crate::bitflags::BitFlags;
 use crate::fs;
 use crate::process::OpenFileErr;
 
@@ -152,3 +153,45 @@ pub enum Seek {
 pub enum SeekErr {
     BadFd,
 }
+
+pub fn mem_map(
+    addr: u32,
+    len: u32,
+    prot: BitFlags<u32, MemMapProt>,
+    flags: BitFlags<u32, MemMapFlags>,
+    fd: i32,
+    offset: usize,
+) -> Result<usize, MemMapErr> {
+    println!(
+        "[SYS MEM_MAP] addr = 0x{:08X}, len = {}, prot = {}, flags = {}, fd = {}, offset = 0x{:08X}",
+        addr, len, prot.value, flags.value, fd, offset,
+    );
+
+    if addr != 0 {
+        unimplemented!("[SYS MEM_MAP] addr is not 0");
+    }
+    if fd != -1 {
+        unimplemented!("[SYS MEM_MAP] fd is not -1");
+    }
+
+    unimplemented!();
+}
+
+bitflags! {
+    #[repr(u32)]
+    pub enum MemMapProt {
+        Read = 1 << 0,
+        Write = 1 << 1,
+    }
+}
+
+bitflags! {
+    #[repr(u32)]
+    pub enum MemMapFlags {
+        Private = 1 << 0,
+        Anonymous = 1 << 1,
+    }
+}
+
+#[derive(Debug)]
+pub enum MemMapErr {}
