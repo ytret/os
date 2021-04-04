@@ -19,6 +19,13 @@ Patch GCC 10.2.0:
     $ patch -p1 < ../gcc-10.2.0.patch
     $ cd libstdc++-v3 && autoreconf
 
+Install the [C standard library](https://github.com/ytret/mlibc) headers:
+
+    $ cd /path/to/ytret/mlibc
+    $ $EDITOR meson_options.txt  # set `headers_only' to `true'
+    $ meson builddir --cross-file cross.txt
+    $ DESTDIR=$SYSROOT ninja install
+
 Configure, build and install Binutils 2.36.1:
 
     $ mkdir build-binutils-2.36.1 && cd build-binutils-2.36.1
@@ -33,8 +40,7 @@ Configure, build and install GCC 10.2.0:
     $ make all-gcc all-target-libgcc
     $ make install-gcc install-target-libgcc
 
-Before continuing, build and install the [mlibc][ytret_mlibc] headers. Then,
-build and install the standard C++ library:
+Build and install the C++ standard library:
 
     $ cd build-gcc-10.2.0
     $ make all-target-libstdc++-v3
