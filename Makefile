@@ -135,7 +135,7 @@ $(ISOFILE): $(OUTPUT) grub.cfg
 
 sysroot:
 	test ! -d $(SYSROOT)
-	mkdir -p $(SYSROOT)/dev
+	mkdir -p $(SYSROOT)/dev $(SYSROOT)/bin
 	mkdir -p $(SYSROOT)/usr/local/lib $(SYSROOT)/usr/local/include
 	ln -s local/lib $(SYSROOT)/usr/lib
 	ln -s local/include $(SYSROOT)/usr/include
