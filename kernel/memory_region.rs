@@ -56,6 +56,10 @@ impl<T: RegionType> Region<T> {
         }
         return OverlappingWith::NoOverlap;
     }
+
+    pub fn contains(&self, something: &T) -> bool {
+        self.range().contains(something)
+    }
 }
 
 impl<T: RegionType + fmt::UpperHex> fmt::Debug for Region<T> {
