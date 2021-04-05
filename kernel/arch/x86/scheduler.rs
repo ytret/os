@@ -16,6 +16,7 @@
 
 use core::sync::atomic::Ordering;
 
+use crate::arch::vas::KERNEL_VAS;
 use crate::scheduler::{NO_SCHED_COUNTER, SCHEDULER, TEMP_SPAWNER_ON};
 
 use crate::arch::gdt;
@@ -66,7 +67,8 @@ pub fn init() {
 
     unsafe {
         let init_process_id = SCHEDULER.allocate_process_id();
-        let mut init_process = Process::new(init_process_id);
+        let mut init_process =
+            Process::new(init_process_id, KERNEL_VAS.lock().clone());
         let init_thread_id = init_process.allocate_thread_id();
         SCHEDULER.add_process(init_process);
 

@@ -155,33 +155,84 @@ pub enum SeekErr {
 }
 
 pub fn mem_map(
-    addr: u32,
-    len: u32,
+    addr: usize,
+    len: usize,
     prot: BitFlags<u32, MemMapProt>,
     flags: BitFlags<u32, MemMapFlags>,
     fd: i32,
     offset: usize,
 ) -> Result<usize, MemMapErr> {
     println!(
-        "[SYS MEM_MAP] addr = 0x{:08X}, len = {}, prot = {}, flags = {}, fd = {}, offset = 0x{:08X}",
+        "[SYS MEM_MAP] addr = 0x{:08X}, len = 0x{:08X}, prot = {}, flags = {}, fd = {}, offset = 0x{:08X}",
         addr, len, prot.value, flags.value, fd, offset,
     );
 
     if addr != 0 {
-        unimplemented!("[SYS MEM_MAP] addr is not 0");
+        unimplemented!("syscall mem_map: addr is not 0");
     }
     if fd != -1 {
-        unimplemented!("[SYS MEM_MAP] fd is not -1");
+        unimplemented!("syscall mem_map: fd is not -1");
+    }
+    if offset != 0 {
+        println!("[SYS MEM_MAP] non-zero offset (0x{:X}) is ignored", offset);
     }
 
-    unimplemented!();
+    let mut readable = false;
+    let mut writable = false;
+
+    let mut prot_left = prot;
+    if prot_left.has_set(MemMapProt::None) {
+        prot_left.unset_flag(MemMapProt::None);
+    }
+    if prot_left.has_set(MemMapProt::Read) {
+        readable = true;
+        prot_left.unset_flag(MemMapProt::Read);
+    }
+    if prot_left.has_set(MemMapProt::Write) {
+        writable = true;
+        prot_left.unset_flag(MemMapProt::Write);
+    }
+    if prot_left.has_set(MemMapProt::Exec) {
+        unimplemented!("syscall mem_map: MemMapProt::Exec");
+    }
+    assert_eq!(prot_left.value, 0, "unknown prot: {}", prot_left.value);
+
+    let mut private = false;
+    let mut anonymous = false;
+
+    let mut flags_left = flags;
+    if flags_left.has_set(MemMapFlags::Private) {
+        private = true;
+        flags_left.unset_flag(MemMapFlags::Private);
+    }
+    if flags_left.has_set(MemMapFlags::Anonymous) {
+        anonymous = true;
+        flags_left.unset_flag(MemMapFlags::Anonymous);
+    }
+    if flags_left.has_set(MemMapFlags::Shared) {
+        unimplemented!("syscall mem_map: MemMapFlags::Shared");
+    }
+    if flags_left.has_set(MemMapFlags::Fixed) {
+        unimplemented!("syscall mem_map: MemMapFlags::Fixed");
+    }
+    assert_eq!(flags_left.value, 0, "unknown flags: {}", flags_left.value);
+
+    assert!(readable && writable);
+    assert!(private && anonymous);
+
+    let mapping = unsafe { SCHEDULER.running_process().mem_map(len) };
+    println!("mapping = {:?}", mapping.region);
+
+    Ok(mapping.region.start as usize)
 }
 
 bitflags! {
     #[repr(u32)]
     pub enum MemMapProt {
-        Read = 1 << 0,
-        Write = 1 << 1,
+        None = 1 << 0,
+        Read = 1 << 1,
+        Write = 1 << 2,
+        Exec = 1 << 3,
     }
 }
 
@@ -190,6 +241,8 @@ bitflags! {
     pub enum MemMapFlags {
         Private = 1 << 0,
         Anonymous = 1 << 1,
+        Shared = 1 << 2,
+        Fixed = 1 << 3,
     }
 }
 

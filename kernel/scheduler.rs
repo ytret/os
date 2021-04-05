@@ -23,6 +23,7 @@ use crate::timer::TIMER;
 
 use crate::arch;
 use crate::arch::thread::ThreadControlBlock;
+use crate::arch::vas::VirtAddrSpace;
 use crate::process::Process;
 use crate::thread::Thread;
 
@@ -207,16 +208,19 @@ fn schedule() {
 
         if TEMP_SPAWNER_ON && NUM_SPAWNED < 1 {
             let process_id = SCHEDULER.allocate_process_id();
-            let mut process = Process::new(process_id);
+            let mut process =
+                Process::new(process_id, VirtAddrSpace::kvas_copy_on_heap());
             let thread_id = process.allocate_thread_id();
+            let pgdir_phys = process.vas.pgdir_phys;
             SCHEDULER.add_process(process);
             println!("[SCHED] Created a process with ID {}.", process_id);
 
-            let new_thread = Thread::new_with_stack(
+            let mut new_thread = Thread::new_with_stack(
                 process_id,
                 thread_id,
                 default_entry_point,
             );
+            new_thread.tcb.cr3 = pgdir_phys;
             SCHEDULER
                 .runnable_threads
                 .as_mut()

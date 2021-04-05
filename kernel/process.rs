@@ -17,22 +17,35 @@
 use alloc::vec::Vec;
 
 pub use crate::arch::process::default_entry_point;
+use crate::arch::process::MemMapping;
+use crate::arch::vas::VirtAddrSpace;
 use crate::fs;
+use crate::memory_region::Region;
 
 pub const MAX_OPENED_FILES: i32 = 32;
 
 pub struct Process {
     pub id: usize,
-    pub opened_files: Vec<OpenedFile>,
     new_thread_id: usize,
+
+    pub vas: VirtAddrSpace,
+
+    pub program_segments: Vec<Region<usize>>,
+    pub mem_mappings: Vec<MemMapping>,
+    pub opened_files: Vec<OpenedFile>,
 }
 
 impl Process {
-    pub fn new(id: usize) -> Self {
+    pub fn new(id: usize, vas: VirtAddrSpace) -> Self {
         Process {
             id,
-            opened_files: Vec::new(),
             new_thread_id: 0,
+
+            vas,
+
+            program_segments: Vec::new(),
+            mem_mappings: Vec::new(),
+            opened_files: Vec::new(),
         }
     }
 

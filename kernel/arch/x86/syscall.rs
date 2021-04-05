@@ -163,8 +163,8 @@ pub extern "C" fn syscall_handler(
         let args =
             unsafe { slice::from_raw_parts(gp_regs.ebx as *const u32, 6) };
 
-        let addr = args[0];
-        let len = args[1];
+        let addr = args[0] as usize;
+        let len = args[1] as usize;
         let prot = BitFlags::<u32, syscall::MemMapProt>::new(args[2]);
         let flags = BitFlags::<u32, syscall::MemMapFlags>::new(args[3]);
         let fd = args[4] as i32;

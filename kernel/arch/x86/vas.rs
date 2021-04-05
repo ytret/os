@@ -60,6 +60,7 @@ bitflags! {
 // It is the user's obligation to ensure that the VAS is consistent, meaning
 // that the PDEs and PT pointers point to the same PTs.  Otherwise it is
 // undefined behavior.
+#[derive(Clone)]
 pub struct VirtAddrSpace {
     pgdir_virt: *mut Directory, // relative to the kernel VAS
     pub pgdir_phys: u32,
