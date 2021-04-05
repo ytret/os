@@ -258,8 +258,12 @@ impl VirtAddrSpace {
     pub unsafe fn virt_to_phys(&self, virt: u32) -> Option<u32> {
         let pgtbl_virt = self.pgtbl_virt_of(virt);
         if !pgtbl_virt.is_null() {
-            let pte_idx = ((virt >> 12) & 0x3FF) as usize;
-            Some((*pgtbl_virt).0[pte_idx].addr() + (virt & 0xFFF))
+            let pte = self.pgtbl_entry(virt);
+            if pte.flags().has_set(PteFlags::Present) {
+                Some(pte.addr())
+            } else {
+                None
+            }
         } else {
             None
         }

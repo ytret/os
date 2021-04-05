@@ -152,7 +152,7 @@ pub fn default_entry_point() -> ! {
 
             for virt_page in mem_reg.range().step_by(4096) {
                 print!("[PROC] Page 0x{:08X}", virt_page);
-                if vas.virt_to_phys(virt_page).unwrap() == 0 {
+                if vas.virt_to_phys(virt_page).is_none() {
                     let phys = PMM_STACK.lock().pop_page();
                     vas.map_page(virt_page, phys);
                     (virt_page as *mut u8).write_bytes(0, 4096);
