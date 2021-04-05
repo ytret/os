@@ -15,7 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 CC := i686-myos-gcc
-CFLAGS := -c
+CFLAGS := -c -g
 
 OUTPUT := main
 INSTALLAS := test-hello-world
