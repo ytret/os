@@ -119,11 +119,11 @@ impl Process {
                         aligned_at_4mib + 0x400000,
                     );
                 } else {
-                    println!(
-                        "[PROC MEM_MAP] There is a page table for 0x{:08X}..0x{:08X}.",
-                        aligned_at_4mib,
-                        aligned_at_4mib + 0x400000,
-                    );
+                    // println!(
+                    //     "[PROC MEM_MAP] There is a page table for 0x{:08X}..0x{:08X}.",
+                    //     aligned_at_4mib,
+                    //     aligned_at_4mib + 0x400000,
+                    // );
                 }
             }
         }
@@ -139,10 +139,10 @@ impl Process {
 
                 let phys_page = PMM_STACK.lock().pop_page();
                 self.vas.map_page(virt_page, phys_page);
-                println!(
-                    "[PROC MEM_MAP] Page 0x{:08X} has been mapped to 0x{:08X}.",
-                    virt_page, phys_page,
-                );
+                // println!(
+                //     "[PROC MEM_MAP] Page 0x{:08X} has been mapped to 0x{:08X}.",
+                //     virt_page, phys_page,
+                // );
 
                 let raw_ptr = virt_page as *mut u8;
                 raw_ptr.write_bytes(0, 4096);
@@ -316,21 +316,15 @@ pub fn default_entry_point() -> ! {
         this_process.vas.map_page(ARGV_ENVIRON.start, phys);
         (ARGV_ENVIRON.start as *mut u8).write_bytes(0, 4096);
         println!(
-            "[PROC] Page 0x{:08X} has been mapped to 0x{:08X}.",
+            "[PROC] Page 0x{:08X} has been mapped to 0x{:08X} for ARGV_ENVIRON.",
             ARGV_ENVIRON.start, phys,
         );
 
-        let argc = 0;
-        let argv = ARGV_ENVIRON.start as *mut u32;
-        *argv.wrapping_add(0) = 0; // argv[argc] = NULL
-        let environ = argv.wrapping_add(1);
-        *environ = 0; // environ[0] = NULL
-
         let usermode_stack_top =
             (USERMODE_STACK.end as *mut u32).wrapping_sub(3);
-        *usermode_stack_top.wrapping_add(0) = environ as u32;
-        *usermode_stack_top.wrapping_add(1) = argv as u32;
-        *usermode_stack_top.wrapping_add(2) = argc;
+        *usermode_stack_top.wrapping_add(0) = 0; // argc
+        *usermode_stack_top.wrapping_add(1) = 0; // argv
+        *usermode_stack_top.wrapping_add(2) = 0; // environ
 
         SCHEDULER.keep_scheduling();
 
