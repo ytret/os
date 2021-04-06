@@ -162,10 +162,10 @@ pub fn mem_map(
     fd: i32,
     offset: usize,
 ) -> Result<usize, MemMapErr> {
-    println!(
-        "[SYS MEM_MAP] addr = 0x{:08X}, len = 0x{:08X}, prot = {}, flags = {}, fd = {}, offset = 0x{:08X}",
-        addr, len, prot.value, flags.value, fd, offset,
-    );
+    // println!(
+    //     "[SYS MEM_MAP] addr = 0x{:08X}, len = 0x{:08X}, prot = {}, flags = {}, fd = {}, offset = 0x{:08X}",
+    //     addr, len, prot.value, flags.value, fd, offset,
+    // );
 
     if addr != 0 {
         unimplemented!("syscall mem_map: addr is not 0");
@@ -221,7 +221,6 @@ pub fn mem_map(
     assert!(private && anonymous);
 
     let mapping = unsafe { SCHEDULER.running_process().mem_map(len) };
-    println!("mapping = {:?}", mapping.region);
 
     Ok(mapping.region.start as usize)
 }
@@ -248,3 +247,11 @@ bitflags! {
 
 #[derive(Debug)]
 pub enum MemMapErr {}
+
+pub fn debug_print_num(num: u32) {
+    println!("[SYS DEBUG_PRINT_NUM] 0x{:08X}", num);
+}
+
+pub fn debug_print_str(s: &str) {
+    println!("[SYS DEBUG_PRINT_STR] {}", s);
+}

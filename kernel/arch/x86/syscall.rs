@@ -175,6 +175,29 @@ pub extern "C" fn syscall_handler(
                 Ok(ptr) => ptr as i32,
                 Err(_) => unimplemented!(),
             };
+    }
+    // 8 debug_print_num
+    // ebx: num, u32
+    // returns 0
+    else if syscall_num == 8 {
+        let num = gp_regs.ebx;
+        syscall::debug_print_num(num);
+        return_value = 0;
+    }
+    // 9 debug_print_str
+    // ebx: string, *const u8
+    // ecx: string len, u32
+    // returns 0
+    else if syscall_num == 9 {
+        let string = unsafe {
+            let bytes = slice::from_raw_parts(
+                gp_regs.ebx as *const u8,
+                gp_regs.ecx as usize,
+            );
+            str::from_utf8(&bytes).unwrap()
+        };
+        syscall::debug_print_str(string);
+        return_value = 0;
     } else {
         println!("[SYS] Ignoring an invalid syscall number {}.", syscall_num);
         return_value = 0;
