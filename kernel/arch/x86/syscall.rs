@@ -176,6 +176,19 @@ pub extern "C" fn syscall_handler(
                 Err(_) => unimplemented!(),
             };
     }
+    // 6 set_tls
+    // ebx: a pointer to the TLS, u32
+    // returns 0
+    else if syscall_num == 6 {
+        let ptr = gp_regs.ebx as usize;
+        syscall::set_tls(ptr);
+        return_value = 0;
+    }
+    // 7 get_tls
+    // returns the pointer to the TLS, u32
+    else if syscall_num == 7 {
+        return_value = syscall::get_tls() as i32;
+    }
     // 8 debug_print_num
     // ebx: num, u32
     // returns 0

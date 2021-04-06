@@ -45,6 +45,7 @@ impl Thread {
             process_id,
 
             tcb,
+            tls_ptr: None,
         }
     }
 
