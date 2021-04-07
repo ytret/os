@@ -45,10 +45,6 @@ impl Process {
         let mut last = start;
         loop {
             let reg = Region { start, end: last };
-            let reg_usize = Region {
-                start: start as usize,
-                end: last as usize,
-            };
             assert!(start < self.program_region.end);
             if last - start == len {
                 break;
@@ -60,7 +56,7 @@ impl Process {
                 last = self.usermode_stack.end;
             }
             for segment in &self.program_segments {
-                if segment.conflicts_with(reg_usize) {
+                if segment.conflicts_with(reg) {
                     start = (segment.end + 0xFFF) & !0xFFF;
                     last = (segment.end + 0xFFF) & !0xFFF;
                 }
