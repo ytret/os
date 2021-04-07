@@ -379,7 +379,7 @@ pub fn init() {
         return;
     }
 
-    let heap_region = unsafe { KERNEL_INFO.arch_init_info.heap_region };
+    let heap_region = unsafe { KERNEL_INFO.arch.heap_region };
     assert!(
         heap_region.size() > 2 * size_of::<Tag>(),
         "heap must be big enough to accomodate at least two tags",

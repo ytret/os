@@ -543,19 +543,19 @@ pub unsafe fn parse(boot_info: *const BootInfo) {
                     );
 
                     if name == "HPET" {
-                        if KERNEL_INFO.arch_init_info.hpet_dt.is_none() {
+                        if KERNEL_INFO.arch.hpet_dt.is_none() {
                             let hpet_dt = sdt_ptr
                                 .add(1)
                                 .cast::<hpet::HpetDt>()
                                 .read_unaligned();
-                            KERNEL_INFO.arch_init_info.hpet_dt = Some(hpet_dt);
+                            KERNEL_INFO.arch.hpet_dt = Some(hpet_dt);
                         } else {
                             println!("Another HPET timer, ignoring.");
                         }
                     }
                 }
 
-                // KERNEL_INFO.arch_init_info.old_rsdp = Some();
+                // KERNEL_INFO.arch.old_rsdp = Some();
             }
             15 => {
                 let tag = &*(ptr as *const AcpiNewRsdp);
@@ -605,7 +605,7 @@ pub unsafe fn parse(boot_info: *const BootInfo) {
                             .add(1)
                             .cast::<hpet::HpetDt>()
                             .read_unaligned();
-                        KERNEL_INFO.arch_init_info.hpet_dt = Some(hpet_dt);
+                        KERNEL_INFO.arch.hpet_dt = Some(hpet_dt);
                     }
                 }
             }

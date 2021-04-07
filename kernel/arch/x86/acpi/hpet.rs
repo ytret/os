@@ -88,7 +88,7 @@ impl Hpet {
 
         Hpet {
             base_addr: unsafe {
-                KERNEL_INFO.arch_init_info.hpet_region.unwrap().start as u32
+                KERNEL_INFO.arch.hpet_region.unwrap().start as u32
             },
             period_ms,
             callback: None,
@@ -456,7 +456,7 @@ pub static mut HPET: Option<Hpet> = None;
 
 impl Timer for Hpet {
     fn init_with_period_ms(period_ms: usize) -> Self {
-        let hpet_dt = unsafe { KERNEL_INFO.arch_init_info.hpet_dt.unwrap() };
+        let hpet_dt = unsafe { KERNEL_INFO.arch.hpet_dt.unwrap() };
         let hpet = Hpet::new(&hpet_dt, period_ms as u32);
 
         let mut gen_conf = hpet.gen_conf_reg();

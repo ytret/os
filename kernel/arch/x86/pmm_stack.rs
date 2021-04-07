@@ -46,20 +46,18 @@ impl PmmStack {
                 // End of slice.
                 break;
             }
-            match region
-                .overlapping_with(KERNEL_INFO.arch_init_info.kernel_region)
-            {
+            match region.overlapping_with(KERNEL_INFO.arch.kernel_region) {
                 OverlappingWith::Covers => {
                     unimplemented!("a free region covers the kernel");
                 }
                 OverlappingWith::StartsIn => {
-                    region.start = KERNEL_INFO.arch_init_info.kernel_region.end;
+                    region.start = KERNEL_INFO.arch.kernel_region.end;
                 }
                 OverlappingWith::IsIn => {
                     continue;
                 }
                 OverlappingWith::EndsIn => {
-                    region.end = KERNEL_INFO.arch_init_info.kernel_region.start;
+                    region.end = KERNEL_INFO.arch.kernel_region.start;
                 }
                 OverlappingWith::NoOverlap => {}
             }

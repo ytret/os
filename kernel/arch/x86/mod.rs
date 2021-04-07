@@ -80,7 +80,7 @@ extern "C" {
 }
 
 pub fn init() {
-    let aif = unsafe { &mut KERNEL_INFO.arch_init_info };
+    let aif = unsafe { &mut KERNEL_INFO.arch };
 
     gdt::init();
 

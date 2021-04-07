@@ -63,14 +63,14 @@ use core::panic::PanicInfo;
 use memory_region::Region;
 
 pub struct KernelInfo {
-    arch_init_info: arch::ArchInitInfo,
+    arch: arch::ArchInitInfo,
     available_memory_regions: [Region<usize>; 32], // 32 is enough maybe
 }
 
 impl KernelInfo {
     const fn new() -> Self {
         KernelInfo {
-            arch_init_info: arch::ArchInitInfo::new(),
+            arch: arch::ArchInitInfo::new(),
             available_memory_regions: [Region { start: 0, end: 0 }; 32],
         }
     }
@@ -96,8 +96,8 @@ pub extern "C" fn main(magic_num: u32, boot_info: *const multiboot::BootInfo) {
     unsafe {
         println!(
             "Kernel size: {} KiB ({} pages)",
-            KERNEL_INFO.arch_init_info.kernel_region.size() / 1024,
-            KERNEL_INFO.arch_init_info.kernel_region.size() / 4096,
+            KERNEL_INFO.arch.kernel_region.size() / 1024,
+            KERNEL_INFO.arch.kernel_region.size() / 4096,
         );
     }
 

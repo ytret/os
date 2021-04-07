@@ -37,7 +37,7 @@ pub struct AcpiAddr {
 /// i.e. if [`ArchInitInfo::hpet_dt`](crate::arch::ArchInitInfo::hpet_dt) is
 /// `Some`.
 pub fn init() {
-    let aif = unsafe { &mut KERNEL_INFO.arch_init_info };
+    let aif = unsafe { &mut KERNEL_INFO.arch };
     let hpet_region = &mut aif.hpet_region;
 
     let hpet_phys_region = if let Some(hpet_dt) = aif.hpet_dt {
