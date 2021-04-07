@@ -38,7 +38,7 @@ pub struct Node(pub Rc<RefCell<NodeInternals>>);
 #[derive(Clone, Debug)]
 pub struct NodeInternals {
     pub _type: NodeType,
-    name: String,
+    pub name: String,
     pub id_in_fs: Option<usize>,
 
     parent: Option<Weak<RefCell<NodeInternals>>>,
@@ -73,7 +73,7 @@ impl Node {
     /// # Panics
     /// This method panics if it could not find any mount point parent node or
     /// if any of the parent nodes has been deallocated.
-    fn mount_point(&self) -> Rc<RefCell<NodeInternals>> {
+    pub fn mount_point(&self) -> Rc<RefCell<NodeInternals>> {
         let mut current = Rc::clone(&self.0);
         loop {
             if current.borrow().is_mount_point() {

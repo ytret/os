@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use alloc::rc::Rc;
+
 use crate::fs::VFS_ROOT;
 use crate::scheduler::SCHEDULER;
 
@@ -281,4 +283,30 @@ pub fn exit(status: i32) -> ! {
     unsafe {
         SCHEDULER.terminate_running_thread(status);
     }
+}
+
+pub fn is_tty(fd: i32) -> Result<bool, IsTtyErr> {
+    if !running_process!().check_fd(fd) {
+        return Err(IsTtyErr::BadFd);
+    } else {
+        // The char devices (and thus ttys) are currently located only in /dev.
+        // Furthermore, they are named tty*.  So the check is fairly easy.
+        let f = running_process!().opened_file(fd);
+        let devfs = VFS_ROOT
+            .lock()
+            .as_mut()
+            .unwrap()
+            .child_named("dev")
+            .unwrap();
+        if !Rc::ptr_eq(&devfs.0, &f.node.mount_point()) {
+            Ok(false)
+        } else {
+            Ok(f.node.0.borrow().name.starts_with("tty"))
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum IsTtyErr {
+    BadFd,
 }

@@ -38,6 +38,7 @@ const EBADFD: i32 = -1;
 const EINVAL: i32 = -2;
 const EMFILE: i32 = -3;
 const ENOENT: i32 = -4;
+const ENOTTY: i32 = -5;
 
 #[no_mangle]
 pub extern "C" fn syscall_handler(
@@ -212,6 +213,25 @@ pub extern "C" fn syscall_handler(
     else if syscall_num == 10 {
         let status = gp_regs.ebx as i32;
         syscall::exit(status);
+    }
+    // 11 is_tty
+    // ebx: fd, i32
+    // returns 1 or error number
+    else if syscall_num == 11 {
+        let fd = gp_regs.ebx as i32;
+        return_value = match syscall::is_tty(fd) {
+            Ok(res) => {
+                if res {
+                    1
+                } else {
+                    println!("NOTTY");
+                    ENOTTY
+                }
+            }
+            Err(err) => match err {
+                syscall::IsTtyErr::BadFd => EBADFD,
+            },
+        }
     } else {
         println!("[SYS] Ignoring an invalid syscall number {}.", syscall_num);
         return_value = 0;

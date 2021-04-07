@@ -118,7 +118,7 @@ pub enum OpenFileErr {
 }
 
 pub struct OpenedFile {
-    node: fs::Node,
+    pub node: fs::Node,
     offset: Option<usize>,
 }
 
