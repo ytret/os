@@ -34,16 +34,10 @@ pub struct GpRegs {
     eax: u32,
 }
 
-const OPEN_ENOENT: i32 = -1;
-const OPEN_EMFILE: i32 = -2;
-const OPEN_EINVAL: i32 = -3;
-
-const WRITE_EBADF: i32 = -1;
-
-const READ_EBADF: i32 = -1;
-const READ_EINVAL: i32 = -2;
-
-const SEEK_EBADF: i32 = -1;
+const EBADFD: i32 = -1;
+const EINVAL: i32 = -2;
+const EMFILE: i32 = -3;
+const ENOENT: i32 = -4;
 
 #[no_mangle]
 pub extern "C" fn syscall_handler(
@@ -74,9 +68,9 @@ pub extern "C" fn syscall_handler(
         return_value = match syscall::open(pathname) {
             Ok(fd) => fd,
             Err(err) => match err {
-                syscall::OpenErr::NotFound => OPEN_ENOENT,
-                syscall::OpenErr::MaxOpenedFiles => OPEN_EMFILE,
-                syscall::OpenErr::UnsupportedFileType => OPEN_EINVAL,
+                syscall::OpenErr::NotFound => ENOENT,
+                syscall::OpenErr::MaxOpenedFiles => EMFILE,
+                syscall::OpenErr::UnsupportedFileType => EINVAL,
             },
         };
     }
@@ -94,9 +88,9 @@ pub extern "C" fn syscall_handler(
             )
         };
         return_value = match syscall::write(fd, buf) {
-            Ok(_) => 0,
+            Ok(n) => n as i32,
             Err(err) => match err {
-                syscall::WriteErr::BadFd => WRITE_EBADF,
+                syscall::WriteErr::BadFd => EBADFD,
             },
         };
     }
@@ -116,8 +110,8 @@ pub extern "C" fn syscall_handler(
         return_value = match syscall::read(fd, buf) {
             Ok(_) => 0,
             Err(err) => match err {
-                syscall::ReadErr::BadFd => READ_EBADF,
-                syscall::ReadErr::NotReadable => READ_EINVAL,
+                syscall::ReadErr::BadFd => EBADFD,
+                syscall::ReadErr::NotReadable => EINVAL,
             },
         };
     }
@@ -131,7 +125,7 @@ pub extern "C" fn syscall_handler(
         return_value = match syscall::seek(syscall::Seek::Abs, fd, new_offset) {
             Ok(new_offset) => new_offset as i32,
             Err(err) => match err {
-                syscall::SeekErr::BadFd => SEEK_EBADF,
+                syscall::SeekErr::BadFd => EBADFD,
             },
         };
     }
@@ -146,7 +140,7 @@ pub extern "C" fn syscall_handler(
             match syscall::seek(syscall::Seek::Rel, fd, add_to_offset) {
                 Ok(new_offset) => new_offset as i32,
                 Err(err) => match err {
-                    syscall::SeekErr::BadFd => SEEK_EBADF,
+                    syscall::SeekErr::BadFd => EBADFD,
                 },
             };
     }
