@@ -96,8 +96,8 @@ pub extern "C" fn main(magic_num: u32, boot_info: *const multiboot::BootInfo) {
     unsafe {
         println!(
             "Kernel size: {} KiB ({} pages)",
-            KERNEL_INFO.arch.kernel_region.size() / 1024,
-            KERNEL_INFO.arch.kernel_region.size() / 4096,
+            KERNEL_INFO.arch.kernel_region.len() / 1024,
+            KERNEL_INFO.arch.kernel_region.len() / 4096,
         );
     }
 

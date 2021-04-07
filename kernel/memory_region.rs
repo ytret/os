@@ -36,7 +36,7 @@ impl<T: RegionType> Region<T> {
         self.start..self.end
     }
 
-    pub fn size(&self) -> T {
+    pub fn len(&self) -> T {
         self.end - self.start
     }
 

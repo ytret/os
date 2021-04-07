@@ -224,7 +224,6 @@ pub extern "C" fn syscall_handler(
                 if res {
                     1
                 } else {
-                    println!("NOTTY");
                     ENOTTY
                 }
             }

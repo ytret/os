@@ -265,7 +265,7 @@ pub fn default_entry_point() -> ! {
 
         assert_eq!(this_process.usermode_stack.start % 4096, 0);
         assert_eq!(this_process.usermode_stack.end % 4096, 0);
-        assert!(this_process.usermode_stack.size() <= 4 * 1024 * 1024);
+        assert!(this_process.usermode_stack.len() <= 4 * 1024 * 1024);
 
         let pde_idx = (this_process.usermode_stack.start >> 22) as usize;
         let pgtbl_virt =
@@ -277,7 +277,7 @@ pub fn default_entry_point() -> ! {
             this_process.usermode_stack,
         );
 
-        assert_eq!(this_process.usermode_stack.size(), 4096);
+        assert_eq!(this_process.usermode_stack.len(), 4096);
         let phys = PMM_STACK.lock().pop_page();
         this_process
             .vas

@@ -48,7 +48,7 @@ pub fn init() {
         return;
     };
 
-    assert_ne!(hpet_phys_region.size(), 0);
+    assert_ne!(hpet_phys_region.len(), 0);
     assert_eq!(hpet_phys_region.start % 4096, 0);
     assert_eq!(hpet_phys_region.end % 4096, 0);
 
