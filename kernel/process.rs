@@ -16,6 +16,9 @@
 
 use alloc::vec::Vec;
 
+use crate::console::CONSOLE;
+use crate::fs::VFS_ROOT;
+
 pub use crate::arch::process::default_entry_point;
 use crate::arch::process::MemMapping;
 use crate::arch::vas::VirtAddrSpace;
@@ -39,7 +42,7 @@ pub struct Process {
 
 impl Process {
     pub fn new(id: usize, vas: VirtAddrSpace) -> Self {
-        Process {
+        let mut process = Process {
             id,
             new_thread_id: 0,
 
@@ -56,7 +59,20 @@ impl Process {
             mem_mappings: Vec::new(),
 
             opened_files: Vec::new(),
-        }
+        };
+
+        assert!(CONSOLE.lock().is_some());
+        let stdin =
+            VFS_ROOT.lock().as_mut().unwrap().path("/dev/chr0").unwrap();
+        let stdout =
+            VFS_ROOT.lock().as_mut().unwrap().path("/dev/chr0").unwrap();
+        let stderr =
+            VFS_ROOT.lock().as_mut().unwrap().path("/dev/chr0").unwrap();
+        assert_eq!(process.open_file_by_node(stdin).unwrap(), 0);
+        assert_eq!(process.open_file_by_node(stdout).unwrap(), 1);
+        assert_eq!(process.open_file_by_node(stderr).unwrap(), 2);
+
+        process
     }
 
     pub fn allocate_thread_id(&mut self) -> usize {
