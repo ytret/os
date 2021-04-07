@@ -138,8 +138,8 @@ impl Scheduler {
         self.run_thread(new_thread);
 
         println!(
-            "[SCHED] Terminated thread pid {} tid {}.",
-            old_thread.process_id, old_thread.id,
+            "[SCHED] Terminated thread pid {} tid {} with status {}.",
+            old_thread.process_id, old_thread.id, status,
         );
 
         self.terminated_threads
