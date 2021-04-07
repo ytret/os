@@ -37,59 +37,39 @@ extern "C" {
     ) -> !;
 }
 
-/// Region of program's virtual memory intended to be used by the program itself
-/// and not the kernel.
-///
-/// Its start and end must be aligned at 4 MiB.
-pub const PROGRAM_REGION: Region<u32> = Region {
-    start: 128 * 1024 * 1024,                      // 128 MiB
-    end: 3 * 1024 * 1024 * 1024 + 4 * 1024 * 1024, // 3 GiB + 4 MiB
-};
-
-pub const USERMODE_STACK: Region<u32> = Region {
-    start: 3 * 1024 * 1024 * 1024,      // 3 GiB
-    end: 3 * 1024 * 1024 * 1024 + 4096, // 3 GiB + 4 KiB
-};
-
-pub const ARGV_ENVIRON: Region<u32> = Region {
-    start: 3 * 1024 * 1024 * 1024 + 1 * 4096, // 3 GiB + 4 KiB
-    end: 3 * 1024 * 1024 * 1024 + 2 * 4096,   // 3 GiB + 8 KiB
-};
-
-// NOTE: The above three regions must have page-aligned start and end.
-
 impl Process {
     // PROT_READ, PROT_WRITE, MAP_ANONYMOUS, MAP_PRIVATE
     pub fn mem_map(&mut self, len: usize) -> &MemMapping {
         assert_eq!(len % 4096, 0, "len must be page-aligned");
-        let mut start = PROGRAM_REGION.start;
+        let mut start = self.program_region.start;
         let mut last = start;
         loop {
-            assert!(start < PROGRAM_REGION.end);
-            if last - start == len as u32 {
+            let reg = Region { start, end: last };
+            let reg_usize = Region {
+                start: start as usize,
+                end: last as usize,
+            };
+            assert!(start < self.program_region.end);
+            if last - start == len {
                 break;
-            } else if last - start > len as u32 {
+            } else if last - start > len {
                 unreachable!();
             }
+            if self.usermode_stack.conflicts_with(reg) {
+                start = self.usermode_stack.end;
+                last = self.usermode_stack.end;
+            }
+            for segment in &self.program_segments {
+                if segment.conflicts_with(reg_usize) {
+                    start = (segment.end + 0xFFF) & !0xFFF;
+                    last = (segment.end + 0xFFF) & !0xFFF;
+                }
+            }
             for mapping in &self.mem_mappings {
-                if mapping.region.contains(&last) {
+                if mapping.region.conflicts_with(reg) {
                     start = (mapping.region.end + 0xFFF) & !0xFFF;
                     last = (mapping.region.end + 0xFFF) & !0xFFF;
                 }
-            }
-            for segment in &self.program_segments {
-                if segment.contains(&(last as usize)) {
-                    start = ((segment.end as u32) + 0xFFF) & !0xFFF;
-                    last = ((segment.end as u32) + 0xFFF) & !0xFFF;
-                }
-            }
-            if USERMODE_STACK.contains(&last as &u32) {
-                start = USERMODE_STACK.end;
-                last = USERMODE_STACK.end;
-            }
-            if ARGV_ENVIRON.contains(&last as &u32) {
-                start = ARGV_ENVIRON.end;
-                last = ARGV_ENVIRON.end;
             }
             last += 4096;
         }
@@ -98,6 +78,7 @@ impl Process {
             region: Region { start, end: last },
         });
         let mapping = self.mem_mappings.last().unwrap();
+        println!("mapping: {:?}", mapping.region);
 
         let whole = Region {
             start: mapping.region.start & !0x3FFFFF,
@@ -105,7 +86,7 @@ impl Process {
         };
         for aligned_at_4mib in whole.range().step_by(4 * 1024 * 1024) {
             unsafe {
-                let pgtbl_virt = self.vas.pgtbl_virt_of(aligned_at_4mib);
+                let pgtbl_virt = self.vas.pgtbl_virt_of(aligned_at_4mib as u32);
                 if pgtbl_virt.is_null() {
                     let pde_idx = (aligned_at_4mib >> 22) as usize;
                     let new_pgtbl_virt =
@@ -131,14 +112,14 @@ impl Process {
         for virt_page in mapping.region.range().step_by(4096) {
             unsafe {
                 assert!(
-                    self.vas.virt_to_phys(virt_page).is_none(),
+                    self.vas.virt_to_phys(virt_page as u32).is_none(),
                     "page 0x{:08X} is already mapped to {:#X?}",
                     virt_page,
-                    self.vas.virt_to_phys(virt_page).unwrap(),
+                    self.vas.virt_to_phys(virt_page as u32).unwrap(),
                 );
 
                 let phys_page = PMM_STACK.lock().pop_page();
-                self.vas.map_page(virt_page, phys_page);
+                self.vas.map_page(virt_page as u32, phys_page);
                 // println!(
                 //     "[PROC MEM_MAP] Page 0x{:08X} has been mapped to 0x{:08X}.",
                 //     virt_page, phys_page,
@@ -156,7 +137,7 @@ impl Process {
 }
 
 pub struct MemMapping {
-    pub region: Region<u32>,
+    pub region: Region<usize>,
 }
 
 pub fn default_entry_point() -> ! {
@@ -172,6 +153,7 @@ pub fn default_entry_point() -> ! {
     unsafe {
         SCHEDULER.stop_scheduling();
         let this_process = SCHEDULER.running_process();
+        // let this_thread = SCHEDULER.running_thread();
 
         // println!("[PROC] Loading the VAS.");
         // this_process.vas.load();
@@ -201,11 +183,11 @@ pub fn default_entry_point() -> ! {
         .unwrap();
         println!("[PROC] {:#X?}", elf);
 
-        assert!(PROGRAM_REGION.start.trailing_zeros() >= 22);
-        assert!(PROGRAM_REGION.end.trailing_zeros() >= 22);
+        assert!(this_process.program_region.start.trailing_zeros() >= 22);
+        assert!(this_process.program_region.end.trailing_zeros() >= 22);
 
         print!("[PROC] Checking if the program region is unmapped... ");
-        // for program_page in PROGRAM_REGION.range().step_by(4096) {
+        // for program_page in this_process.program_region.range().step_by(4096) {
         //     assert!(
         //         this_process.vas.pgtbl_virt_of(program_page).is_null(),
         //         "program region must be unmapped on a process start up",
@@ -215,10 +197,8 @@ pub fn default_entry_point() -> ! {
         println!("skipped.");
 
         for seg in elf.program_segments {
-            let mem_reg = Region::from_start_len(
-                seg.in_mem_at as u32,
-                seg.in_mem_size as u32,
-            );
+            let mem_reg =
+                Region::from_start_len(seg.in_mem_at, seg.in_mem_size);
 
             // FIXME: make everything usize.
             this_process.program_segments.push(Region {
@@ -231,19 +211,16 @@ pub fn default_entry_point() -> ! {
             }
 
             assert_eq!(
-                mem_reg.overlapping_with(PROGRAM_REGION),
+                mem_reg.overlapping_with(this_process.program_region),
                 OverlappingWith::IsIn,
             );
-            assert_eq!(
-                mem_reg.overlapping_with(USERMODE_STACK),
-                OverlappingWith::NoOverlap,
-            );
-            assert_eq!(
-                mem_reg.overlapping_with(ARGV_ENVIRON),
-                OverlappingWith::NoOverlap,
-            );
+            assert!(!mem_reg.conflicts_with(this_process.usermode_stack));
 
-            if this_process.vas.pgtbl_virt_of(mem_reg.start).is_null() {
+            if this_process
+                .vas
+                .pgtbl_virt_of(mem_reg.start as u32)
+                .is_null()
+            {
                 let pde_idx = (mem_reg.start >> 22) as usize;
                 let pgtbl_virt =
                     alloc(Layout::from_size_align(4096, 4096).unwrap())
@@ -261,11 +238,15 @@ pub fn default_entry_point() -> ! {
                 );
             }
 
-            for virt_page in mem_reg.range().step_by(4096) {
+            let mem_reg_pages = Region {
+                start: mem_reg.start & !0xFFF,
+                end: (mem_reg.end + 0xFFF) & !0xFFF,
+            };
+            for virt_page in mem_reg_pages.range().step_by(4096) {
                 print!("[PROC] Page 0x{:08X}", virt_page);
-                if this_process.vas.virt_to_phys(virt_page).is_none() {
+                if this_process.vas.virt_to_phys(virt_page as u32).is_none() {
                     let phys = PMM_STACK.lock().pop_page();
-                    this_process.vas.map_page(virt_page, phys);
+                    this_process.vas.map_page(virt_page as u32, phys);
                     (virt_page as *mut u8).write_bytes(0, 4096);
                     println!(" has been mapped to 0x{:08X}.", phys);
                 } else {
@@ -286,42 +267,33 @@ pub fn default_entry_point() -> ! {
             elf.entry_point,
         );
 
-        assert_eq!(USERMODE_STACK.start % 4096, 0);
-        assert_eq!(USERMODE_STACK.end % 4096, 0);
-        assert!(USERMODE_STACK.size() <= 4 * 1024 * 1024);
+        assert_eq!(this_process.usermode_stack.start % 4096, 0);
+        assert_eq!(this_process.usermode_stack.end % 4096, 0);
+        assert!(this_process.usermode_stack.size() <= 4 * 1024 * 1024);
 
-        let pde_idx = (USERMODE_STACK.start >> 22) as usize;
+        let pde_idx = (this_process.usermode_stack.start >> 22) as usize;
         let pgtbl_virt =
             alloc(Layout::from_size_align(4096, 4096).unwrap()) as *mut Table;
         pgtbl_virt.write_bytes(0, 1);
         this_process.vas.set_pde_addr(pde_idx, pgtbl_virt);
         println!(
             "[PROC] Allocated a page table for a usermode stack at {:?}.",
-            USERMODE_STACK,
+            this_process.usermode_stack,
         );
 
-        assert_eq!(USERMODE_STACK.size(), 4096);
-        let mut phys = PMM_STACK.lock().pop_page();
-        this_process.vas.map_page(USERMODE_STACK.start, phys);
-        (USERMODE_STACK.start as *mut u8).write_bytes(0, 4096);
+        assert_eq!(this_process.usermode_stack.size(), 4096);
+        let phys = PMM_STACK.lock().pop_page();
+        this_process
+            .vas
+            .map_page(this_process.usermode_stack.start as u32, phys);
+        (this_process.usermode_stack.start as *mut u8).write_bytes(0, 4096);
         println!(
             "[PROC] Page 0x{:08X} has been mapped to 0x{:08X}.",
-            USERMODE_STACK.start, phys,
-        );
-
-        assert_eq!(ARGV_ENVIRON.start % 4096, 0);
-        assert_eq!(ARGV_ENVIRON.end % 4096, 0);
-        assert_eq!(ARGV_ENVIRON.size() % 4096, 0);
-        phys = PMM_STACK.lock().pop_page();
-        this_process.vas.map_page(ARGV_ENVIRON.start, phys);
-        (ARGV_ENVIRON.start as *mut u8).write_bytes(0, 4096);
-        println!(
-            "[PROC] Page 0x{:08X} has been mapped to 0x{:08X} for ARGV_ENVIRON.",
-            ARGV_ENVIRON.start, phys,
+            this_process.usermode_stack.start, phys,
         );
 
         let usermode_stack_top =
-            (USERMODE_STACK.end as *mut u32).wrapping_sub(3);
+            (this_process.usermode_stack.end as *mut u32).wrapping_sub(3);
         *usermode_stack_top.wrapping_add(0) = 0; // argc
         *usermode_stack_top.wrapping_add(1) = 0; // argv
         *usermode_stack_top.wrapping_add(2) = 0; // environ

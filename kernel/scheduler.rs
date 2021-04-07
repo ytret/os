@@ -40,6 +40,7 @@ pub struct Scheduler {
 
     runnable_threads: Option<VecDeque<Thread>>,
     blocked_threads: Option<VecDeque<Thread>>,
+    terminated_threads: Option<VecDeque<(Thread, i32)>>,
     running_thread: Option<Thread>,
 
     new_process_id: usize,
@@ -54,6 +55,7 @@ impl Scheduler {
 
             runnable_threads: None,
             blocked_threads: None,
+            terminated_threads: None,
             running_thread: None,
 
             new_process_id: 0,
@@ -63,8 +65,10 @@ impl Scheduler {
     pub fn init_vec_deques(&mut self) {
         assert!(self.runnable_threads.is_none());
         assert!(self.blocked_threads.is_none());
+        assert!(self.terminated_threads.is_none());
         self.runnable_threads = Some(VecDeque::new());
         self.blocked_threads = Some(VecDeque::new());
+        self.terminated_threads = Some(VecDeque::new());
     }
 
     pub fn allocate_process_id(&mut self) -> usize {
@@ -121,6 +125,43 @@ impl Scheduler {
         } else {
             None
         }
+    }
+
+    pub fn terminate_running_thread(&mut self, status: i32) -> ! {
+        assert_ne!(
+            self.runnable_threads.as_ref().unwrap().len(),
+            0,
+            "cannot terminate the last thread",
+        );
+        let old_thread = self.running_thread.take().unwrap();
+        let new_thread = self.next_runnable_thread();
+        self.run_thread(new_thread);
+
+        println!(
+            "[SCHED] Terminated thread pid {} tid {}.",
+            old_thread.process_id, old_thread.id,
+        );
+
+        self.terminated_threads
+            .as_mut()
+            .unwrap()
+            .push_back((old_thread, status));
+        let from_tcb = &mut self
+            .terminated_threads
+            .as_mut()
+            .unwrap()
+            .back_mut()
+            .unwrap()
+            .0
+            .tcb as *mut ThreadControlBlock;
+        let to_tcb =
+            &mut self.running_thread().tcb as *const ThreadControlBlock;
+
+        unsafe {
+            self.switch_threads(from_tcb, to_tcb);
+        }
+
+        unreachable!();
     }
 
     pub fn block_running_thread(&mut self) {

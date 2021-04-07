@@ -29,9 +29,11 @@ pub struct Process {
     new_thread_id: usize,
 
     pub vas: VirtAddrSpace,
-
+    pub program_region: Region<usize>,
     pub program_segments: Vec<Region<usize>>,
+    pub usermode_stack: Region<usize>,
     pub mem_mappings: Vec<MemMapping>,
+
     pub opened_files: Vec<OpenedFile>,
 }
 
@@ -42,9 +44,17 @@ impl Process {
             new_thread_id: 0,
 
             vas,
-
+            program_region: Region {
+                start: 128 * 1024 * 1024,                      // 128 MiB
+                end: 3 * 1024 * 1024 * 1024 + 4 * 1024 * 1024, // 3 GiB + 4 MiB
+            },
             program_segments: Vec::new(),
+            usermode_stack: Region {
+                start: 3 * 1024 * 1024 * 1024,      // 3 GiB
+                end: 3 * 1024 * 1024 * 1024 + 4096, // 3 GiB + 4 KiB
+            },
             mem_mappings: Vec::new(),
+
             opened_files: Vec::new(),
         }
     }
@@ -104,15 +114,23 @@ impl OpenedFile {
         }
     }
 
-    pub fn seek_abs(&mut self, new_offset: usize) {
+    pub fn seek_abs(&mut self, new_offset: usize) -> usize {
         if let Some(offset) = self.offset.as_mut() {
             *offset = new_offset;
+            return *offset;
+        } else {
+            // FIXME: error 'not seekable'.
+            return 0;
         }
     }
 
-    pub fn seek_rel(&mut self, add_offset: usize) {
+    pub fn seek_rel(&mut self, add_offset: usize) -> usize {
         if let Some(offset) = self.offset.as_mut() {
             *offset += add_offset;
+            return *offset;
+        } else {
+            // FIXME: error 'not seekable'.
+            return 0;
         }
     }
 

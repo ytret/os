@@ -129,7 +129,7 @@ pub extern "C" fn syscall_handler(
         let fd = gp_regs.ebx as i32;
         let new_offset = gp_regs.ecx as usize;
         return_value = match syscall::seek(syscall::Seek::Abs, fd, new_offset) {
-            Ok(_) => 0,
+            Ok(new_offset) => new_offset as i32,
             Err(err) => match err {
                 syscall::SeekErr::BadFd => SEEK_EBADF,
             },
@@ -144,7 +144,7 @@ pub extern "C" fn syscall_handler(
         let add_to_offset = gp_regs.ecx as usize;
         return_value =
             match syscall::seek(syscall::Seek::Rel, fd, add_to_offset) {
-                Ok(_) => 0,
+                Ok(new_offset) => new_offset as i32,
                 Err(err) => match err {
                     syscall::SeekErr::BadFd => SEEK_EBADF,
                 },
@@ -211,6 +211,13 @@ pub extern "C" fn syscall_handler(
         };
         syscall::debug_print_str(string);
         return_value = 0;
+    }
+    // 10 exit
+    // ebx: exit status, i32
+    // does not return
+    else if syscall_num == 10 {
+        let status = gp_regs.ebx as i32;
+        syscall::exit(status);
     } else {
         println!("[SYS] Ignoring an invalid syscall number {}.", syscall_num);
         return_value = 0;

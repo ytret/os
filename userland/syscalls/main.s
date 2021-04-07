@@ -57,6 +57,8 @@ _entry:
     je 2f
     cmpb $0x32, (entry_buf)     // 2
     je 3f
+    cmpb $0x33, (entry_buf)     // 3
+    je 4f
 
     jmp 0b
 
@@ -64,6 +66,9 @@ _entry:
     jmp 0b
 
 3:  call test_mem_map
+    jmp 0b
+
+4:  call test_exit
     jmp 0b
 
 1:  ud2
@@ -127,12 +132,20 @@ test_mem_map:
     ud2
 .size test_mem_map, . - test_mem_map
 
+.type test_exit, @function
+test_exit:
+    movl $10, %eax
+    movl $-1, %ebx
+    int $0x88
+    ud2
+.size test_exit, . - test_exit
+
 .section .data
 
 entry_hello:                .ascii "Choose a test to run:\n"
 entry_hello_len:            .long 22
-entry_list:                 .ascii "1. console\n2. mem_map\n"
-entry_list_len:             .long 22
+entry_list:                 .ascii "1. console\n2. mem_map\n3. exit\n"
+entry_list_len:             .long 30
 entry_buf:                  .skip 1
 
 console_fd:                 .skip 4

@@ -51,10 +51,14 @@ impl<T: RegionType> Region<T> {
             if self.end <= region.end {
                 return OverlappingWith::IsIn;
             }
-        } else if self.end >= region.start && self.end <= region.end {
+        } else if self.end > region.start && self.end < region.end {
             return OverlappingWith::EndsIn;
         }
         return OverlappingWith::NoOverlap;
+    }
+
+    pub fn conflicts_with(&self, region: Region<T>) -> bool {
+        self.overlapping_with(region) != OverlappingWith::NoOverlap
     }
 
     pub fn contains(&self, something: &T) -> bool {

@@ -126,7 +126,7 @@ pub enum ReadErr {
     NotReadable,
 }
 
-pub fn seek(variant: Seek, fd: i32, offset: usize) -> Result<(), SeekErr> {
+pub fn seek(variant: Seek, fd: i32, offset: usize) -> Result<usize, SeekErr> {
     if !running_process!().check_fd(fd) {
         println!(
             "[SYS SEEK] Invalid file descriptor {} for PID {}.",
@@ -135,11 +135,10 @@ pub fn seek(variant: Seek, fd: i32, offset: usize) -> Result<(), SeekErr> {
         );
         Err(SeekErr::BadFd)
     } else {
-        match variant {
+        Ok(match variant {
             Seek::Abs => running_process!().opened_file(fd).seek_abs(offset),
             Seek::Rel => running_process!().opened_file(fd).seek_rel(offset),
-        }
-        Ok(())
+        })
     }
 }
 
@@ -162,10 +161,10 @@ pub fn mem_map(
     fd: i32,
     offset: usize,
 ) -> Result<usize, MemMapErr> {
-    // println!(
-    //     "[SYS MEM_MAP] addr = 0x{:08X}, len = 0x{:08X}, prot = {}, flags = {}, fd = {}, offset = 0x{:08X}",
-    //     addr, len, prot.value, flags.value, fd, offset,
-    // );
+    println!(
+        "[SYS MEM_MAP] addr = 0x{:08X}, len = 0x{:08X}, prot = {}, flags = {}, fd = {}, offset = 0x{:08X}",
+        addr, len, prot.value, flags.value, fd, offset,
+    );
 
     if addr != 0 {
         unimplemented!("syscall mem_map: addr is not 0");
@@ -276,4 +275,10 @@ pub fn debug_print_num(num: u32) {
 
 pub fn debug_print_str(s: &str) {
     println!("[SYS DEBUG_PRINT_STR] {}", s);
+}
+
+pub fn exit(status: i32) -> ! {
+    unsafe {
+        SCHEDULER.terminate_running_thread(status);
+    }
 }
