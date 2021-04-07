@@ -67,7 +67,7 @@ impl From<OpenFileErr> for OpenErr {
     }
 }
 
-pub fn write(fd: i32, buf: &[u8]) -> Result<(), WriteErr> {
+pub fn write(fd: i32, buf: &[u8]) -> Result<usize, WriteErr> {
     // println!("[SYS WRITE] fd = {} by pid {}", fd, running_process!().id);
     // println!("[SYS WRITE] buf is at 0x{:08X}", &buf as *const _ as usize);
     // println!("[SYS WRITE] buf len = {}", buf.len());
@@ -80,8 +80,8 @@ pub fn write(fd: i32, buf: &[u8]) -> Result<(), WriteErr> {
         );
         Err(WriteErr::BadFd)
     } else {
-        running_process!().opened_file(fd).write(&buf);
-        Ok(())
+        let n = running_process!().opened_file(fd).write(&buf);
+        Ok(n)
     }
 }
 

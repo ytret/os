@@ -144,11 +144,12 @@ impl OpenedFile {
         Ok(())
     }
 
-    pub fn write(&mut self, buf: &[u8]) {
+    pub fn write(&mut self, buf: &[u8]) -> usize {
         let fs = self.node.fs();
         let id_in_fs = self.node.0.borrow().id_in_fs.unwrap();
         fs.write_file(id_in_fs, self.offset.unwrap_or(0), buf)
             .unwrap();
         self.seek_rel(buf.len());
+        buf.len()
     }
 }
