@@ -32,6 +32,7 @@ extern "C" {
     fn jump_into_usermode(
         code_seg: u16,
         data_seg: u16,
+        tls_seg: u16,
         jump_to: u32,
         esp: u32,
     ) -> !;
@@ -300,6 +301,7 @@ pub fn default_entry_point() -> ! {
         jump_into_usermode(
             gdt::USERMODE_CODE_SEG,
             gdt::USERMODE_DATA_SEG,
+            gdt::TLS_SEG,
             elf.entry_point as u32,
             usermode_stack_top as u32,
         );

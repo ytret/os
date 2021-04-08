@@ -107,6 +107,7 @@ impl Scheduler {
     }
 
     pub fn run_thread(&mut self, thread: Thread) {
+        thread.load_tls();
         self.running_thread = Some(thread);
     }
 

@@ -74,8 +74,9 @@ switch_threads:
  * Does a far return with usermode segments to the specified function.
  * Arguments: 1) usermode code segment (not a selector)
  *            2) usermode data segment (not a selector)
- *            3) the address to jump to
- *            4) usermode esp value
+ *            3) TLS segment (not a selector)
+ *            4) the address to jump to
+ *            5) usermode esp value
  * This function does not return.
  */
 .global jump_into_usermode
@@ -86,24 +87,26 @@ jump_into_usermode:
 
     movl 8(%ebp), %eax          // eax = usermode code segment
     movl 12(%ebp), %ebx         // ebx = usermode data segment
-    movl 16(%ebp), %ecx         // ecx = the address to jump to
+    movl 16(%ebp), %ecx         // ecx = TLS segment
+    movl 20(%ebp), %edx         // edx = the address to jump to
 
     // Set RPL to 3, that is to usermode.
     orl $3, %eax
     orl $3, %ebx
+    orl $3, %ecx
 
     // Set data segments (%ss is set by iret).
     movw %bx, %ds
     movw %bx, %es
     movw %bx, %fs
-    movw %bx, %gs
+    movw %cx, %gs
 
     // Make up the iret stack frame.
     pushl %ebx                  // ss = data segment selector
-    pushl 20(%ebp)              // esp
+    pushl 24(%ebp)              // esp
     pushf
     pushl %eax                  // cs = code segment selector
-    pushl %ecx                  // eip
+    pushl %edx                  // eip
 
     iret
 1:  ud2

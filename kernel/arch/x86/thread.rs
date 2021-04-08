@@ -18,6 +18,7 @@ use alloc::alloc::{alloc, Layout};
 
 use crate::scheduler::SCHEDULER;
 
+use crate::arch::gdt;
 use crate::thread::{Thread, ThreadEntryPoint};
 
 impl Thread {
@@ -38,6 +39,7 @@ impl Thread {
             cr3: crate::arch::vas::KERNEL_VAS.lock().pgdir_phys,
             esp0: kernel_stack_bottom as u32,
             esp: kernel_stack_top as u32,
+            tls: 0,
         };
 
         Thread {
@@ -45,7 +47,6 @@ impl Thread {
             process_id,
 
             tcb,
-            tls_ptr: None,
         }
     }
 
@@ -77,6 +78,22 @@ impl Thread {
 
         thread
     }
+
+    pub fn set_tls(&mut self, value: usize) {
+        self.tcb.tls = value as u32;
+        self.load_tls();
+    }
+
+    pub fn load_tls(&self) {
+        gdt::GDT.lock().0[gdt::TLS_IDX].set_base(self.tcb.tls);
+        unsafe {
+            asm!(
+                "movw %ax, %gs",
+                in("ax") gdt::TLS_SEG | 3, // usermode TLS segment selector
+                options(att_syntax),
+            );
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -87,4 +104,5 @@ pub struct ThreadControlBlock {
     pub cr3: u32,
     pub esp0: u32,
     pub esp: u32,
+    pub tls: u32,
 }

@@ -21,7 +21,6 @@ pub struct Thread {
     pub process_id: usize,
 
     pub tcb: ThreadControlBlock,
-    pub tls_ptr: Option<usize>,
 }
 
 pub type ThreadEntryPoint = fn() -> !;

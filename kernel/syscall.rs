@@ -251,24 +251,11 @@ pub enum MemMapErr {}
 
 pub fn set_tls(ptr: usize) {
     let this_thread = unsafe { SCHEDULER.running_thread() };
-    this_thread.tls_ptr = Some(ptr as usize);
+    this_thread.set_tls(ptr);
     println!(
         "[SYS SET_TLS] tls_ptr = 0x{:08X} for pid {} tid {}",
-        this_thread.tls_ptr.unwrap(),
-        this_thread.process_id,
-        this_thread.id,
+        ptr, this_thread.process_id, this_thread.id,
     );
-}
-
-pub fn get_tls() -> usize {
-    let this_thread = unsafe { SCHEDULER.running_thread() };
-    println!(
-        "[SYS GET_TLS] tls_ptr = 0x{:08X} for pid {} tid {}",
-        this_thread.tls_ptr.unwrap(),
-        this_thread.process_id,
-        this_thread.id,
-    );
-    this_thread.tls_ptr.unwrap()
 }
 
 pub fn debug_print_num(num: u32) {

@@ -179,11 +179,6 @@ pub extern "C" fn syscall_handler(
         syscall::set_tls(ptr);
         return_value = 0;
     }
-    // 7 get_tls
-    // returns the pointer to the TLS, u32
-    else if syscall_num == 7 {
-        return_value = syscall::get_tls() as i32;
-    }
     // 8 debug_print_num
     // ebx: num, u32
     // returns 0

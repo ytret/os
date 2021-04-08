@@ -67,6 +67,12 @@ impl Entry {
         }
     }
 
+    pub fn set_base(&mut self, new_base: u32) {
+        self.base_0_15 = new_base as u16;
+        self.base_16_23 = (new_base >> 16) as u8;
+        self.base_24_31 = (new_base >> 24) as u8;
+    }
+
     fn missing() -> Self {
         Entry {
             limit_0_15: 0,
@@ -183,7 +189,7 @@ impl TaskStateSegment {
 }
 
 #[repr(C, packed)]
-pub struct GlobalDescriptorTable([Entry; 32]);
+pub struct GlobalDescriptorTable(pub [Entry; 32]);
 
 impl GlobalDescriptorTable {
     fn new() -> Self {
@@ -251,12 +257,14 @@ pub const KERNEL_DATA_IDX: usize = 2;
 pub const USERMODE_CODE_IDX: usize = 3;
 pub const USERMODE_DATA_IDX: usize = 4;
 pub const TSS_IDX: usize = 5;
+pub const TLS_IDX: usize = 6;
 
 pub const KERNEL_CODE_SEG: u16 = 8 * KERNEL_CODE_IDX as u16;
 pub const KERNEL_DATA_SEG: u16 = 8 * KERNEL_DATA_IDX as u16;
 pub const USERMODE_CODE_SEG: u16 = 8 * USERMODE_CODE_IDX as u16;
 pub const USERMODE_DATA_SEG: u16 = 8 * USERMODE_DATA_IDX as u16;
 pub const TSS_SEG: u16 = 8 * TSS_IDX as u16;
+pub const TLS_SEG: u16 = 8 * TLS_IDX as u16;
 
 kernel_static! {
     pub static ref GDT: Mutex<GlobalDescriptorTable> = Mutex::new({
@@ -336,6 +344,21 @@ kernel_static! {
                 | AccessByte::Accessed)
                 .value,
             (BitFlags::new(0) | EntryFlags::PageGranularity).value,
+        );
+
+        // Thread local storage.
+        gdt.0[TLS_IDX] = Entry::new(
+            0xDEADBEEF,
+            7 * 4, // see mlibc/options/internal/include/mlibc/tcb.hpp
+            (BitFlags::new(0)
+                | AccessByte::Present
+                | AccessByte::NotTaskStateSegment
+                | AccessByte::Usermode
+                | AccessByte::ReadableWritable)
+                .value,
+            (BitFlags::new(0)
+                | EntryFlags::ProtectedMode32Bit)
+                .value,
         );
 
         gdt
