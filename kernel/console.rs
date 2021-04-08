@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use alloc::boxed::Box;
 use alloc::collections::vec_deque::VecDeque;
 use alloc::rc::Rc;
 use core::cell::RefCell;
@@ -37,6 +36,7 @@ pub struct Console {
     num_lock: bool,
 
     pid_tid_blocked_by_read: Option<(usize, usize)>,
+    current_buf_idx: usize,
 }
 
 impl Console {
@@ -57,6 +57,7 @@ impl Console {
             num_lock: false,
 
             pid_tid_blocked_by_read: None,
+            current_buf_idx: 0,
         }
     }
 
@@ -229,6 +230,7 @@ impl CharDevice for Console {
         let maybe_ascii = self.try_resolve_into_ascii();
         if self.pid_tid_blocked_by_read.is_none() {
             if let Some(ascii) = maybe_ascii {
+                self.write(ascii).unwrap();
                 Ok(ascii)
             } else {
                 self.pid_tid_blocked_by_read = Some((pid, tid));
@@ -239,13 +241,26 @@ impl CharDevice for Console {
         }
     }
 
-    fn read_many(&mut self, len: usize) -> Result<Box<[u8]>, ReadErr> {
-        assert_eq!(len, 1);
-        match self.read() {
-            Ok(byte) => Ok(Box::new([byte])),
-            Err(err) => Err(err),
+    fn read_many(&mut self, buf: &mut [u8]) -> Result<usize, ReadErr> {
+        let pid = unsafe { SCHEDULER.running_process().id };
+        let tid = unsafe { SCHEDULER.running_thread().id };
+
+        let ch = self.read()?;
+        if self.current_buf_idx < buf.len() {
+            buf[self.current_buf_idx] = ch;
+            self.current_buf_idx += 1;
+        } else {
+            // Discard characters which would overflow the buffer.
         }
-        // Err(ReadErr::NotReadable)
+        if ch == 0x0A {
+            // Newline.
+            let bytes_read = self.current_buf_idx;
+            self.current_buf_idx = 0;
+            Ok(bytes_read)
+        } else {
+            self.pid_tid_blocked_by_read = Some((pid, tid));
+            Err(ReadErr::Block)
+        }
     }
 
     fn write(&mut self, byte: u8) -> Result<(), WriteErr> {

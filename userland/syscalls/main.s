@@ -47,6 +47,7 @@ _entry:
 0:  // Print the prompt.
     PRINT $entry_hello (entry_hello_len)
     PRINT $entry_list (entry_list_len)
+    PRINT $entry_prompt (entry_prompt_len)
 
     // Read the answer.
     READ $entry_buf $1
@@ -59,6 +60,8 @@ _entry:
     je 3f
     cmpb $0x33, (entry_buf)     // 3
     je 4f
+    cmpb $0x34, (entry_buf)     // 4
+    je 5f
 
     jmp 0b
 
@@ -69,6 +72,9 @@ _entry:
     jmp 0b
 
 4:  call test_exit
+    jmp 0b
+
+5:  call test_read_many
     jmp 0b
 
 1:  ud2
@@ -140,12 +146,38 @@ test_exit:
     ud2
 .size test_exit, . - test_exit
 
+.type test_read_many, @function
+test_read_many:
+    pushl %ebp
+    movl %esp, %ebp
+
+    movl $2, %eax
+    movl (console_fd), %ebx
+    movl $test_read_many_buffer, %ecx
+    movl $2, %edx
+    int $0x88
+
+    movl %eax, %edx
+    movl $1, %eax
+    int $0x88
+
+    movl $1, %eax
+    movl $test_console_newline_char, %ecx
+    movl $1, %edx
+    int $0x88
+
+    popl %ebp
+    ret
+.size test_read_many, . - test_read_many
+
 .section .data
 
 entry_hello:                .ascii "Choose a test to run:\n"
 entry_hello_len:            .long 22
-entry_list:                 .ascii "1. console\n2. mem_map\n3. exit\n"
-entry_list_len:             .long 30
+entry_list:                 .ascii "1. console\n2. mem_map\n3. exit\n4. read_many\n"
+entry_list_len:             .long 43
+entry_prompt:               .ascii "> "
+entry_prompt_len:           .long 2
 entry_buf:                  .skip 1
 
 console_fd:                 .skip 4
@@ -156,3 +188,6 @@ test_console_hello_len:     .long 42
 test_console_buffer:        .skip 1
 test_console_newline_char:  .ascii "\n"
 test_console_exit_char:     .ascii "]"
+
+test_read_many_buffer:      .skip 128
+test_read_many_buffer_len:  .long 128
