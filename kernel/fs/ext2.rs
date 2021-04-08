@@ -939,7 +939,7 @@ impl FileSystem for Ext2 {
             let from = (i - start_block) * self.block_size;
             let to = from + self.block_size;
             match self.read_inode_block(&inode, i, &mut tmp_buf[from..to]) {
-                Ok(nread) => assert_eq!(nread, tmp_buf.len()),
+                Ok(nread) => assert_eq!(nread, to - from),
                 Err(err) => match err {
                     ReadInodeBlockErr::BlockNotFound
                     | ReadInodeBlockErr::TooBigBlockIndex => {
