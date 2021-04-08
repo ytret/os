@@ -295,10 +295,10 @@ pub extern "C" fn dummy_exception_handler(
     println!(" exception number: {}", int_num);
     println!(
         " error code: {:08b}_{:08b}_{:08b}_{:08b} (0x{:08X})",
-        (err_code >> 24) & 0xF,
-        (err_code >> 16) & 0xF,
-        (err_code >> 08) & 0xF,
-        (err_code >> 00) & 0xF,
+        (err_code >> 24) & 0xFF,
+        (err_code >> 16) & 0xFF,
+        (err_code >> 08) & 0xFF,
+        (err_code >> 00) & 0xFF,
         err_code
     );
 
