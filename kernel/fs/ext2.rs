@@ -17,6 +17,7 @@
 use alloc::boxed::Box;
 use alloc::rc::{Rc, Weak};
 use alloc::string::String;
+use alloc::vec;
 use alloc::vec::Vec;
 use core::cell::RefCell;
 use core::convert::TryFrom;
@@ -542,19 +543,14 @@ impl Ext2 {
             .ok_or(ReadInodeErr::NoRwInterface)
             .unwrap();
         let inode_addr = self.inode_addr(inode_idx);
-        let first_block_idx = inode_addr / rw_interface.block_size();
-        let num_blocks = size_of::<Inode>() / rw_interface.block_size() + 1;
-        let offset_in_blocks = inode_addr % rw_interface.block_size();
-        match rw_interface.read_blocks(first_block_idx, num_blocks) {
-            Ok(blocks) => {
-                let base = blocks.as_ptr();
-                unsafe {
-                    let raw = base.add(offset_in_blocks) as *const Inode;
-                    Ok(Box::new((*raw).clone()))
-                }
-            }
-            Err(err) => Err(ReadInodeErr::DiskErr(err)),
-        }
+        let mut raw_inode = vec![0u8; size_of::<Inode>()];
+        assert_eq!(
+            rw_interface.read(inode_addr, &mut raw_inode)?,
+            raw_inode.len(),
+        );
+        let inode =
+            unsafe { raw_inode.as_ptr().cast::<Inode>().read_unaligned() };
+        Ok(Box::new(inode))
     }
 
     fn inode_size(&self, inode: &Inode) -> usize {
@@ -566,7 +562,8 @@ impl Ext2 {
         &self,
         inode: &Inode,
         index: usize,
-    ) -> Result<Box<[u8]>, ReadInodeBlockErr> {
+        buf: &mut [u8],
+    ) -> Result<usize, ReadInodeBlockErr> {
         // Divide all the possible blocks into SIBs, DIBs and TIBs.  The SIBs
         // are those blocks which are accessed using the singly indirect block
         // pointer, the DIBs are accessed using the doubly indirect block
@@ -643,30 +640,10 @@ impl Ext2 {
             return Err(ReadInodeBlockErr::TooBigBlockIndex);
         };
         if block_num != 0 {
-            Ok(self.read_block(block_num)?)
+            Ok(self.read_block(block_num, buf)?)
         } else {
             Err(ReadInodeBlockErr::BlockNotFound)
         }
-    }
-
-    fn num_block_entries(
-        &self,
-        block_num: usize,
-    ) -> Result<usize, ReadBlockErr> {
-        let block = self.read_block(block_num)?;
-        let mut i = 0;
-        while i < self.block_size / 4 {
-            let first = i * 4;
-            let entry = block[first] as usize
-                | ((block[first + 1] as usize) << 8)
-                | ((block[first + 2] as usize) << 16)
-                | ((block[first + 3] as usize) << 24);
-            if entry == 0 {
-                break;
-            }
-            i += 1;
-        }
-        Ok(i)
     }
 
     fn read_block_entry(
@@ -674,7 +651,8 @@ impl Ext2 {
         block_num: usize,
         entry_idx: usize,
     ) -> Result<usize, ReadBlockErr> {
-        let block = self.read_block(block_num)?;
+        let mut block = vec![0u8; self.block_size];
+        assert_eq!(self.read_block(block_num, &mut block)?, block.len());
         assert!(entry_idx * 4 <= block.len() - 4);
         let first = entry_idx * 4;
         Ok(block[first] as usize
@@ -683,29 +661,26 @@ impl Ext2 {
             | ((block[first + 3] as usize) << 24))
     }
 
-    fn read_block(&self, block_num: usize) -> Result<Box<[u8]>, ReadBlockErr> {
-        let rw_interface = self
+    fn read_block(
+        &self,
+        block_idx: usize,
+        buf: &mut [u8],
+    ) -> Result<usize, ReadBlockErr> {
+        assert_eq!(buf.len(), self.block_size, "invalid buffer length");
+        if block_idx >= self.total_num_blocks as usize {
+            return Err(ReadBlockErr::InvalidBlockNum);
+        }
+        let rwif = self
             .rw_interface
             .upgrade()
             .ok_or(ReadBlockErr::NoRwInterface)
             .unwrap();
-        if block_num >= self.total_num_blocks as usize {
-            return Err(ReadBlockErr::InvalidBlockNum);
-        }
-        let addr = block_num * self.block_size;
-        assert_eq!(
-            addr % rw_interface.block_size(),
-            0,
-            "cannot convert the block address to a block index",
-        );
-        let block_idx = addr / rw_interface.block_size();
-        assert_eq!(
-            self.block_size % rw_interface.block_size(),
-            0,
-            "cannot convert the ext2 block size to a number of system blocks",
-        );
-        let num_blocks = self.block_size / rw_interface.block_size();
-        Ok(rw_interface.read_blocks(block_idx, num_blocks)?)
+        let rwif_addr = block_idx * self.block_size;
+        assert_eq!(rwif_addr % rwif.block_size(), 0);
+        let rwif_block_idx = rwif_addr / rwif.block_size();
+        assert_eq!(self.block_size % rwif.block_size(), 0);
+        assert_eq!(rwif.read_blocks(rwif_block_idx, buf)?, buf.len());
+        Ok(buf.len())
     }
 
     fn iter_dir(
@@ -846,14 +821,15 @@ impl FileSystem for Ext2 {
         // Traverse the directory.
         let total_size = self.inode_size(&dir_inode);
         let num_blocks = (total_size + self.block_size - 1) / self.block_size;
-        let blocks = {
-            let mut res = Vec::new();
-            for i in 0..num_blocks {
-                let block = self.read_inode_block(&dir_inode, i)?;
-                res.push(block.to_vec());
-            }
-            res.concat()
-        };
+        let mut blocks = vec![0u8; self.block_size * num_blocks];
+        for i in 0..num_blocks {
+            let from = i * self.block_size;
+            let to = from + self.block_size;
+            assert_eq!(
+                self.read_inode_block(&dir_inode, i, &mut blocks[from..to])?,
+                self.block_size,
+            );
+        }
         let first_entry = blocks.as_ptr() as *const DirEntry;
 
         for raw_entry in self.iter_dir(first_entry, total_size) {
@@ -943,22 +919,27 @@ impl FileSystem for Ext2 {
         &self,
         id: usize,
         offset: usize,
-        len: usize,
-    ) -> Result<Vec<u8>, ReadFileErr> {
+        buf: &mut [u8],
+    ) -> Result<usize, ReadFileErr> {
         assert_ne!(id as u32, 0, "invalid id");
         let inode = self.read_inode(id as u32)?;
-        println!(
-            "[EXT2] Reading file inode {}, offset: {}, len: {}.",
-            id, offset, len,
+        print!(
+            "[EXT2] Reading file inode {}, offset: {}, len: {}...",
+            id,
+            offset,
+            buf.len(),
         );
 
-        let mut res_buf = Vec::with_capacity(len);
         let start_block = offset / self.block_size;
-        let end_block = (offset + len - 1) / self.block_size + 1;
+        let end_block = (offset + buf.len() - 1) / self.block_size + 1;
+        let num_blocks = end_block - start_block;
+        let mut tmp_buf = vec![0u8; num_blocks * self.block_size];
 
         for i in start_block..end_block {
-            match self.read_inode_block(&inode, i) {
-                Ok(buf) => res_buf.extend_from_slice(&buf),
+            let from = (i - start_block) * self.block_size;
+            let to = from + self.block_size;
+            match self.read_inode_block(&inode, i, &mut tmp_buf[from..to]) {
+                Ok(nread) => assert_eq!(nread, tmp_buf.len()),
                 Err(err) => match err {
                     ReadInodeBlockErr::BlockNotFound
                     | ReadInodeBlockErr::TooBigBlockIndex => {
@@ -971,11 +952,12 @@ impl FileSystem for Ext2 {
             }
         }
 
-        res_buf.drain(0..offset % self.block_size);
-        res_buf.truncate(len);
+        let from = offset % self.block_size;
+        let to = from + buf.len();
+        buf.copy_from_slice(&tmp_buf[from..to]);
 
-        println!("[EXT2] Done, buffer len: {} bytes.", res_buf.len());
-        Ok(res_buf)
+        println!(" done ({} bytes).", buf.len());
+        Ok(buf.len())
     }
 
     fn write_file(

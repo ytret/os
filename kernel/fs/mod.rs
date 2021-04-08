@@ -293,8 +293,8 @@ pub trait FileSystem {
         &self,
         id: usize,
         offset: usize,
-        len: usize,
-    ) -> Result<Vec<u8>, ReadFileErr>;
+        buf: &mut [u8],
+    ) -> Result<usize, ReadFileErr>;
 
     fn write_file(
         &self,

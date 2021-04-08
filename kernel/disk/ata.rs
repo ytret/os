@@ -14,12 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use alloc::boxed::Box;
 use alloc::rc::Rc;
 use alloc::vec::Vec;
 use core::cell::RefCell;
 use core::mem::align_of;
-use core::ops::Range;
 use core::slice;
 
 use crate::arch::interrupts::{InterruptStackFrame, IDT, STAGE2_IRQ15_HANDLER};
@@ -207,7 +205,16 @@ impl Bus {
         }
     }
 
-    fn read(&self, lba: u32, num_sectors: u8) -> Box<[u16]> {
+    fn read(&self, lba: u32, buf: &mut [u8]) -> usize {
+        assert_ne!(buf.len(), 0, "cannot read into an empty buffer");
+        assert_eq!(
+            buf.len() % 512,
+            0,
+            "buffer length must be a multiple of 512",
+        );
+        let num_sectors = (buf.len() / 512) as u8;
+        assert_ne!(num_sectors, 0, "too many sectors to read");
+
         self.check_for_errors();
 
         unsafe {
@@ -216,18 +223,17 @@ impl Bus {
             self.registers.command.write(0x20u8);
         }
 
-        let buf_len = 256 * num_sectors as usize;
-        let mut buf: Vec<u16> = Vec::with_capacity(buf_len);
-
-        for _ in 0..num_sectors {
+        for i in 0..num_sectors {
             self.wait_until_ready();
-            for _ in 0..256 {
+            for j in 0..256 {
                 let word: u16 = unsafe { self.registers.data.read() };
-                buf.push(word);
+                let idx = (i as usize) * 512 + j * 2;
+                buf[idx] = word as u8;
+                buf[idx + 1] = (word >> 8) as u8;
             }
         }
 
-        buf.into_boxed_slice()
+        buf.len()
     }
 
     fn write(&self, lba: u32, num_sectors: u8, data: &[u16]) {
@@ -247,18 +253,6 @@ impl Bus {
                 self.registers.data.write(word);
             }
         }
-    }
-}
-
-#[inline(always)]
-fn boxed_slice_u16_to_u8(from: Box<[u16]>) -> Box<[u8]> {
-    unsafe {
-        // FIXME: endianness?
-        let slice_u16_len = from.len();
-        let raw_u16: *mut u16 = Box::into_raw(from).cast();
-        let slice_u8: &mut [u8] =
-            slice::from_raw_parts_mut(raw_u16 as *mut u8, 2 * slice_u16_len);
-        Box::from_raw(slice_u8 as *mut [u8]) // same box
     }
 }
 
@@ -328,62 +322,44 @@ impl ReadWriteInterface for Drive {
             || block_idx as u32 >= self.num_sectors_lba28)
     }
 
-    fn read_block(&self, block_idx: usize) -> Result<Box<[u8]>, ReadErr> {
+    fn read_block(
+        &self,
+        block_idx: usize,
+        buf: &mut [u8],
+    ) -> Result<usize, ReadErr> {
         let mut bus = self.bus.as_ref().unwrap().borrow_mut();
         bus.select_drive(self.id);
-        if !self.has_block(block_idx) {
-            Err(ReadErr::NoSuchBlock)
+        if self.has_block(block_idx) {
+            Ok(bus.read(block_idx as u32, buf))
         } else {
-            let data = bus.read(block_idx as u32, 1);
-            Ok(boxed_slice_u16_to_u8(data))
+            Err(ReadErr::NoSuchBlock)
         }
     }
 
     fn read_blocks(
         &self,
         first_block_idx: usize,
-        num_blocks: usize,
-    ) -> Result<Box<[u8]>, ReadErr> {
+        buf: &mut [u8],
+    ) -> Result<usize, ReadErr> {
+        assert_eq!(buf.len() % self.block_size(), 0); // FIXME: Err(...)
+
+        let num_blocks = buf.len() / self.block_size();
         if num_blocks == 0 {
+            // FIXME: InvalidBuf?  InvalidBufLen?
             return Err(ReadErr::InvalidNumBlocks);
+        }
+        if num_blocks as u8 == 0 {
+            return Err(ReadErr::TooMuchBlocks);
         }
 
         let mut bus = self.bus.as_ref().unwrap().borrow_mut();
         bus.select_drive(self.id);
 
-        let last_block_idx = first_block_idx + num_blocks - 1;
-        if !self.has_block(first_block_idx) {
+        if self.has_block(first_block_idx) {
+            Ok(bus.read(first_block_idx as u32, buf))
+        } else {
             Err(ReadErr::NoSuchBlock)
-        } else if !self.has_block(last_block_idx)
-            || (num_blocks != 0 && num_blocks as u8 == 0)
-        {
-            Err(ReadErr::TooMuchBlocks)
-        } else {
-            let data = bus.read(first_block_idx as u32, num_blocks as u8);
-            Ok(boxed_slice_u16_to_u8(data))
         }
-    }
-
-    fn read(&self, from_byte: usize, len: usize) -> Result<Box<[u8]>, ReadErr> {
-        let block_sz = self.block_size();
-        let blocks_to_read = Range {
-            start: from_byte / block_sz,
-            end: (from_byte + len) / block_sz + 1,
-        };
-        let raw =
-            self.read_blocks(blocks_to_read.start, blocks_to_read.len())?;
-        let offset_in_raw = from_byte % block_sz;
-        assert!(offset_in_raw + len <= raw.len());
-
-        // Truncate the slice if needed.
-        let mut nothing_extra = if offset_in_raw == 0 {
-            raw.into_vec()
-        } else {
-            // FIXME: this allocates a new Vec, is there a more efficient way?
-            raw.into_vec().split_off(offset_in_raw)
-        };
-        nothing_extra.truncate(len);
-        Ok(nothing_extra.into_boxed_slice())
     }
 
     fn write_block(

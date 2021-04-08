@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use alloc::boxed::Box;
 use alloc::rc::Rc;
 use alloc::vec::Vec;
 use core::cell::RefCell;
@@ -26,13 +25,16 @@ pub trait BlockDevice {
     fn block_size(&self) -> usize;
     fn has_block(&self, block_idx: usize) -> bool;
 
-    fn read_block(&self, block_idx: usize) -> Result<Box<[u8]>, ReadErr>;
+    fn read_block(
+        &self,
+        block_idx: usize,
+        buf: &mut [u8],
+    ) -> Result<usize, ReadErr>;
     fn read_blocks(
         &self,
         first_block_idx: usize,
-        num_blocks: usize,
-    ) -> Result<Box<[u8]>, ReadErr>;
-    fn read(&self, from_byte: usize, len: usize) -> Result<Box<[u8]>, ReadErr>;
+        buf: &mut [u8],
+    ) -> Result<usize, ReadErr>;
 
     fn write_block(
         &self,

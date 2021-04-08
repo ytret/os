@@ -16,8 +16,8 @@
 
 pub mod ata;
 
-use alloc::boxed::Box;
 use alloc::rc::Rc;
+use alloc::vec;
 use alloc::vec::Vec;
 use core::cell::RefCell;
 use core::mem::size_of;
@@ -35,12 +35,11 @@ pub struct Disk {
 impl Disk {
     pub fn probe_fs(&self) -> Result<KnownFs, ProbeFsErr> {
         // Ext2?  Read the superblock and check the signature.
-        let raw_sb = self
-            .rw_interface
-            .read(1024, size_of::<ext2::Superblock>())?;
+        let mut raw_sb = vec![0u8; size_of::<ext2::Superblock>()];
+        assert_eq!(self.rw_interface.read(1024, &mut raw_sb)?, raw_sb.len());
         let sb = unsafe {
             // SAFETY?
-            (raw_sb.as_ptr() as *const ext2::Superblock).read_unaligned()
+            raw_sb.as_ptr().cast::<ext2::Superblock>().read_unaligned()
         };
         if sb.ext2_signature == ext2::EXT2_SIGNATURE {
             println!("[DISK] Found an ext2 signature.");
@@ -60,20 +59,22 @@ impl Disk {
             KnownFs::Ext2 => {
                 let rwif = &self.rw_interface;
                 let sb_offset = 1024;
-                let raw_sb = rwif.read(sb_offset, 1024)?;
-                let raw_bgd = unsafe {
-                    // SAFETY?
-                    let sb = (raw_sb.as_ptr() as *const ext2::Superblock)
-                        .read_unaligned();
-                    let bs = 1024 * 2usize.pow(sb.log_block_size_minus_10);
-                    let bgd_offset = bs * (sb_offset / bs + 1);
-                    let num_bgds = sb.total_num_blocks as usize
-                        / sb.block_group_num_blocks as usize;
-                    rwif.read(
-                        bgd_offset,
-                        num_bgds * size_of::<ext2::BlockGroupDescriptor>(),
-                    )?
+                let mut raw_sb = [0u8; 1024];
+                assert_eq!(rwif.read(sb_offset, &mut raw_sb)?, 1024);
+                let sb = unsafe {
+                    raw_sb.as_ptr().cast::<ext2::Superblock>().read_unaligned()
                 };
+
+                let bs = 1024 * 2usize.pow(sb.log_block_size_minus_10);
+                let bgd_offset = bs * (sb_offset / bs + 1);
+                let num_bgds = sb.total_num_blocks as usize
+                    / sb.block_group_num_blocks as usize;
+                let mut raw_bgd =
+                    vec![
+                        0u8;
+                        num_bgds * size_of::<ext2::BlockGroupDescriptor>()
+                    ];
+                assert_eq!(rwif.read(bgd_offset, &mut raw_bgd)?, raw_bgd.len());
                 let ext2 = unsafe {
                     // SAFETY?
                     ext2::Ext2::from_raw(
@@ -101,24 +102,17 @@ impl block_device::BlockDevice for Disk {
     fn read_block(
         &self,
         block_idx: usize,
-    ) -> Result<Box<[u8]>, block_device::ReadErr> {
-        Ok(self.rw_interface.read_block(block_idx)?)
+        buf: &mut [u8],
+    ) -> Result<usize, block_device::ReadErr> {
+        Ok(self.rw_interface.read_block(block_idx, buf)?)
     }
 
     fn read_blocks(
         &self,
         first_block_idx: usize,
-        num_blocks: usize,
-    ) -> Result<Box<[u8]>, block_device::ReadErr> {
-        Ok(self.rw_interface.read_blocks(first_block_idx, num_blocks)?)
-    }
-
-    fn read(
-        &self,
-        from_byte: usize,
-        len: usize,
-    ) -> Result<Box<[u8]>, block_device::ReadErr> {
-        Ok(self.rw_interface.read(from_byte, len)?)
+        buf: &mut [u8],
+    ) -> Result<usize, block_device::ReadErr> {
+        Ok(self.rw_interface.read_blocks(first_block_idx, buf)?)
     }
 
     fn write_block(
@@ -198,13 +192,42 @@ pub trait ReadWriteInterface {
     fn block_size(&self) -> usize;
     fn has_block(&self, block_idx: usize) -> bool;
 
-    fn read_block(&self, block_idx: usize) -> Result<Box<[u8]>, ReadErr>;
+    fn read_block(
+        &self,
+        block_idx: usize,
+        buf: &mut [u8],
+    ) -> Result<usize, ReadErr>;
     fn read_blocks(
         &self,
         first_block_idx: usize,
-        num_blocks: usize,
-    ) -> Result<Box<[u8]>, ReadErr>;
-    fn read(&self, from_byte: usize, len: usize) -> Result<Box<[u8]>, ReadErr>;
+        buf: &mut [u8],
+    ) -> Result<usize, ReadErr>;
+
+    fn read(&self, from_byte: usize, buf: &mut [u8]) -> Result<usize, ReadErr> {
+        assert_ne!(buf.len(), 0, "cannot read into an empty buffer");
+        let to_byte = from_byte + buf.len();
+
+        let from_block =
+            (from_byte + self.block_size()) / self.block_size() - 1;
+        let to_block = (to_byte + self.block_size()) / self.block_size();
+        let num_blocks = to_block - from_block;
+
+        if from_byte % self.block_size() != 0
+            || to_byte % self.block_size() != 0
+        {
+            let mut tmp_buf = vec![0u8; num_blocks * self.block_size()];
+            assert_eq!(
+                self.read_blocks(from_block, &mut tmp_buf)?,
+                tmp_buf.len(),
+            );
+            tmp_buf.drain(..from_byte % self.block_size());
+            tmp_buf.truncate(buf.len());
+            buf.copy_from_slice(&tmp_buf);
+            Ok(buf.len())
+        } else {
+            Ok(self.read_blocks(from_block, buf)?)
+        }
+    }
 
     fn write_block(
         &self,

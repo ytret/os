@@ -109,7 +109,7 @@ pub extern "C" fn syscall_handler(
             )
         };
         return_value = match syscall::read(fd, buf) {
-            Ok(_) => 0,
+            Ok(n) => n as i32,
             Err(err) => match err {
                 syscall::ReadErr::BadFd => EBADFD,
                 syscall::ReadErr::NotReadable => EINVAL,

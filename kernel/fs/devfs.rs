@@ -17,6 +17,7 @@
 use alloc::format;
 use alloc::rc::{Rc, Weak};
 use alloc::string::String;
+use alloc::vec;
 use alloc::vec::Vec;
 use core::cell::RefCell;
 
@@ -166,34 +167,35 @@ impl FileSystem for DevFs {
         &self,
         id: usize,
         offset: usize,
-        len: usize,
-    ) -> Result<Vec<u8>, ReadFileErr> {
-        let mut res_buf = Vec::with_capacity(len);
+        buf: &mut [u8],
+    ) -> Result<usize, ReadFileErr> {
         match self.resolve_id(id) {
             ResolveId::BlockDevice(rc_refcell_blkdev) => {
                 let blkdev = rc_refcell_blkdev.borrow();
 
                 let start_block = offset / blkdev.block_size();
-                let end_block = (offset + len - 1) / blkdev.block_size() + 1;
+                let end_block =
+                    (offset + buf.len() - 1) / blkdev.block_size() + 1;
                 let num_blocks = end_block - start_block;
 
-                res_buf.extend_from_slice(
-                    // FIXME: don't unwrap.
-                    blkdev
-                        .read_blocks(start_block, num_blocks)
-                        .as_ref()
-                        .unwrap(),
+                let mut tmp_buf = vec![0u8; num_blocks * blkdev.block_size()];
+
+                // FIXME: don't unwrap.
+                assert_eq!(
+                    blkdev.read_blocks(start_block, &mut tmp_buf).unwrap(),
+                    tmp_buf.len(),
                 );
 
-                res_buf.drain(0..offset % blkdev.block_size());
-                res_buf.truncate(len);
+                tmp_buf.drain(..offset % blkdev.block_size());
+                tmp_buf.truncate(buf.len());
+                buf.clone_from_slice(&tmp_buf);
+                Ok(buf.len())
             }
             ResolveId::CharDevice(rc_refcell_chrdev) => {
                 let mut chrdev = rc_refcell_chrdev.borrow_mut();
-                res_buf.extend_from_slice(&chrdev.read_many(len)?);
+                Ok(chrdev.read_many(buf)?)
             }
         }
-        Ok(res_buf)
     }
 
     fn write_file(

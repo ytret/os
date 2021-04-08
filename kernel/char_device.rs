@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use alloc::boxed::Box;
 use alloc::rc::Rc;
 use alloc::vec::Vec;
 use core::cell::RefCell;
@@ -24,7 +23,7 @@ use crate::kernel_static::Mutex;
 
 pub trait CharDevice {
     fn read(&mut self) -> Result<u8, ReadErr>;
-    fn read_many(&mut self, len: usize) -> Result<Box<[u8]>, ReadErr>;
+    fn read_many(&mut self, buf: &mut [u8]) -> Result<usize, ReadErr>;
 
     fn write(&mut self, byte: u8) -> Result<(), WriteErr>;
     fn write_many(&mut self, bytes: &[u8]) -> Result<(), WriteErr>;

@@ -92,7 +92,7 @@ pub enum WriteErr {
     BadFd,
 }
 
-pub fn read(fd: i32, buf: &mut [u8]) -> Result<(), ReadErr> {
+pub fn read(fd: i32, buf: &mut [u8]) -> Result<usize, ReadErr> {
     // println!("[SYS READ] fd = {} by pid {}", fd, running_process!().id);
     // println!("[SYS READ] buf is at 0x{:08X}", &buf as *const _ as usize);
     // println!("[SYS READ] buf len = {}", buf.len());
@@ -107,7 +107,7 @@ pub fn read(fd: i32, buf: &mut [u8]) -> Result<(), ReadErr> {
             return Err(ReadErr::BadFd);
         } else {
             match running_process!().opened_file(fd).read(buf) {
-                Ok(_) => return Ok(()),
+                Ok(n) => return Ok(n),
                 Err(err) => match err {
                     fs::ReadFileErr::Block => unsafe {
                         SCHEDULER.block_running_thread();
