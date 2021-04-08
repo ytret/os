@@ -113,13 +113,13 @@ impl Hpet {
     pub fn gen_caps_and_id_reg(&self) -> GenCapsAndIdReg {
         let reg_addr = self.base_addr;
         let reg_ptr = reg_addr as *const GenCapsAndIdReg;
-        unsafe { reg_ptr.read() }
+        unsafe { reg_ptr.read_volatile() }
     }
 
     pub fn gen_conf_reg(&self) -> GenConfReg {
         let reg_addr = self.base_addr + 0x10;
         let reg_ptr = reg_addr as *const GenConfReg;
-        unsafe { reg_ptr.read() }
+        unsafe { reg_ptr.read_volatile() }
     }
 
     pub fn write_gen_conf_reg(&self, new_value: GenConfReg) {
@@ -130,20 +130,20 @@ impl Hpet {
         let reg_addr = self.base_addr + 0x10;
         let reg_ptr = reg_addr as *mut GenConfReg;
         unsafe {
-            reg_ptr.write(new_value);
+            reg_ptr.write_volatile(new_value);
         }
     }
 
     pub fn gen_int_status_reg(&self) -> GenIntStatusReg {
         let reg_addr = self.base_addr + 0x20;
         let reg_ptr = reg_addr as *const GenIntStatusReg;
-        unsafe { reg_ptr.read() }
+        unsafe { reg_ptr.read_volatile() }
     }
 
     pub fn main_counter_value(&self) -> u64 {
         let reg_addr = self.base_addr + 0xF0;
         let reg_ptr = reg_addr as *const u64;
-        unsafe { reg_ptr.read() }
+        unsafe { reg_ptr.read_volatile() }
     }
 
     pub fn write_main_counter_value(&self, new_value: u64) {
@@ -152,14 +152,14 @@ impl Hpet {
 
         let reg_addr = self.base_addr + 0xF0;
         let reg_ptr = reg_addr as *mut u64;
-        unsafe { reg_ptr.write(new_value) }
+        unsafe { reg_ptr.write_volatile(new_value) }
     }
 
     pub fn timer_conf_and_cap_reg(&self, timer_n: usize) -> TimerConfAndCapReg {
         assert!(timer_n <= self.gen_caps_and_id_reg().num_timers());
         let reg_addr = self.base_addr + 0x100 + 0x20 * (timer_n as u32);
         let reg_ptr = reg_addr as *const TimerConfAndCapReg;
-        unsafe { reg_ptr.read() }
+        unsafe { reg_ptr.read_volatile() }
     }
 
     pub fn write_timer_conf_and_cap_reg(
@@ -171,26 +171,27 @@ impl Hpet {
         assert!(timer_n <= self.gen_caps_and_id_reg().num_timers());
         let reg_addr = self.base_addr + 0x100 + 0x20 * (timer_n as u32);
         let reg_ptr = reg_addr as *mut TimerConfAndCapReg;
-        unsafe { reg_ptr.write(new_value) }
+        unsafe { reg_ptr.write_volatile(new_value) }
     }
 
     pub fn timer_comparator_value(&self, timer_n: usize) -> u64 {
         assert!(timer_n <= self.gen_caps_and_id_reg().num_timers());
         let reg_addr = self.base_addr + 0x108 + 0x20 * (timer_n as u32);
         let reg_ptr = reg_addr as *const u64;
-        unsafe { reg_ptr.read() }
+        unsafe { reg_ptr.read_volatile() }
     }
 
     pub fn write_timer_comparator_value(&self, timer_n: usize, new_value: u64) {
         assert!(timer_n <= self.gen_caps_and_id_reg().num_timers());
         let reg_addr = self.base_addr + 0x108 + 0x20 * (timer_n as u32);
         let reg_ptr = reg_addr as *mut u64;
-        unsafe { reg_ptr.write(new_value) }
+        unsafe { reg_ptr.write_volatile(new_value) }
     }
 }
 
-#[repr(C, packed)]
+#[repr(transparent)]
 pub struct GenCapsAndIdReg(u64);
+
 impl GenCapsAndIdReg {
     pub fn rev_id(&self) -> u8 {
         self.0 as u8
@@ -233,6 +234,7 @@ impl fmt::Debug for GenCapsAndIdReg {
     }
 }
 
+#[repr(transparent)]
 pub struct GenConfReg(u64);
 
 impl GenConfReg {
@@ -270,6 +272,7 @@ impl fmt::Debug for GenConfReg {
     }
 }
 
+#[repr(transparent)]
 pub struct GenIntStatusReg(u64);
 
 impl GenIntStatusReg {
@@ -290,6 +293,7 @@ impl fmt::Debug for GenIntStatusReg {
     }
 }
 
+#[repr(transparent)]
 pub struct TimerConfAndCapReg(u64);
 
 impl TimerConfAndCapReg {
