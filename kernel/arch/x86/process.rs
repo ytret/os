@@ -155,7 +155,7 @@ pub fn default_entry_point() -> ! {
         // this_process.vas.load();
         // SCHEDULER.running_thread().tcb.cr3 = this_process.vas.pgdir_phys;
 
-        let fd = syscall::open("/bin/test-hello-world").unwrap();
+        let fd = syscall::open("/bin/test-user-input").unwrap();
         let elf = ElfObj::from_feeder(|offset, len| {
             let buf_len = match len {
                 0 => 64,
