@@ -243,11 +243,11 @@ impl From<ElfHeaderErr> for ElfObjErr {
 }
 
 impl ElfObj {
-    /// Constructs an ELF object using the giving byte `feeder`.
+    /// Constructs an ELF object using the given byte `feeder`.
     ///
-    /// The feeder's first argument is a byte offset in the raw ELF, the second
-    /// argument is the number of bytes to read.  If the second argument is
-    /// zero, it means reading until a null byte.
+    /// The feeder's first argument is a byte offset in the raw ELF byte array,
+    /// the second argument is the number of bytes to read.  If the second
+    /// argument is zero, it means _read until a null byte_.
     pub unsafe fn from_feeder<F>(feeder: F) -> Result<Self, ElfObjErr>
     where
         F: Fn(usize, usize) -> Box<[u8]>,
