@@ -55,6 +55,7 @@ pub mod fs;
 pub mod char_device;
 pub mod console;
 
+pub mod feeder;
 pub mod elf;
 
 use alloc::rc::Rc;
