@@ -153,9 +153,9 @@ sync:
 	rmdir mnt
 
 run:
-	qemu-system-i386 -m 32								\
-	                 -drive if=ide,index=0,media=cdrom,file=$(ISOFILE)		\
-	                 -drive if=ide,index=1,media=disk,file=hd.img,format=raw	\
+	qemu-system-i386 -m 32                                                         \
+	                 -drive if=ide,index=0,media=cdrom,file=$(ISOFILE)             \
+	                 -drive if=ide,index=1,media=disk,file=hd.img,format=raw       \
 	                 -serial stdio
 
 clean-all: clean-libdir clean-kernel clean-userland
