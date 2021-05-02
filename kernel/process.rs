@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use alloc::boxed::Box;
+use alloc::vec;
 use alloc::vec::Vec;
 
 use crate::console::CONSOLE;
@@ -22,6 +24,7 @@ use crate::fs::VFS_ROOT;
 pub use crate::arch::process::default_entry_point;
 use crate::arch::process::MemMapping;
 use crate::arch::vas::VirtAddrSpace;
+use crate::feeder::Feeder;
 use crate::fs;
 use crate::memory_region::Region;
 
@@ -165,5 +168,31 @@ impl OpenedFile {
             .unwrap();
         self.seek_rel(buf.len());
         buf.len()
+    }
+}
+
+impl Feeder for OpenedFile {
+    fn get_len(&mut self, offset: usize, len: usize) -> Box<[u8]> {
+        let mut buf = vec![0u8; len].into_boxed_slice();
+        self.seek_abs(offset);
+        self.read(&mut buf).unwrap();
+        buf
+    }
+
+    fn get_until(&mut self, offset: usize, cond: fn(&u8) -> bool) -> Box<[u8]> {
+        let mut buf = vec![0u8; 64]; // FIXME: len
+        let mut i = 0;
+        loop {
+            buf.resize(buf.len() + 1, 0); // FIXME: +1
+
+            self.seek_abs(offset + i);
+            self.read(&mut buf).unwrap();
+
+            if let Some(true_at) = buf[i..].iter().position(cond) {
+                return buf.drain(0..true_at).collect();
+            } else {
+                i = buf.len();
+            }
+        }
     }
 }
