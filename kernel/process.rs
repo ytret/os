@@ -14,19 +14,24 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use alloc::alloc::{alloc, Layout};
 use alloc::boxed::Box;
 use alloc::vec;
 use alloc::vec::Vec;
+use core::slice;
 
+use crate::arch::pmm_stack::PMM_STACK;
 use crate::console::CONSOLE;
 use crate::fs::VFS_ROOT;
 
 pub use crate::arch::process::default_entry_point;
 use crate::arch::process::MemMapping;
-use crate::arch::vas::VirtAddrSpace;
+use crate::arch::vas::{Table, VirtAddrSpace};
+use crate::elf::{ElfObj, ProgSegmentType};
 use crate::feeder::Feeder;
 use crate::fs;
-use crate::memory_region::Region;
+use crate::memory_region::{OverlappingWith, Region};
+use crate::syscall;
 
 pub const MAX_OPENED_FILES: i32 = 32;
 
@@ -111,6 +116,87 @@ impl Process {
 
     pub fn check_fd(&self, fd: i32) -> bool {
         return 0 <= fd && fd < self.opened_files.len() as i32;
+    }
+
+    /// Reads loadable segments into memory from an ELF executable.
+    pub unsafe fn load_from_file(&mut self, pathname: &str) -> ElfObj {
+        // FIXME: no syscalls here
+
+        let fd = syscall::open(pathname).unwrap();
+        let elf = ElfObj::from(self.opened_file(fd)).unwrap();
+        println!("[PROC] {:#X?}", elf);
+
+        assert!(self.program_region.start.trailing_zeros() >= 22);
+        assert!(self.program_region.end.trailing_zeros() >= 22);
+
+        for seg in &elf.program_segments {
+            let mem_reg =
+                Region::from_start_len(seg.in_mem_at, seg.in_mem_size);
+
+            // FIXME: make everything usize
+            self.program_segments.push(Region {
+                start: mem_reg.start as usize,
+                end: mem_reg.end as usize,
+            });
+
+            if seg._type != ProgSegmentType::Load {
+                continue;
+            }
+
+            assert_eq!(
+                mem_reg.overlapping_with(self.program_region),
+                OverlappingWith::IsIn,
+            );
+            assert!(!mem_reg.conflicts_with(self.usermode_stack));
+
+            if self.vas.pgtbl_virt_of(mem_reg.start as u32).is_null() {
+                let pde_idx = (mem_reg.start >> 22) as usize;
+                let pgtbl_virt =
+                    alloc(Layout::from_size_align(4096, 4096).unwrap())
+                        as *mut Table;
+                pgtbl_virt.write_bytes(0, 1);
+                self.vas.set_pde_addr(pde_idx, pgtbl_virt);
+                println!(
+                    "[PROC] Allocated a page table for region {:?}.",
+                    mem_reg,
+                );
+            } else {
+                println!(
+                    "[PROC] Page table for region {:?} is already allocated.",
+                    mem_reg,
+                );
+            }
+
+            let mem_reg_pages = Region {
+                start: mem_reg.start & !0xFFF,
+                end: (mem_reg.end + 0xFFF) & !0xFFF,
+            };
+            for virt_page in mem_reg_pages.range().step_by(4096) {
+                print!("[PROC] Page 0x{:08X}", virt_page);
+                if self.vas.virt_to_phys(virt_page as u32).is_none() {
+                    let phys = PMM_STACK.lock().pop_page();
+                    self.vas.map_page(virt_page as u32, phys);
+                    (virt_page as *mut u8).write_bytes(0, 4096);
+                    println!(" has been mapped to 0x{:08X}.", phys);
+                } else {
+                    println!(" has been mapped already.");
+                }
+            }
+
+            let buf = slice::from_raw_parts_mut(
+                mem_reg.start as *mut u8,
+                seg.in_file_size as usize,
+            );
+            syscall::seek(syscall::Seek::Abs, fd, seg.in_file_at).unwrap();
+            syscall::read(fd, buf).unwrap();
+        }
+
+        println!(
+            "[RPOC] Program entry point is at 0x{:08X}.",
+            elf.entry_point,
+        );
+
+        elf
     }
 }
 

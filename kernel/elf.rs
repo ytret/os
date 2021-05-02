@@ -14,10 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::mem::size_of;
+
+use crate::feeder::Feeder;
 
 #[repr(C, packed)]
 #[derive(Clone, Copy, Debug)]
@@ -243,19 +244,11 @@ impl From<ElfHeaderErr> for ElfObjErr {
 }
 
 impl ElfObj {
-    /// Constructs an ELF object using the given byte `feeder`.
-    ///
-    /// The feeder's first argument is a byte offset in the raw ELF byte array,
-    /// the second argument is the number of bytes to read.  If the second
-    /// argument is zero, it means _read until a null byte_.
-    pub unsafe fn from_feeder<F>(feeder: F) -> Result<Self, ElfObjErr>
-    where
-        F: Fn(usize, usize) -> Box<[u8]>,
-    {
+    pub unsafe fn from(feeder: &mut dyn Feeder) -> Result<Self, ElfObjErr> {
         let elf_header =
-            ElfHeader::from_bytes(&feeder(0, size_of::<ElfHeader>()))?;
+            ElfHeader::from_bytes(&feeder.get_len(0, size_of::<ElfHeader>()))?;
 
-        let names_section = SectionHeader::from_bytes(&feeder(
+        let names_section = SectionHeader::from_bytes(&feeder.get_len(
             elf_header.section_header_idx(elf_header.shstrndx as usize),
             size_of::<SectionHeader>(),
         ));
@@ -265,7 +258,7 @@ impl ElfObj {
             sections: {
                 let mut vec = Vec::new();
                 for i in 0..elf_header.shnum as usize {
-                    let sh = SectionHeader::from_bytes(&feeder(
+                    let sh = SectionHeader::from_bytes(&feeder.get_len(
                         elf_header.section_header_idx(i),
                         size_of::<SectionHeader>(),
                     ));
@@ -274,7 +267,8 @@ impl ElfObj {
                         name: if elf_header.shstrndx != 0 && sh.name != 0 {
                             let name_start =
                                 names_section_start + sh.name as usize;
-                            let name_bytes = feeder(name_start, 0);
+                            let name_bytes =
+                                feeder.get_until(name_start, |&x| x == 0);
                             Some(
                                 String::from_utf8(name_bytes.to_vec()).unwrap(),
                             )
@@ -290,7 +284,7 @@ impl ElfObj {
             program_segments: {
                 let mut vec = Vec::new();
                 for i in 0..elf_header.phnum as usize {
-                    let ph = ProgHeader::from_bytes(&feeder(
+                    let ph = ProgHeader::from_bytes(&feeder.get_len(
                         elf_header.program_header_idx(i),
                         size_of::<ProgHeader>(),
                     ));
@@ -301,27 +295,6 @@ impl ElfObj {
             entry_point: elf_header.entry as usize,
         })
     }
-
-    // pub unsafe fn from_bytes(data: &[u8]) -> Result<Self, ElfObjErr> {
-    //     let elf_header = ElfHeader::from_bytes(data)?;
-    //     Ok(ElfObj {
-    //         sections: {
-    //             let mut vec = Vec::new();
-    //             for i in 0..elf_header.shnum as usize {
-    //                 vec.push(SectionInfo::from_bytes(data, &elf_header, i));
-    //             }
-    //             vec
-    //         },
-    //         program_segments: {
-    //             let mut vec = Vec::new();
-    //             for i in 0..elf_header.phnum as usize {
-    //                 vec.push(ProgSegment::from_bytes(data, &elf_header, i));
-    //             }
-    //             vec
-    //         },
-    //         entry_point: elf_header.entry as usize,
-    //     })
-    // }
 }
 
 #[derive(Clone, Debug)]

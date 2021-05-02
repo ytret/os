@@ -15,18 +15,14 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use alloc::alloc::{alloc, Layout};
-use alloc::vec::Vec;
-use core::slice;
 
 use crate::arch::pmm_stack::PMM_STACK;
 use crate::scheduler::SCHEDULER;
 
 use crate::arch::gdt;
 use crate::arch::vas::Table;
-use crate::elf::{ElfObj, ProgSegmentType};
-use crate::memory_region::{OverlappingWith, Region};
+use crate::memory_region::Region;
 use crate::process::Process;
-use crate::syscall;
 
 extern "C" {
     fn jump_into_usermode(
@@ -152,117 +148,7 @@ pub fn default_entry_point() -> ! {
         let this_process = SCHEDULER.running_process();
         // let this_thread = SCHEDULER.running_thread();
 
-        // println!("[PROC] Loading the VAS.");
-        // this_process.vas.load();
-        // SCHEDULER.running_thread().tcb.cr3 = this_process.vas.pgdir_phys;
-
-        let fd = syscall::open("/bin/test-user-input").unwrap();
-        let elf = ElfObj::from_feeder(|offset, len| {
-            let buf_len = match len {
-                0 => 64,
-                other => other,
-            };
-            let mut pre_buf = Vec::with_capacity(buf_len);
-            for _ in 0..pre_buf.capacity() {
-                pre_buf.push(0);
-            }
-            let mut buf = pre_buf.into_boxed_slice();
-            syscall::seek(syscall::Seek::Abs, fd, offset).unwrap();
-            if len == 0 {
-                syscall::read(fd, &mut buf).unwrap();
-                let null_at = buf.iter().position(|&x| x == 0).unwrap();
-                buf.into_vec().drain(0..null_at).collect()
-            } else {
-                syscall::read(fd, &mut buf).unwrap();
-                buf
-            }
-        })
-        .unwrap();
-        println!("[PROC] {:#X?}", elf);
-
-        assert!(this_process.program_region.start.trailing_zeros() >= 22);
-        assert!(this_process.program_region.end.trailing_zeros() >= 22);
-
-        print!("[PROC] Checking if the program region is unmapped... ");
-        // for program_page in this_process.program_region.range().step_by(4096) {
-        //     assert!(
-        //         this_process.vas.pgtbl_virt_of(program_page).is_null(),
-        //         "program region must be unmapped on a process start up",
-        //     );
-        // }
-        // println!("done.");
-        println!("skipped.");
-
-        for seg in elf.program_segments {
-            let mem_reg =
-                Region::from_start_len(seg.in_mem_at, seg.in_mem_size);
-
-            // FIXME: make everything usize.
-            this_process.program_segments.push(Region {
-                start: mem_reg.start as usize,
-                end: mem_reg.end as usize,
-            });
-
-            if seg._type != ProgSegmentType::Load {
-                continue;
-            }
-
-            assert_eq!(
-                mem_reg.overlapping_with(this_process.program_region),
-                OverlappingWith::IsIn,
-            );
-            assert!(!mem_reg.conflicts_with(this_process.usermode_stack));
-
-            if this_process
-                .vas
-                .pgtbl_virt_of(mem_reg.start as u32)
-                .is_null()
-            {
-                let pde_idx = (mem_reg.start >> 22) as usize;
-                let pgtbl_virt =
-                    alloc(Layout::from_size_align(4096, 4096).unwrap())
-                        as *mut Table;
-                pgtbl_virt.write_bytes(0, 1);
-                this_process.vas.set_pde_addr(pde_idx, pgtbl_virt);
-                println!(
-                    "[PROC] Allocated a page table for region {:?}.",
-                    mem_reg,
-                );
-            } else {
-                println!(
-                    "[PROC] Page table for region {:?} is already allocated.",
-                    mem_reg,
-                );
-            }
-
-            let mem_reg_pages = Region {
-                start: mem_reg.start & !0xFFF,
-                end: (mem_reg.end + 0xFFF) & !0xFFF,
-            };
-            for virt_page in mem_reg_pages.range().step_by(4096) {
-                print!("[PROC] Page 0x{:08X}", virt_page);
-                if this_process.vas.virt_to_phys(virt_page as u32).is_none() {
-                    let phys = PMM_STACK.lock().pop_page();
-                    this_process.vas.map_page(virt_page as u32, phys);
-                    (virt_page as *mut u8).write_bytes(0, 4096);
-                    println!(" has been mapped to 0x{:08X}.", phys);
-                } else {
-                    println!(" has been mapped already.");
-                }
-            }
-
-            let buf = slice::from_raw_parts_mut(
-                mem_reg.start as *mut u8,
-                seg.in_file_size as usize,
-            );
-            syscall::seek(syscall::Seek::Abs, fd, seg.in_file_at).unwrap();
-            syscall::read(fd, buf).unwrap();
-        }
-
-        println!(
-            "[RPOC] Program entry point is at 0x{:08X}.",
-            elf.entry_point,
-        );
+        let elf = this_process.load_from_file("/bin/test-user-input");
 
         assert_eq!(this_process.usermode_stack.start % 4096, 0);
         assert_eq!(this_process.usermode_stack.end % 4096, 0);
