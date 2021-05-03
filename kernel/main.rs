@@ -29,9 +29,7 @@ pub mod kernel_static;
 pub mod port;
 
 #[macro_use]
-pub mod vga;
-
-pub mod timer;
+pub mod dev;
 
 #[cfg_attr(target_arch = "x86", path = "arch/x86/mod.rs")]
 pub mod arch;
@@ -47,13 +45,7 @@ pub mod thread;
 
 pub mod scheduler;
 
-pub mod block_device;
-pub mod disk;
-
 pub mod fs;
-
-pub mod char_device;
-pub mod console;
 
 pub mod feeder;
 pub mod elf;
@@ -81,7 +73,7 @@ pub static mut KERNEL_INFO: KernelInfo = KernelInfo::new();
 
 #[no_mangle]
 pub extern "C" fn main(magic_num: u32, boot_info: *const multiboot::BootInfo) {
-    vga::init();
+    dev::vga::init();
 
     if magic_num == 0x36D76289 {
         println!("Booted by a Multiboot2-compliant bootloader.");
@@ -106,12 +98,12 @@ pub extern "C" fn main(magic_num: u32, boot_info: *const multiboot::BootInfo) {
     arch::pci::init();
     arch::keyboard::init();
 
-    console::init();
+    dev::console::init();
 
-    let rc_console = Rc::clone(console::CONSOLE.lock().as_ref().unwrap());
-    char_device::CHAR_DEVICES.lock().push(rc_console);
+    let rc_console = Rc::clone(dev::console::CONSOLE.lock().as_ref().unwrap());
+    dev::char_device::CHAR_DEVICES.lock().push(rc_console);
 
-    if disk::DISKS.lock().len() > 0 {
+    if dev::disk::DISKS.lock().len() > 0 {
         println!("Initializing the VFS root on disk 0.");
         fs::init_vfs_root_on_disk(0);
     }

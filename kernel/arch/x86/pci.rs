@@ -20,8 +20,8 @@ use core::cell::RefCell;
 use core::marker::PhantomData;
 
 use crate::arch::port_io;
-use crate::block_device;
-use crate::disk;
+use crate::dev::block_device;
+use crate::dev::disk;
 
 #[derive(Clone)]
 struct Pci {

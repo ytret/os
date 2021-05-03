@@ -18,12 +18,12 @@ use core::fmt;
 
 use crate::arch::interrupts::{IDT, IRQ0_RUST_HANDLER};
 use crate::arch::pic::PIC;
-use crate::timer::TIMER;
+use crate::dev::timer::TIMER;
 use crate::KERNEL_INFO;
 
 use super::AcpiAddr;
+use crate::dev::timer::{Timer, TimerCallback};
 use crate::memory_region::Region;
-use crate::timer::{Timer, TimerCallback};
 
 extern "C" {
     fn irq0_handler(); // interrupts.s

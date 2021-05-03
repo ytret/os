@@ -22,7 +22,7 @@ use alloc::vec::Vec;
 use core::cell::RefCell;
 use core::mem::size_of;
 
-use crate::block_device;
+use crate::dev::block_device;
 use crate::fs::{ext2, FileSystem, Mountable, Node, ReadDirErr};
 use crate::kernel_static::Mutex;
 

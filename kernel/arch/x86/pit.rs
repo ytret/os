@@ -16,10 +16,10 @@
 
 use crate::arch::interrupts::{IDT, IRQ0_RUST_HANDLER};
 use crate::arch::pic::PIC;
-use crate::timer::TIMER;
+use crate::dev::timer::TIMER;
 
 use crate::arch::port_io;
-use crate::timer::{Timer, TimerCallback};
+use crate::dev::timer::{Timer, TimerCallback};
 
 extern "C" {
     fn irq0_handler(); // interrupts.s

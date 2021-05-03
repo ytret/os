@@ -22,7 +22,7 @@ use core::slice;
 
 use crate::arch::interrupts::{InterruptStackFrame, IDT, STAGE2_IRQ15_HANDLER};
 use crate::arch::pic::PIC;
-use crate::disk::{ReadErr, ReadWriteInterface, WriteErr};
+use crate::dev::disk::{ReadErr, ReadWriteInterface, WriteErr};
 use crate::port::{Port, PortBuilder};
 
 extern "C" {

@@ -21,9 +21,9 @@ use core::cell::RefCell;
 use crate::scheduler::SCHEDULER;
 
 use crate::arch::keyboard::{Event, EventListener, Key, KEYBOARD};
-use crate::char_device::{CharDevice, ReadErr, WriteErr};
+use crate::dev::char_device::{CharDevice, ReadErr, WriteErr};
+use crate::dev::vga;
 use crate::kernel_static::Mutex;
-use crate::vga;
 
 const MAX_KBD_EVENTS: usize = 64;
 

@@ -42,21 +42,21 @@ SOURCES := \
 	kernel/kernel_static.rs \
 	kernel/memory_region.rs \
 	kernel/port.rs \
-	kernel/vga.rs \
+	kernel/dev/vga.rs \
+	kernel/dev/block_device.rs \
+	kernel/dev/disk/mod.rs \
+	kernel/dev/disk/ata.rs \
+	kernel/dev/char_device.rs \
+	kernel/dev/console.rs \
 	kernel/multiboot.rs \
 	kernel/heap.rs \
 	kernel/process.rs \
 	kernel/thread.rs \
 	kernel/scheduler.rs \
 	kernel/syscall.rs \
-	kernel/block_device.rs \
-	kernel/disk/mod.rs \
-	kernel/disk/ata.rs \
 	kernel/fs/mod.rs \
 	kernel/fs/devfs.rs \
 	kernel/fs/ext2.rs \
-	kernel/char_device.rs \
-	kernel/console.rs \
 	kernel/elf.rs \
 	$(ARCH_SOURCES)
 

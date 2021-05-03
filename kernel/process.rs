@@ -21,7 +21,7 @@ use alloc::vec::Vec;
 use core::slice;
 
 use crate::arch::pmm_stack::PMM_STACK;
-use crate::console::CONSOLE;
+use crate::dev::console::CONSOLE;
 use crate::fs::VFS_ROOT;
 
 pub use crate::arch::process::default_entry_point;

@@ -31,7 +31,7 @@ use super::{
     WriteFileErr,
 };
 use crate::bitflags::BitFlags;
-use crate::disk;
+use crate::dev::disk;
 
 #[allow(dead_code)]
 #[repr(C, packed)]

@@ -18,8 +18,8 @@ use alloc::collections::vec_deque::VecDeque;
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU32, Ordering};
 
+use crate::dev::timer::TIMER;
 use crate::process::default_entry_point;
-use crate::timer::TIMER;
 
 use crate::arch;
 use crate::arch::thread::ThreadControlBlock;

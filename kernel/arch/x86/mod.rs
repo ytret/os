@@ -42,12 +42,12 @@ use core::ptr;
 
 use alloc::boxed::Box;
 
-use crate::timer::TIMER;
+use crate::dev::timer::TIMER;
 use crate::KERNEL_INFO;
 
 use crate::heap;
 use crate::memory_region::Region;
-use crate::timer::Timer;
+use crate::dev::timer::Timer;
 
 pub struct ArchInitInfo {
     pub kernel_region: Region<usize>,

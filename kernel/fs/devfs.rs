@@ -21,8 +21,8 @@ use alloc::vec;
 use alloc::vec::Vec;
 use core::cell::RefCell;
 
-use crate::block_device;
-use crate::char_device;
+use crate::dev::block_device;
+use crate::dev::char_device;
 
 use super::{
     FileSystem, Node, NodeInternals, NodeType, ReadDirErr, ReadFileErr,

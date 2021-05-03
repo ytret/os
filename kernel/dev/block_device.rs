@@ -18,7 +18,7 @@ use alloc::rc::Rc;
 use alloc::vec::Vec;
 use core::cell::RefCell;
 
-use crate::disk;
+use crate::dev::disk;
 use crate::kernel_static::Mutex;
 
 pub trait BlockDevice {

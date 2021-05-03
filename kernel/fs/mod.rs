@@ -24,7 +24,7 @@ use core::cell::RefCell;
 use core::cmp;
 use core::fmt;
 
-use crate::disk;
+use crate::dev::disk;
 use crate::kernel_static::Mutex;
 
 #[derive(Clone, Debug)]
