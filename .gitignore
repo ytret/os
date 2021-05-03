@@ -4,6 +4,7 @@
 *.bin
 *.img
 
+/build/
 /isodir/
 /lib/
 /doc/

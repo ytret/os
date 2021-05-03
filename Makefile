@@ -25,11 +25,13 @@ RUSTFMT := rustfmt
 RUSTDOC := rustdoc
 SHELL := /bin/bash
 
+BUILDDIR ?= $(PWD)/build
 LIBDIR ?= $(PWD)/lib
 ISODIR ?= $(PWD)/isodir
 USERDIR ?= $(PWD)/userland
 
-RUSTFLAGS := --target $(ARCHDIR)/target.json -L $(LIBDIR)
+RUSTFLAGS := --target $(ARCHDIR)/target.json -L $(LIBDIR) \
+             -C incremental=$(BUILDDIR)
 RUSTFMTFLAGS := --check --edition 2018 \
 	--config max_width=80,reorder_modules=false
 
