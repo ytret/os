@@ -15,7 +15,6 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 pub mod sdt;
-pub mod hpet;
 
 use crate::arch::vas::{ACPI_PGTBL, KERNEL_VAS};
 use crate::KERNEL_INFO;

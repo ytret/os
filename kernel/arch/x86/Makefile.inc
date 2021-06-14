@@ -18,11 +18,11 @@ ARCH_SOURCES := \
 	$(ARCHDIR)/mod.rs \
 	$(ARCHDIR)/port_io.rs \
 	$(ARCHDIR)/gdt.rs \
-	$(ARCHDIR)/pic.rs \
+	$(ARCHDIR)/dev/pic.rs \
 	$(ARCHDIR)/acpi/mod.rs \
 	$(ARCHDIR)/acpi/sdt.rs \
-	$(ARCHDIR)/acpi/hpet.rs \
-	$(ARCHDIR)/pit.rs \
+	$(ARCHDIR)/dev/acpi/hpet.rs \
+	$(ARCHDIR)/dev/pit.rs \
 	$(ARCHDIR)/interrupts.rs \
 	$(ARCHDIR)/vas.rs \
 	$(ARCHDIR)/pmm_stack.rs \
@@ -31,7 +31,7 @@ ARCH_SOURCES := \
 	$(ARCHDIR)/scheduler.rs \
 	$(ARCHDIR)/pci.rs \
 	$(ARCHDIR)/syscall.rs \
-	$(ARCHDIR)/keyboard.rs
+	$(ARCHDIR)/dev/keyboard.rs
 
 ARCH_OBJECTS := \
 	$(ARCHDIR)/boot.o \

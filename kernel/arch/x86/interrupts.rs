@@ -16,7 +16,7 @@
 
 use core::mem::size_of;
 
-use crate::arch::pic::PIC;
+use crate::arch::dev::pic::PIC;
 use crate::kernel_static::Mutex;
 
 // See interrupts.s

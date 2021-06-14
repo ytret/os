@@ -17,11 +17,9 @@
 pub mod gdt;
 pub mod interrupts;
 pub mod vas;
-pub mod pic;
 
 pub mod acpi;
-
-pub mod pit;
+pub mod dev;
 
 pub mod pmm_stack;
 pub mod port_io;
@@ -35,8 +33,6 @@ pub mod scheduler;
 pub mod pci;
 
 pub mod syscall;
-
-pub mod keyboard;
 
 use core::ptr;
 
@@ -53,7 +49,7 @@ pub struct ArchInitInfo {
     pub kernel_region: Region<usize>,
     pub heap_region: Region<usize>,
 
-    pub hpet_dt: Option<acpi::hpet::HpetDt>,
+    pub hpet_dt: Option<dev::acpi::hpet::HpetDt>,
     pub hpet_region: Option<Region<usize>>,
 }
 
@@ -97,7 +93,7 @@ pub fn init() {
         );
     }
 
-    pic::init();
+    dev::pic::init();
     interrupts::init();
 
     // FIXME: check if there is an HPET instead of panicking in multiboot.rs.
@@ -151,10 +147,10 @@ pub fn init() {
 
     let timer: Box<dyn Timer> = if aif.hpet_dt.is_some() {
         println!("Using HPET as the system timer.");
-        Box::new(acpi::hpet::Hpet::init_with_period_ms(10))
+        Box::new(dev::acpi::hpet::Hpet::init_with_period_ms(10))
     } else {
         println!("Using PIT as the system timer.");
-        Box::new(pit::Pit::init_with_period_ms(10))
+        Box::new(dev::pit::Pit::init_with_period_ms(10))
     };
 
     unsafe {

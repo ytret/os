@@ -19,7 +19,7 @@ use alloc::vec::Vec;
 use core::cell::RefCell;
 
 use crate::arch::interrupts::IDT;
-use crate::arch::pic::PIC;
+use crate::arch::dev::pic::PIC;
 use crate::port::{Port, PortBuilder};
 
 extern "C" {

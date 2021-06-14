@@ -21,7 +21,8 @@ use core::mem;
 use core::slice;
 use core::str;
 
-use crate::arch::acpi::{hpet, sdt};
+use crate::arch::acpi::sdt;
+use crate::arch::dev::acpi::hpet;
 use crate::memory_region;
 use crate::KERNEL_INFO;
 

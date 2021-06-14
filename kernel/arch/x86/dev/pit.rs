@@ -15,7 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use crate::arch::interrupts::{IDT, IRQ0_RUST_HANDLER};
-use crate::arch::pic::PIC;
+use crate::arch::dev::pic::PIC;
 use crate::dev::timer::TIMER;
 
 use crate::arch::port_io;

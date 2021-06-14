@@ -96,7 +96,7 @@ pub extern "C" fn main(magic_num: u32, boot_info: *const multiboot::BootInfo) {
 
     // FIXME
     arch::pci::init();
-    arch::keyboard::init();
+    arch::dev::keyboard::init();
 
     dev::console::init();
 

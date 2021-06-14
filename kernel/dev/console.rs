@@ -20,7 +20,7 @@ use core::cell::RefCell;
 
 use crate::scheduler::SCHEDULER;
 
-use crate::arch::keyboard::{Event, EventListener, Key, KEYBOARD};
+use crate::arch::dev::keyboard::{Event, EventListener, Key, KEYBOARD};
 use crate::dev::char_device::{CharDevice, ReadErr, WriteErr};
 use crate::dev::vga;
 use crate::kernel_static::Mutex;
