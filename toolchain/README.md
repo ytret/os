@@ -24,7 +24,7 @@ Install the [C standard library](https://github.com/ytret/mlibc) headers:
     $ cd /path/to/ytret/mlibc
     $ $EDITOR meson_options.txt  # set `headers_only' to `true'
     $ meson builddir --cross-file cross.txt
-    $ DESTDIR=$SYSROOT ninja install
+    $ cd builddir && DESTDIR=$SYSROOT ninja install
 
 Configure, build and install Binutils 2.36.1:
 
