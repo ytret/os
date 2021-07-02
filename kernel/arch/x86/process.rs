@@ -15,12 +15,15 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use alloc::alloc::{alloc, Layout};
+use alloc::vec;
+use alloc::vec::Vec;
 
 use crate::arch::pmm_stack::PMM_STACK;
 use crate::scheduler::SCHEDULER;
 
 use crate::arch::gdt;
 use crate::arch::vas::Table;
+use crate::cstring::CString;
 use crate::memory_region::Region;
 use crate::process::Process;
 
@@ -127,6 +130,67 @@ impl Process {
 
         mapping
     }
+
+    pub unsafe fn set_up_usermode_stack(
+        &mut self,
+        argv: &[CString],
+        environ: &[CString],
+    ) -> *mut u32 {
+        assert_eq!(self.usermode_stack.start % 4096, 0);
+        assert_eq!(self.usermode_stack.end % 4096, 0);
+        assert!(self.usermode_stack.len() <= 4 * 1024 * 1024);
+
+        let pde_idx = (self.usermode_stack.start >> 22) as usize;
+        let pgtbl_virt =
+            alloc(Layout::from_size_align(4096, 4096).unwrap()) as *mut Table;
+        pgtbl_virt.write_bytes(0, 1);
+        self.vas.set_pde_addr(pde_idx, pgtbl_virt);
+        println!(
+            "[PROC] Allocated a page table for a usermode stack at {:?}.",
+            self.usermode_stack,
+        );
+
+        assert_eq!(self.usermode_stack.len(), 4096);
+        let phys = PMM_STACK.lock().pop_page();
+        self.vas.map_page(self.usermode_stack.start as u32, phys);
+        (self.usermode_stack.start as *mut u8).write_bytes(0, 4096);
+        println!(
+            "[PROC] Page 0x{:08X} has been mapped to 0x{:08X}.",
+            self.usermode_stack.start, phys,
+        );
+
+        // Length of the initial stack in 32-bit units.
+        // Init stack = argc + argv + NULL + environ + NULL.
+        let init_stack_len = 1 + argv.len() + 1 + environ.len() + 1;
+
+        let usermode_stack_top =
+            (self.usermode_stack.end as *mut u32).wrapping_sub(init_stack_len);
+        let mut offset = 0;
+
+        // FIXME: copy the strings into usermode memory?
+
+        // argc
+        *usermode_stack_top.wrapping_add(offset) = argv.len() as u32;
+
+        // argv
+        for (i, arg) in argv.iter().enumerate() {
+            offset += 1;
+            *usermode_stack_top.wrapping_add(offset) = argv[i].as_ptr() as u32;
+        }
+        offset += 1;
+        *usermode_stack_top.wrapping_add(offset) = 0;
+
+        // environ
+        for (j, env) in environ.iter().enumerate() {
+            offset += 1;
+            *usermode_stack_top.wrapping_add(offset) =
+                environ[j].as_ptr() as u32;
+        }
+        offset += 1;
+        *usermode_stack_top.wrapping_add(offset) = 0;
+
+        return usermode_stack_top;
+    }
 }
 
 pub struct MemMapping {
@@ -145,41 +209,15 @@ pub fn default_entry_point() -> ! {
 
     unsafe {
         SCHEDULER.stop_scheduling();
-        let this_process = SCHEDULER.running_process();
+        let mut this_process = SCHEDULER.running_process();
         // let this_thread = SCHEDULER.running_thread();
 
+        let argv = vec![CString::new("/bin/test-arg-env").unwrap()];
+        let environ = Vec::new();
+
         let elf = this_process.load_from_file("/bin/test-arg-env");
-
-        assert_eq!(this_process.usermode_stack.start % 4096, 0);
-        assert_eq!(this_process.usermode_stack.end % 4096, 0);
-        assert!(this_process.usermode_stack.len() <= 4 * 1024 * 1024);
-
-        let pde_idx = (this_process.usermode_stack.start >> 22) as usize;
-        let pgtbl_virt =
-            alloc(Layout::from_size_align(4096, 4096).unwrap()) as *mut Table;
-        pgtbl_virt.write_bytes(0, 1);
-        this_process.vas.set_pde_addr(pde_idx, pgtbl_virt);
-        println!(
-            "[PROC] Allocated a page table for a usermode stack at {:?}.",
-            this_process.usermode_stack,
-        );
-
-        assert_eq!(this_process.usermode_stack.len(), 4096);
-        let phys = PMM_STACK.lock().pop_page();
-        this_process
-            .vas
-            .map_page(this_process.usermode_stack.start as u32, phys);
-        (this_process.usermode_stack.start as *mut u8).write_bytes(0, 4096);
-        println!(
-            "[PROC] Page 0x{:08X} has been mapped to 0x{:08X}.",
-            this_process.usermode_stack.start, phys,
-        );
-
         let usermode_stack_top =
-            (this_process.usermode_stack.end as *mut u32).wrapping_sub(3);
-        *usermode_stack_top.wrapping_add(0) = 0; // argc
-        *usermode_stack_top.wrapping_add(1) = 0; // argv
-        *usermode_stack_top.wrapping_add(2) = 0; // environ
+            this_process.set_up_usermode_stack(&argv, &environ);
 
         SCHEDULER.keep_scheduling();
 
