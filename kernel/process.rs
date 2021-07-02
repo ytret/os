@@ -45,7 +45,7 @@ pub struct Process {
     pub usermode_stack: Region<usize>,
     pub mem_mappings: Vec<MemMapping>,
 
-    pub opened_files: Vec<OpenedFile>,
+    opened_files: Vec<OpenedFile>,
 }
 
 impl Process {
