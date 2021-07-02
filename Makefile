@@ -151,6 +151,7 @@ sync:
 	mkdir mnt
 	sudo mount $(HDIMG) mnt
 	sudo rsync -avu --delete $(SYSROOT)/ mnt/
+	sync
 	sudo umount mnt
 	rmdir mnt
 
