@@ -2,7 +2,7 @@
 
 This document describes building GNU Binutils and GCC which target myos.
 
-1. Set environment variables.
+1. Set environment variables:
 
 ```sh
 $ export TARGET=i686-myos
