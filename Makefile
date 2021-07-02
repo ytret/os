@@ -78,7 +78,7 @@ ISOFILE := kernel.iso
 HDIMG := hd.img
 SYSROOT := sysroot
 
-USERPROGS ?= syscalls hello-world user-input
+USERPROGS ?= syscalls hello-world user-input arg-env
 
 .DEFAULT_GOAL := kernel
 .PHONY: all kernel userland \

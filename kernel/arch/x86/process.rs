@@ -148,7 +148,7 @@ pub fn default_entry_point() -> ! {
         let this_process = SCHEDULER.running_process();
         // let this_thread = SCHEDULER.running_thread();
 
-        let elf = this_process.load_from_file("/bin/test-user-input");
+        let elf = this_process.load_from_file("/bin/test-arg-env");
 
         assert_eq!(this_process.usermode_stack.start % 4096, 0);
         assert_eq!(this_process.usermode_stack.end % 4096, 0);
