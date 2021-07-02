@@ -20,8 +20,8 @@ use core::cell::RefCell;
 use core::mem::align_of;
 use core::slice;
 
-use crate::arch::interrupts::{InterruptStackFrame, IDT, STAGE2_IRQ15_HANDLER};
 use crate::arch::dev::pic::PIC;
+use crate::arch::interrupts::{InterruptStackFrame, IDT, STAGE2_IRQ15_HANDLER};
 use crate::dev::disk::{ReadErr, ReadWriteInterface, WriteErr};
 use crate::port::{Port, PortBuilder};
 

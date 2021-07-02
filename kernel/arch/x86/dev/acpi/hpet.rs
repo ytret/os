@@ -16,8 +16,8 @@
 
 use core::fmt;
 
-use crate::arch::interrupts::{IDT, IRQ0_RUST_HANDLER};
 use crate::arch::dev::pic::PIC;
+use crate::arch::interrupts::{IDT, IRQ0_RUST_HANDLER};
 use crate::dev::timer::TIMER;
 use crate::KERNEL_INFO;
 
