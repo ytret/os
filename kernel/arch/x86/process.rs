@@ -22,18 +22,24 @@ use crate::arch::pmm_stack::PMM_STACK;
 use crate::scheduler::SCHEDULER;
 
 use crate::arch::gdt;
+use crate::arch::syscall::GpRegs;
 use crate::arch::vas::Table;
 use crate::cstring::CString;
 use crate::memory_region::Region;
 use crate::process::Process;
 
 extern "C" {
-    fn jump_into_usermode(
+    /// Does an interrupt return with the requested privilege level 3
+    /// (usermode).
+    ///
+    /// # Safety
+    /// `gp_regs` must point to valid data.
+    pub fn jump_into_usermode(
         code_seg: u16,
         data_seg: u16,
         tls_seg: u16,
         jump_to: u32,
-        esp: u32,
+        gp_regs: *const GpRegs,
     ) -> !;
 }
 
@@ -221,13 +227,24 @@ pub extern "C" fn default_entry_point() -> ! {
 
         SCHEDULER.keep_scheduling();
 
+        let gp_regs = GpRegs {
+            edi: 0,
+            esi: 0,
+            ebp: 0,
+            esp: usermode_stack_top as u32,
+            ebx: 0,
+            edx: 0,
+            ecx: 0,
+            eax: 0,
+        };
+
         println!("[PROC] Entering usermode.");
         jump_into_usermode(
             gdt::USERMODE_CODE_SEG,
             gdt::USERMODE_DATA_SEG,
             gdt::TLS_SEG,
             elf.entry_point as u32,
-            usermode_stack_top as u32,
+            &gp_regs as *const GpRegs,
         );
     }
 }

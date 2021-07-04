@@ -78,7 +78,7 @@ switch_threads:
  *            2) usermode data segment (not a selector)
  *            3) TLS segment (not a selector)
  *            4) the address to jump to
- *            5) usermode esp value
+ *            5) usermode general purpose registers: *const syscall::GpRegs
  * This function does not return.
  */
 .global jump_into_usermode
@@ -91,6 +91,7 @@ jump_into_usermode:
     movl 12(%ebp), %ebx         // ebx = usermode data segment
     movl 16(%ebp), %ecx         // ecx = TLS segment
     movl 20(%ebp), %edx         // edx = the address to jump to
+    movl 24(%ebp), %esi         // esi = usermode GP registers
 
     // Set RPL to 3, that is to usermode.
     orl $3, %eax
@@ -105,10 +106,19 @@ jump_into_usermode:
 
     // Make up the iret stack frame.
     pushl %ebx                  // ss = data segment selector
-    pushl 24(%ebp)              // esp
+    pushl 3*4(%esi)             // esp
     pushf
     pushl %eax                  // cs = code segment selector
     pushl %edx                  // eip
+
+    // Load the GP registers.
+    movl 0*4(%esi), %edi
+    movl 2*4(%esi), %ebp
+    movl 4*4(%esi), %ebx
+    movl 5*4(%esi), %edx
+    movl 6*4(%esi), %ecx
+    movl 7*4(%esi), %eax
+    movl 1*4(%esi), %esi
 
     iret
 1:  ud2
