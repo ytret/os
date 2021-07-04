@@ -199,6 +199,7 @@ impl Process {
     }
 }
 
+#[derive(Clone)]
 pub struct MemMapping {
     pub region: Region<usize>,
 }

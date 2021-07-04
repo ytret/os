@@ -124,7 +124,7 @@ impl Process {
 
         let fd = syscall::open(pathname).unwrap();
         let elf = ElfObj::from(self.opened_file(fd)).unwrap();
-        println!("[PROC] {:#X?}", elf);
+        // println!("[PROC] {:#X?}", elf);
 
         assert!(self.program_region.start.trailing_zeros() >= 22);
         assert!(self.program_region.end.trailing_zeros() >= 22);
@@ -198,6 +198,39 @@ impl Process {
 
         elf
     }
+
+    /// Clones the process.
+    ///
+    /// What is cloned:
+    /// * virtual address space layout (physical memory is copied),
+    /// * program segments,
+    /// * usermode stack region,
+    /// * memory mappings,
+    /// * opened files.
+    ///
+    /// What is not cloned:
+    /// * process ID,
+    /// * threads,
+    /// * guard pages.
+    pub fn clone(&self, clone_id: usize) -> Self {
+        Process {
+            id: clone_id,
+            new_thread_id: 0,
+
+            vas: unsafe {
+                print!("[PROC] Copying VAS...");
+                let vas = self.vas.copy();
+                println!("done");
+                vas
+            },
+            program_region: self.program_region,
+            program_segments: self.program_segments.clone(),
+            usermode_stack: self.usermode_stack,
+            mem_mappings: self.mem_mappings.clone(),
+
+            opened_files: self.opened_files.clone(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -206,6 +239,7 @@ pub enum OpenFileErr {
     UnsupportedFileType,
 }
 
+#[derive(Clone)]
 pub struct OpenedFile {
     pub node: fs::Node,
     offset: Option<usize>,

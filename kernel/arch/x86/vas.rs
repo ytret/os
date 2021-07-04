@@ -18,10 +18,13 @@ use alloc::alloc::{alloc, Layout};
 use core::mem::align_of;
 use core::ptr;
 
-use crate::arch::interrupts::InterruptStackFrame;
 use crate::arch::pmm_stack::PMM_STACK;
+use crate::KERNEL_INFO;
+
+use crate::arch::interrupts::InterruptStackFrame;
 use crate::bitflags::BitFlags;
 use crate::kernel_static::Mutex;
+use crate::memory_region::Region;
 
 bitflags! {
     #[repr(u32)]
@@ -168,6 +171,117 @@ impl VirtAddrSpace {
         }
 
         vas
+    }
+
+    pub unsafe fn copy(&self) -> Self {
+        let new_pgdir_virt = alloc(Layout::from_size_align(4096, 4096).unwrap())
+            as *mut Directory;
+        let new_pgdir_phys = self.virt_to_phys(new_pgdir_virt as u32).unwrap();
+
+        let new_vas = VirtAddrSpace {
+            pgdir_virt: new_pgdir_virt,
+            pgdir_phys: new_pgdir_phys,
+
+            pgtbls_virt: alloc(Layout::from_size_align(4096, 4096).unwrap())
+                .cast(),
+            pgtbls_phys: alloc(Layout::from_size_align(4096, 4096).unwrap())
+                .cast(),
+
+            usermode: self.usermode,
+        };
+
+        new_vas.pgdir_virt.write_bytes(0, 1);
+        new_vas.pgtbls_virt.write_bytes(0, 1024);
+        new_vas.pgtbls_phys.write_bytes(0, 1024);
+
+        let pgdir = self.pgdir_virt.as_ref().unwrap();
+        let new_pgdir = new_pgdir_virt.as_mut().unwrap();
+
+        // Allocate a page on the heap and use it for copying physical pages
+        // from one VAS to another.  FIXME: this is dirty and slow.
+        let copying_virt =
+            alloc(Layout::from_size_align(4096, 4096).unwrap()) as u32;
+        let initial_mapping = self.pgtbl_entry(copying_virt).addr();
+
+        for (pde_idx, pde) in
+            self.pgdir_virt.as_ref().unwrap().0.iter().enumerate()
+        {
+            // println!("pde_idx = {}", pde_idx);
+            // println!("pde = 0x{:08X}", pde as *const _ as u32);
+
+            if pde.flags().has_set(PdeFlags::Present) {
+                // println!("- is present");
+
+                let pgtbl_virt = self.pgtbl_virt_of((pde_idx as u32) << 22);
+                let new_pgtbl_virt =
+                    alloc(Layout::from_size_align(4096, 4096).unwrap())
+                        as *mut Table;
+                new_pgtbl_virt.write_bytes(0, 1);
+
+                let pgtbl = pgtbl_virt.as_ref().unwrap();
+                let new_pgtbl = new_pgtbl_virt.as_mut().unwrap();
+
+                new_pgdir.0[pde_idx] = pgdir.0[pde_idx];
+                new_vas.set_pde_phys_virt(
+                    pde_idx,
+                    KERNEL_VAS
+                        .lock()
+                        .virt_to_phys(new_pgtbl_virt as u32)
+                        .unwrap(),
+                    new_pgtbl_virt,
+                );
+
+                for (pte_idx, pte) in pgtbl.0.iter().enumerate() {
+                    // println!(" - pte_idx = {}", pte_idx);
+                    // println!(" - pte = 0x{:08X}", pte as *const _ as u32);
+                    if pte.flags().has_set(PteFlags::Present) {
+                        let copy_from =
+                            ((pde_idx << 22) | (pte_idx << 12)) as u32;
+
+                        let acpi_region = KERNEL_INFO
+                            .arch
+                            .hpet_region
+                            .unwrap_or(Region { start: 0, end: 0 });
+
+                        // If this page is within the kernel or ACPI region,
+                        // retain the mapping so that the kernel and ACPI memory
+                        // are mapped the same way across different VASes.
+                        if KERNEL_REGION.contains(&(copy_from as usize))
+                            || acpi_region.contains(&(copy_from as usize))
+                        {
+                            new_pgtbl.0[pte_idx] = pgtbl.0[pte_idx];
+                            continue;
+                        }
+
+                        // Otherwise, allocate a new physical page and copy the
+                        // original page contents into it via `copying_virt'.
+
+                        let phys = PMM_STACK.lock().pop_page();
+
+                        new_pgtbl.0[pte_idx] = pgtbl.0[pte_idx];
+                        new_pgtbl.0[pte_idx].set_addr(phys);
+
+                        self.pgtbl_entry(copying_virt).set_addr(phys);
+                        self.invalidate_cache(copying_virt);
+
+                        assert_ne!(copy_from, copying_virt);
+
+                        // print!("Copying from 0x{:08X} to 0x{:08X}... ", copy_from, copying_virt);
+                        ptr::copy_nonoverlapping(
+                            copy_from as *const u8,
+                            copying_virt as *mut u8,
+                            4096,
+                        );
+                        // println!("done");
+                    }
+                }
+            }
+        }
+
+        // Restore the original mapping of the copying page.
+        self.pgtbl_entry(copying_virt).set_addr(initial_mapping);
+
+        new_vas
     }
 
     pub unsafe fn load(&self) {
@@ -395,6 +509,11 @@ kernel_static! {
         )
     });
 }
+
+const KERNEL_REGION: Region<usize> = Region {
+    start: 0x00000000,
+    end: 0x08000000, // 128 MiB
+};
 
 #[no_mangle]
 pub extern "C" fn page_fault_handler(

@@ -140,6 +140,12 @@ impl Scheduler {
         );
         let old_thread = self.running_thread.take().unwrap();
         let new_thread = self.next_runnable_thread();
+
+        let from_pid = old_thread.process_id;
+        let from_tid = old_thread.id;
+        let to_pid = new_thread.process_id;
+        let to_tid = new_thread.id;
+
         self.run_thread(new_thread);
 
         println!(
@@ -162,6 +168,11 @@ impl Scheduler {
         let to_tcb =
             &mut self.running_thread().tcb as *const ThreadControlBlock;
 
+        println!(
+            "[SCHED] pid {} tid {} -> pid {} tid {}",
+            from_pid, from_tid, to_pid, to_tid,
+        );
+
         unsafe {
             self.switch_threads(from_tcb, to_tcb);
         }
@@ -181,6 +192,11 @@ impl Scheduler {
             let old_thread = self.running_thread.take().unwrap();
             let new_thread = self.next_runnable_thread();
 
+            let from_pid = old_thread.process_id;
+            let from_tid = old_thread.id;
+            let to_pid = new_thread.process_id;
+            let to_tid = new_thread.id;
+
             self.run_thread(new_thread);
             let from_tcb = if still_runnable {
                 self.runnable_threads
@@ -195,10 +211,10 @@ impl Scheduler {
                     .unwrap()
                     .tcb as *mut ThreadControlBlock
             } else {
-                // println!(
-                //     "[SCHED] Blocking thread {} of pid {}.",
-                //     old_thread.id, old_thread.process_id,
-                // );
+                println!(
+                    "[SCHED] Blocking thread {} of pid {}.",
+                    old_thread.id, old_thread.process_id,
+                );
                 self.blocked_threads.as_mut().unwrap().push_back(old_thread);
                 &mut self
                     .blocked_threads
@@ -212,17 +228,22 @@ impl Scheduler {
             let to_tcb =
                 &mut self.running_thread().tcb as *const ThreadControlBlock;
 
+            println!(
+                "[SCHED] pid {} tid {} -> pid {} tid {}",
+                from_pid, from_tid, to_pid, to_tid,
+            );
+
             unsafe {
                 self.switch_threads(from_tcb, to_tcb);
             }
         } else {
-            // if self.counter % 1000 == 0 {
-            //     println!(
-            //         "[SCHED] Not scheduling. (There are {} runnable and {} blocked threads.)",
-            //         self.runnable_threads.as_ref().unwrap().len(),
-            //         self.blocked_threads.as_ref().unwrap().len(),
-            //     );
-            // }
+            if self.counter % 10000 == 0 {
+                println!(
+                    "[SCHED] Not scheduling. (There are {} runnable and {} blocked threads.)",
+                    self.runnable_threads.as_ref().unwrap().len(),
+                    self.blocked_threads.as_ref().unwrap().len(),
+                );
+            }
         }
     }
 }

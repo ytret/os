@@ -14,24 +14,31 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use core::mem::size_of;
 use core::slice;
 use core::str;
 
+use crate::scheduler::SCHEDULER;
+
+use crate::arch::gdt;
 use crate::arch::interrupts::InterruptStackFrame;
+use crate::arch::process::jump_into_usermode;
 use crate::bitflags::BitFlags;
 use crate::syscall;
+use crate::thread::Thread;
 
 #[derive(Clone, Copy, Debug)]
 #[repr(C, packed)]
 pub struct GpRegs {
-    edi: u32,
-    esi: u32,
-    ebp: u32,
-    esp: u32,
-    ebx: u32,
-    edx: u32,
-    ecx: u32,
-    eax: u32,
+    // NOTE: the field order is hard-coded in scheduler.s.
+    pub edi: u32,
+    pub esi: u32,
+    pub ebp: u32,
+    pub esp: u32,
+    pub ebx: u32,
+    pub edx: u32,
+    pub ecx: u32,
+    pub eax: u32,
 }
 
 const EBADF: i32 = -1;
@@ -42,7 +49,7 @@ const ENOTTY: i32 = -5;
 
 #[no_mangle]
 pub extern "C" fn syscall_handler(
-    _stack_frame: &InterruptStackFrame,
+    stack_frame: &InterruptStackFrame,
     gp_regs: &mut GpRegs,
 ) {
     // println!(
@@ -225,6 +232,69 @@ pub extern "C" fn syscall_handler(
             Err(err) => match err {
                 syscall::IsTtyErr::BadFd => EBADF,
             },
+        }
+    }
+    // 12 get_pid
+    // returns process ID
+    else if syscall_num == 12 {
+        return_value = unsafe { SCHEDULER.running_process().id } as i32;
+    }
+    // 13 fork
+    else if syscall_num == 13 {
+        unsafe {
+            println!(
+                "[SYS FORK] Origin pid {} tid {}",
+                SCHEDULER.running_process().id,
+                SCHEDULER.running_thread().id,
+            );
+
+            let copy_id = SCHEDULER.allocate_process_id();
+            let mut copy = SCHEDULER.running_process().clone(copy_id);
+
+            // Define these before moving `copy' into SCHEDULER.
+            let thread_id = copy.allocate_thread_id();
+            let copy_vas_cr3 = copy.vas.pgdir_phys;
+
+            SCHEDULER.add_process(copy);
+
+            let mut thread = Thread::new_with_stack(
+                copy_id,
+                thread_id,
+                jump_into_usermode as u32,
+                5 + size_of::<GpRegs>(),
+                // pass five arguments to jump_into_usermode and store the GP
+                // registers on the stack.  FIXME: memory leak
+            );
+            // FIXME: bad API
+            thread.tcb.cr3 = copy_vas_cr3;
+
+            let kernel_stack_top = thread.tcb.esp as *mut u32;
+
+            let mut new_gp_regs = gp_regs.clone();
+            new_gp_regs.eax = 0; // syscall return value for the child process
+            new_gp_regs.ebp = stack_frame.ebp;
+            new_gp_regs.esp = stack_frame.esp;
+
+            let new_gp_regs_ptr: *mut GpRegs =
+                kernel_stack_top.wrapping_add(14).cast();
+            new_gp_regs_ptr.write(new_gp_regs);
+
+            println!("[SYS FORK] new_gp_regs = {:#X?}", new_gp_regs);
+
+            *kernel_stack_top.wrapping_add(9) = gdt::USERMODE_CODE_SEG as u32;
+            *kernel_stack_top.wrapping_add(10) = gdt::USERMODE_DATA_SEG as u32;
+            *kernel_stack_top.wrapping_add(11) = gdt::TLS_SEG as u32;
+            *kernel_stack_top.wrapping_add(12) = stack_frame.eip;
+            *kernel_stack_top.wrapping_add(13) = new_gp_regs_ptr as u32;
+
+            println!("[fork] esp = 0x{:08X}", stack_frame.esp);
+            println!("[fork] eip = 0x{:08X}", stack_frame.eip);
+
+            SCHEDULER.add_runnable_thread(thread);
+
+            println!("[SYS FORK] Copy pid {} tid {}", copy_id, thread_id);
+
+            return_value = copy_id as i32;
         }
     } else {
         println!("[SYS] Ignoring an invalid syscall number {}.", syscall_num);
