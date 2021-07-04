@@ -22,5 +22,3 @@ pub struct Thread {
 
     pub tcb: ThreadControlBlock,
 }
-
-pub type ThreadEntryPoint = fn() -> !;

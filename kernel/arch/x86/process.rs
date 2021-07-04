@@ -197,7 +197,7 @@ pub struct MemMapping {
     pub region: Region<usize>,
 }
 
-pub fn default_entry_point() -> ! {
+pub extern "C" fn default_entry_point() -> ! {
     // This function must always be a result of ret from switch_threads (see
     // scheduler.s) which requires that interrupts be enabled after it returns
     // so that task switching remains possible.

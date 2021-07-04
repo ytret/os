@@ -76,7 +76,7 @@ pub fn init() {
         // the code that is executing now.  The first thread switch that happens
         // after enablig the spawner will save the current context as a context
         // of the thread with index 0.
-        let init_thread = Thread::new(init_process_id, init_thread_id);
+        let init_thread = Thread::new(init_process_id, init_thread_id, 0);
         tss.esp0 = init_thread.tcb.esp0;
 
         // Load the GDT with the new entries.

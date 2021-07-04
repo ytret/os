@@ -33,8 +33,9 @@ switch_threads:
     movl %esp, %ebp
 
     pushl %eax
-    pushl %ebx
     pushl %ecx
+    pushl %edx
+    pushl %ebx
     pushl %esi
     pushl %edi
 
@@ -61,8 +62,9 @@ switch_threads:
 
 1:  popl %edi
     popl %esi
-    popl %ecx
     popl %ebx
+    popl %edx
+    popl %ecx
     popl %eax
     popl %ebp
 
