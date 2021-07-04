@@ -169,7 +169,8 @@ clean-libdir:
 	rm -rf $(LIBDIR)
 
 clean-kernel:
-	rm -rf $(ISOFILE) $(ISODIR) $(LINKLIST) $(OUTPUT)
+	rm -rf $(ISOFILE) $(ISODIR) $(LINKLIST) $(OUTPUT) $(BUILDDIR)/kernel* \
+	$(LIBDIR)/kernel*
 
 clean-userland:
 	userprogs=($(USERPROGS));				\
