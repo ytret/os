@@ -186,7 +186,7 @@ impl VirtAddrSpace {
             entry.set_flag(PteFlags::AnyDpl);
         }
 
-        asm!("invlpg ({})", in(reg) virt, options(att_syntax));
+        self.invalidate_cache(virt);
     }
 
     /// Maps the specified region to pages given by the [PMM
@@ -281,6 +281,13 @@ impl VirtAddrSpace {
     pub unsafe fn pgtbl_virt_of(&self, virt: u32) -> *mut Table {
         let pde_idx = (virt >> 22) as usize;
         *self.pgtbls_virt.add(pde_idx)
+    }
+
+    fn invalidate_cache(&self, virt: u32) {
+        assert_eq!(virt % 4096, 0, "virt must be page-aligned");
+        unsafe {
+            asm!("invlpg ({})", in(reg) virt, options(att_syntax));
+        }
     }
 }
 
