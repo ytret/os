@@ -81,6 +81,10 @@ impl Scheduler {
         self.processes.push(process)
     }
 
+    pub fn add_runnable_thread(&mut self, thread: Thread) {
+        self.runnable_threads.as_mut().unwrap().push_back(thread)
+    }
+
     pub fn next_runnable_thread(&mut self) -> Thread {
         self.runnable_threads.as_mut().unwrap().pop_front().unwrap()
     }
@@ -263,11 +267,7 @@ fn schedule() {
                 default_entry_point,
             );
             new_thread.tcb.cr3 = pgdir_phys;
-            SCHEDULER
-                .runnable_threads
-                .as_mut()
-                .unwrap()
-                .push_back(new_thread);
+            SCHEDULER.add_runnable_thread(new_thread);
             println!("[SCHED] Created a thread with ID {}.", thread_id);
 
             NUM_SPAWNED += 1;
