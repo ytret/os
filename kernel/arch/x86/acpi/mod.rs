@@ -71,7 +71,7 @@ pub fn init() {
     unsafe {
         let pde_idx = (hpet_region.unwrap().start / 4096 / 1024) as usize;
         let pgtbl_virt = &mut *ACPI_PGTBL.lock() as *mut Table;
-        kvas.set_pde_addr(pde_idx, pgtbl_virt);
+        kvas.set_pde_virt(pde_idx, pgtbl_virt);
     }
 
     let start_page = hpet_phys_region.start / 4096;

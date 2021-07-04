@@ -89,7 +89,7 @@ impl Process {
                         alloc(Layout::from_size_align(4096, 4096).unwrap())
                             as *mut Table;
                     new_pgtbl_virt.write_bytes(0, 1);
-                    self.vas.set_pde_addr(pde_idx, new_pgtbl_virt);
+                    self.vas.set_pde_virt(pde_idx, new_pgtbl_virt);
                     println!(
                         "[PROC MEM_MAP] Allocated a page table for 0x{:08X}..0x{:08X}.",
                         aligned_at_4mib,
@@ -144,7 +144,7 @@ impl Process {
         let pgtbl_virt =
             alloc(Layout::from_size_align(4096, 4096).unwrap()) as *mut Table;
         pgtbl_virt.write_bytes(0, 1);
-        self.vas.set_pde_addr(pde_idx, pgtbl_virt);
+        self.vas.set_pde_virt(pde_idx, pgtbl_virt);
         println!(
             "[PROC] Allocated a page table for a usermode stack at {:?}.",
             self.usermode_stack,

@@ -155,7 +155,7 @@ impl Process {
                     alloc(Layout::from_size_align(4096, 4096).unwrap())
                         as *mut Table;
                 pgtbl_virt.write_bytes(0, 1);
-                self.vas.set_pde_addr(pde_idx, pgtbl_virt);
+                self.vas.set_pde_virt(pde_idx, pgtbl_virt);
                 println!(
                     "[PROC] Allocated a page table for region {:?}.",
                     mem_reg,

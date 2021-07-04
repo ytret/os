@@ -228,19 +228,50 @@ impl VirtAddrSpace {
         println!("[VAS] Removed a guard page from 0x{:08X}.", from);
     }
 
-    pub unsafe fn set_pde_addr(
-        &self,
-        pde_idx: usize,
-        pgtbl_virt: *mut Table,
-    ) -> u32 {
+    /// Sets up a page directory entry with the specified index with the
+    /// physical mapping of the specified virtual address and the default flags.
+    ///
+    /// # Default flags
+    /// See [set_pde_phys_virt](Self::set_pde_phys_virt) for the default flags.
+    ///
+    /// # Panics
+    /// This method panics if it cannot resolve the specified virtual address to
+    /// a physical one within the address space being modified.
+    pub unsafe fn set_pde_virt(&self, pde_idx: usize, pgtbl_virt: *mut Table) {
+        assert!(pde_idx < 1024, "pde_idx must be less than 1024");
         assert_eq!(
-            pgtbl_virt as usize & 0xFFF,
+            pgtbl_virt as usize % 4096,
             0,
             "pgtbl_virt must be page-aligned",
         );
-        assert!(pde_idx < 1024, "pde_idx must be less than 1024");
 
-        let pgtbl_phys = self.virt_to_phys(pgtbl_virt as u32).unwrap();
+        let pgtbl_phys = self
+            .virt_to_phys(pgtbl_virt as u32)
+            .expect("set_pde_addr: virt_to_phys failed");
+        self.set_pde_phys_virt(pde_idx, pgtbl_phys, pgtbl_virt);
+    }
+
+    /// Sets up a page directory entry with the specified index with the
+    /// specified physical address of a page table and the default flags.
+    ///
+    /// Unlike [set_pde_virt](Self::set_pde_virt), this method does not try to
+    /// resolve any mappings and thus does not panic.
+    ///
+    /// The virtual address of the page table is saved internally.
+    ///
+    /// # Default flags
+    /// The default flags are:
+    /// * [present](PdeFlags::Present),
+    /// * [readable and writable](PdeFlags::ReadWrite),
+    /// * [any DPL](PdeFlags::AnyDpl) (if [VirtAddrSpace::usermode] is `true`).
+    unsafe fn set_pde_phys_virt(
+        &self,
+        pde_idx: usize,
+        pgtbl_phys: u32,
+        pgtbl_virt: *mut Table,
+    ) {
+        assert!(pde_idx < 1024, "pde_idx must be less than 1024");
+        assert_eq!(pgtbl_phys % 4096, 0, "pgtbl_phys must be page-aligned");
 
         *self.pgtbls_virt.add(pde_idx) = pgtbl_virt;
         *self.pgtbls_phys.add(pde_idx) = pgtbl_phys;
@@ -252,8 +283,6 @@ impl VirtAddrSpace {
         if self.usermode {
             pgdir.0[pde_idx].set_flag(PdeFlags::AnyDpl);
         }
-
-        pgtbl_phys
     }
 
     pub unsafe fn virt_to_phys(&self, virt: u32) -> Option<u32> {

@@ -135,7 +135,7 @@ pub fn init() {
         let kvas = vas::KERNEL_VAS.lock();
         let heap_pgtbl_virt =
             &mut *vas::KERNEL_HEAP_PGTBL.lock() as *mut vas::Table;
-        kvas.set_pde_addr(aif.heap_region.start >> 22, heap_pgtbl_virt);
+        kvas.set_pde_virt(aif.heap_region.start >> 22, heap_pgtbl_virt);
         ptr::write_bytes(heap_pgtbl_virt as *mut u8, 0, 4096);
         kvas.allocate_pages_from_stack(
             aif.heap_region.start as u32,
