@@ -80,7 +80,7 @@ ISOFILE := kernel.iso
 HDIMG := hd.img
 SYSROOT := sysroot
 
-USERPROGS ?= syscalls hello-world user-input arg-env
+USERPROGS ?= syscalls hello-world user-input arg-env fork
 
 .DEFAULT_GOAL := kernel
 .PHONY: all kernel userland \

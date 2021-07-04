@@ -219,10 +219,10 @@ pub extern "C" fn default_entry_point() -> ! {
         let mut this_process = SCHEDULER.running_process();
         // let this_thread = SCHEDULER.running_thread();
 
-        let argv = vec![CString::new("/bin/test-arg-env").unwrap()];
+        let argv = vec![CString::new("/bin/test-fork").unwrap()];
         let environ = Vec::new();
 
-        let elf = this_process.load_from_file("/bin/test-arg-env");
+        let elf = this_process.load_from_file("/bin/test-fork");
         let usermode_stack_top =
             this_process.set_up_usermode_stack(&argv, &environ);
 
