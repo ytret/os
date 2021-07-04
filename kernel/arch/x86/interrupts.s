@@ -265,7 +265,6 @@ int0x88_handler:
     pusha
     movl %esp, %eax
     movl %ebp, %ebx
-    addl $4, %ebx
     cld
     pushl %eax                      // general purpose registers pointer
     pushl %ebx                      // stack frame pointer

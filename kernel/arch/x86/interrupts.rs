@@ -163,6 +163,7 @@ type Isr = unsafe extern "C" fn();
 
 #[repr(C, packed)]
 pub struct InterruptStackFrame {
+    pub ebp: u32,
     pub eip: u32,
     pub cs: u32,
     pub eflags: u32,
