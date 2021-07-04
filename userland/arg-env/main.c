@@ -2,6 +2,8 @@
 #include <stdint.h>
 
 int main(int argc, char **argv, char **environ) {
+    setvbuf(stdout, NULL, _IONBF, 0);
+
     printf("argc = %d\n", argc);
 
     int i;
@@ -20,9 +22,6 @@ int main(int argc, char **argv, char **environ) {
         }
         printf("environ[%d] = NULL\n", j);
     }
-
-    fflush(stdout);
-    for (;;);
 
     return 0;
 }
