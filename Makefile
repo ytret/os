@@ -181,5 +181,5 @@ check-fmt: $(SOURCES)
 	$(RUSTFMT) $(RUSTFMTFLAGS) $<
 
 doc: $(SOURCES)
-	$(RUSTDOC) $(RUSTFLAGS) --edition 2018 --crate-name kernel \
-	--crate-type staticlib $<
+	$(RUSTDOC) $(RUSTFLAGS) --document-private-items --edition 2018 \
+	--crate-name kernel --crate-type staticlib $<
