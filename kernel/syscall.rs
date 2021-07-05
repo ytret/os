@@ -297,3 +297,7 @@ pub fn is_tty(fd: i32) -> Result<bool, IsTtyErr> {
 pub enum IsTtyErr {
     BadFd,
 }
+
+pub fn get_pid() -> i32 {
+    unsafe { SCHEDULER.running_process().id as i32 }
+}

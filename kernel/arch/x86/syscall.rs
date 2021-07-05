@@ -237,7 +237,7 @@ pub extern "C" fn syscall_handler(
     // 12 get_pid
     // returns process ID
     else if syscall_num == 12 {
-        return_value = unsafe { SCHEDULER.running_process().id } as i32;
+        return_value = syscall::get_pid();
     }
     // 13 fork
     else if syscall_num == 13 {
