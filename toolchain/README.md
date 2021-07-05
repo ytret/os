@@ -59,7 +59,7 @@ $ make install-gcc install-target-libgcc
 ```sh
 $ cd /path/to/ytret/mlibc
 $ $EDITOR meson_options.txt  # set `headers_only` to `false', `static' to `true'
-$ meson builddir --cross-file cross.txt
+$ meson builddir --cross-file ci/myos.cross-file
 $ cd builddir && DESTDIR=$SYSROOT ninja install
 ```
 
