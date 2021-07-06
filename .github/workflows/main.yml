@@ -101,7 +101,7 @@ jobs:
         if: i686-myos-toolchain-${{ env.BINUTILS_VERSION }}-${{ env.GCC_VERSION }}.outputs.cache-hit != true
         run: |
           cd $GITHUB_WORKSPACE/mlibc
-          meson builddir --cross-file ci/myos.cross-file
+          meson builddir --cross-file ci/myos.headers.cross-file
           meson configure -Dheaders_only=true builddir
           cd builddir && DESTDIR=${{ env.SYSROOT }} ninja install
 
