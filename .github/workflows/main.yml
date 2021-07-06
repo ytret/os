@@ -81,6 +81,7 @@ jobs:
           path: |
             os/toolchain/build-binutils-${{ env.BINUTILS_VERSION }}
             os/toolchain/build-gcc-${{ env.GCC_VERSION }}
+            os/sysroot
           key: i686-myos-toolchain-${{ env.BINUTILS_VERSION }}-${{ env.GCC_VERSION }}
 
       - name: Build i686-myos-binutils
@@ -126,6 +127,7 @@ jobs:
         if: i686-myos-toolchain-${{ env.BINUTILS_VERSION }}-${{ env.GCC_VERSION }}.outputs.cache-hit != true
         run: |
           cd $GITHUB_WORKSPACE/mlibc
+          rm -rf builddir
           meson builddir --cross-file ci/myos.cross-file
           cd builddir && DESTDIR=${{ env.SYSROOT }} ninja install
 
