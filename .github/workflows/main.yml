@@ -24,7 +24,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          sudo apt install build-essential bison flex libgmp3-dev libmpc-dev libmpfr-dev texinfo git automake-1.15
+          sudo apt install build-essential bison flex libgmp3-dev libmpc-dev libmpfr-dev texinfo git automake-1.15 meson
 
       - name: Install Rust
         uses: actions-rs/toolchain@v1
