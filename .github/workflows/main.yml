@@ -34,6 +34,11 @@ jobs:
           profile: minimal
           components: rust-src
 
+      - name: Dump autotools versions
+        run: |
+          autoconf --version
+          automake --version
+
       - name: Cache i686-elf-binutils
         id: cache-i686-elf-binutils
         uses: actions/cache@v2
@@ -85,7 +90,7 @@ jobs:
           tar -xJf ../../binutils-${{ env.BINUTILS_VERSION }}.tar.xz
           cd binutils-${{ env.BINUTILS_VERSION }}
           patch -p1 < ../binutils-${{ env.BINUTILS_VERSION }}.patch
-          cd ld && autoreconf
+          cd ld && automake
           mkdir ../../build-binutils-${{ env.BINUTILS_VERSION }}
           cd ../../build-binutils-${{ env.BINUTILS_VERSION }}
           ../binutils-${{ env.BINUTILS_VERSION }}/configure --target=i686-myos --prefix=${{ env.SYSROOT }} --with-sysroot=${{ env.SYSROOT }} --disable-werror --disable-nls --enable-shared
@@ -108,7 +113,7 @@ jobs:
           tar -xJf gcc-${{ env.GCC_VERSION }}.tar.xz
           cd gcc-${{ env.GCC_VERSION }}
           patch -p1 < ../gcc-${{ env.GCC_VERSION }}.patch
-          cd libstdc++-v3 && autoreconf
+          cd libstdc++-v3 && autoconf
           mkdir ../../build-gcc-${{ env.GCC_VERSION }}
           cd ../../build-gcc-${{ env.GCC_VERSION }}
           ../gcc-${{ env.GCC_VERSION }}/configure --target=i686-myos --prefix=${{ env.SYSROOT }} --with-sysroot=${{ env.SYSROOT }} --disable-nls --enable-languages=c,c++ --enable-shared
