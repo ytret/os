@@ -1,0 +1,137 @@
+# FIXME: rebuild mlibc when appropriate
+
+name: CI
+
+on: [push, pull_request, workflow_dispatch]
+
+jobs:
+  build:
+    name: Build
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout os
+        uses: actions/checkout@v2
+        with:
+          path: os
+
+      - name: Checkout mlibc
+        uses: actions/checkout@v2
+        with:
+          repository: ytret/mlibc
+          path: mlibc
+
+      - name: Install dependencies
+        run: |
+          sudo apt install build-essential bison flex libgmp3-dev libmpc-dev libmpfr-dev texinfo rustup git
+          rustup install toolchain nightly
+          rustup component add rust-src
+
+      - name: Cache i686-elf-binutils
+        id: cache-i686-elf-binutils
+        uses: actions/cache@v2
+        with:
+          path: ${{ env.BINUTILS_PREFIX_ELF }}
+          key: i686-elf-binutils-${{ env.BINUTILS_VERSION }}
+
+      - name: Build i686-elf-binutils
+        if: steps.i686-elf-binutils-${{ env.BINUTILS_VERSION }}.outputs.cache-hit != true
+        run: |
+          wget https://ftp.gnu.org/gnu/binutils/binutils-${{ env.BINUTILS_VERSION }}.tar.xz
+          tar -xJf binutils-${{ env.BINUTILS_VERSION }}.tar.xz
+          mkdir $GITHUB_WORKSPACE/build-binutils-${{ env.BINUTILS_VERSION }}
+          cd $GITHUB_WORKSPACE/build-binutils-${{ env.BINUTILS_VERSION }}
+          ../binutils-${{ env.BINUTILS_VERSION }}/configure --target=i686-elf --prefix="${{ env.BINUTILS_PREFIX_ELF }}" --with-sysroot --disable-nls --disable-werror
+          make
+          make install
+
+      - name: Add i686-elf-binutils to PATH
+        run: echo "${{ env.BINUTILS_PREFIX_ELF }}" >> $GITHUB_PATH
+
+      - name: Build kernel
+        run: |
+          cd $GITHUB_WORKSPACE/os
+          make get-libs
+          make kernel
+
+      - name: Create system root
+        run: |
+          cd $GITHUB_WORKSPACE/os
+          make sysroot
+
+      - name: Add sysroot/bin to PATH
+        run: echo "${{ env.SYSROOT }}/bin" >> $GITHUB_PATH
+
+      - name: Cache i686-myos-toolchain build
+        id: cache-i686-myos-toolchain
+        uses: actions/cache@v2
+        with:
+          path: |
+            os/toolchain/build-binutils-${{ env.BINUTILS_VERSION }}
+            os/toolchain/build-gcc-${{ env.GCC_VERSION }}
+          key: i686-myos-toolchain-${{ env.BINUTILS_VERSION }}-${{ env.GCC_VERSION }}
+
+      - name: Build i686-myos-binutils
+        if: i686-myos-toolchain-${{ env.BINUTILS_VERSION }}-${{ env.GCC_VERSION }}.outputs.cache-hit != true
+        run: |
+          cd $GITHUB_WORKSPACE/os/toolchain
+          tar -xJf ../../binutils-${{ env.BINUTILS_VERSION }}.tar.xz
+          cd binutils-${{ env.BINUTILS_VERSION }}
+          patch -p1 < ../binutils-${{ env.BINUTILS_VERSION }}.patch
+          cd ld && autoreconf
+          mkdir build-binutils-${{ env.BINUTILS_VERSION }}
+          cd ../../build-binutils-${{ env.BINUTILS_VERSION }}
+          ../binutils-${{ env.BINUTILS_VERSION }}/configure --target=i686-myos --prefix=${{ env.SYSROOT }} --with-sysroot=${{ env.SYSROOT }} --disable-werror --disable-nls --enable-shared
+          make
+          make install
+
+      - name: Install mlibc headers
+        if: i686-myos-toolchain-${{ env.BINUTILS_VERSION }}-${{ env.GCC_VERSION }}.outputs.cache-hit != true
+        run: |
+          cd $GITHUB_WORKSPACE/mlibc
+          meson builddir --cross-file ci/myos.cross-file
+          meson configure -Dheaders_only=true builddir
+          cd builddir && DESTDIR=${{ env.SYSROOT }} ninja install
+
+      - name: Build i686-myos-gcc
+        if: i686-myos-toolchain-${{ env.BINUTILS_VERSION }}-${{ env.GCC_VERSION }}.outputs.cache-hit != true
+        run: |
+          cd $GITHUB_WORKSPACE/os/toolchain
+          wget https://ftp.gnu.org/gnu/gcc/gcc-${{ env.GCC_VERSION }}/gcc-${{ env.GCC_VERSION }}.tar.xz
+          tar -xJf gcc-${{ env.GCC_VERSION }}.tar.xz
+          cd gcc-${{ env.GCC_VERSION }}
+          patch -p1 < ../gcc-${{ env.GCC_VERSION }}.patch
+          cd libstdc++-v3 && autoreconf
+          mkdir ../../build-gcc-${{ env.GCC_VERSION }}
+          cd ../../build-gcc-${{ env.GCC_VERSION }}
+          ../gcc-${{ env.GCC_VERSION }}/configure --target=i686-myos --prefix=${{ env.SYSROOT }} --with-sysroot=${{ env.SYSROOT }} --disable-nls --enable-languages=c,c++ --enable-shared
+          make all-gcc
+          make all-target-libgcc
+          make install-gcc
+          make install-target-libgcc
+
+      - name: Build mlibc
+        if: i686-myos-toolchain-${{ env.BINUTILS_VERSION }}-${{ env.GCC_VERSION }}.outputs.cache-hit != true
+        run: |
+          cd $GITHUB_WORKSPACE/mlibc
+          meson builddir --cross-file ci/myos.cross-file
+          cd builddir && DESTDIR=${{ env.SYSROOT }} ninja install
+
+      - name: Build C++ standard library
+        if: i686-myos-toolchain-${{ env.BINUTILS_VERSION }}-${{ env.GCC_VERSION }}.outputs.cache-hit != true
+        run: |
+          cd $GITHUB_WORKSPACE/os/toolchain/build-gcc-${{ env.GCC_VERSION }}
+          make all-target-libstdc++-v3
+          make install-target-libstdc++-v3
+
+      - name: Build userland
+        run: |
+          cd $GITHUB_WORKSPACE/os
+          make userland
+
+env:
+  BINUTILS_VERSION: 2.36.1
+  GCC_VERSION: 10.2.0
+  BINUTILS_PREFIX_ELF: $GITHUB_WORKSPACE/i686-elf-binutils
+  SYSROOT: $GITHUB_WORKSPACE/os/sysroot
