@@ -86,7 +86,7 @@ jobs:
           cd binutils-${{ env.BINUTILS_VERSION }}
           patch -p1 < ../binutils-${{ env.BINUTILS_VERSION }}.patch
           cd ld && autoreconf
-          mkdir build-binutils-${{ env.BINUTILS_VERSION }}
+          mkdir ../../build-binutils-${{ env.BINUTILS_VERSION }}
           cd ../../build-binutils-${{ env.BINUTILS_VERSION }}
           ../binutils-${{ env.BINUTILS_VERSION }}/configure --target=i686-myos --prefix=${{ env.SYSROOT }} --with-sysroot=${{ env.SYSROOT }} --disable-werror --disable-nls --enable-shared
           make
