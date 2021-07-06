@@ -24,9 +24,13 @@ jobs:
 
       - name: Install dependencies
         run: |
-          sudo apt install build-essential bison flex libgmp3-dev libmpc-dev libmpfr-dev texinfo rustup git
-          rustup install toolchain nightly
-          rustup component add rust-src
+          sudo apt install build-essential bison flex libgmp3-dev libmpc-dev libmpfr-dev texinfo git
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          components: rust-src
 
       - name: Cache i686-elf-binutils
         id: cache-i686-elf-binutils
