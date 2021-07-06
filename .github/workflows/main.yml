@@ -30,6 +30,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
+          profile: minimal
           components: rust-src
 
       - name: Cache i686-elf-binutils
@@ -56,6 +57,13 @@ jobs:
       - name: Build kernel
         run: |
           cd $GITHUB_WORKSPACE/os
+          echo $(rustc --print-sysroot)
+          ls $(rustc --print sysroot)
+          ls $(rustc --print sysroot)/lib
+          ls $(rustc --print sysroot)/lib/rustlib
+          ls $(rustc --print sysroot)/lib/rustlib/src
+          ls $(rustc --print sysroot)/lib/rustlib/src/rust
+          ls $(rustc --print sysroot)/lib/rustlib/src/rust/library
           make get-libs
           make kernel
 
