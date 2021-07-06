@@ -24,7 +24,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          sudo apt install build-essential bison flex libgmp3-dev libmpc-dev libmpfr-dev texinfo git
+          sudo apt install build-essential bison flex libgmp3-dev libmpc-dev libmpfr-dev texinfo git automake-1.15
 
       - name: Install Rust
         uses: actions-rs/toolchain@v1
@@ -37,7 +37,7 @@ jobs:
       - name: Dump autotools versions
         run: |
           autoconf --version
-          automake --version
+          automake-1.15 --version
 
       - name: Cache i686-elf-binutils
         id: cache-i686-elf-binutils
@@ -90,7 +90,7 @@ jobs:
           tar -xJf ../../binutils-${{ env.BINUTILS_VERSION }}.tar.xz
           cd binutils-${{ env.BINUTILS_VERSION }}
           patch -p1 < ../binutils-${{ env.BINUTILS_VERSION }}.patch
-          cd ld && automake
+          cd ld && automake-1.15
           mkdir ../../build-binutils-${{ env.BINUTILS_VERSION }}
           cd ../../build-binutils-${{ env.BINUTILS_VERSION }}
           ../binutils-${{ env.BINUTILS_VERSION }}/configure --target=i686-myos --prefix=${{ env.SYSROOT }} --with-sysroot=${{ env.SYSROOT }} --disable-werror --disable-nls --enable-shared
