@@ -30,6 +30,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
+          default: true
           profile: minimal
           components: rust-src
 
@@ -57,7 +58,7 @@ jobs:
       - name: Build kernel
         run: |
           cd $GITHUB_WORKSPACE/os
-          echo $(rustc --print-sysroot)
+          echo $(rustc --print sysroot)
           ls $(rustc --print sysroot)
           ls $(rustc --print sysroot)/lib
           ls $(rustc --print sysroot)/lib/rustlib
