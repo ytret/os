@@ -40,6 +40,8 @@ pub mod memory_region;
 
 pub mod syscall;
 
+pub mod stack;
+
 pub mod process;
 pub mod thread;
 

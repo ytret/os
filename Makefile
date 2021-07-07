@@ -54,6 +54,7 @@ SOURCES := \
 	kernel/thread.rs \
 	kernel/scheduler.rs \
 	kernel/syscall.rs \
+	kernel/stack.rs \
 	kernel/fs/mod.rs \
 	kernel/fs/devfs.rs \
 	kernel/fs/ext2.rs \

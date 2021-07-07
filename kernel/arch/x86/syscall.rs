@@ -14,7 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use core::mem::size_of;
+use alloc::alloc::{alloc, Layout};
+use core::mem::{align_of, size_of};
 use core::slice;
 use core::str;
 
@@ -257,38 +258,34 @@ pub extern "C" fn syscall_handler(
 
             SCHEDULER.add_process(copy);
 
+            // FIXME: memory leak
+            let p_usermode_regs = alloc(
+                Layout::from_size_align(
+                    size_of::<GpRegs>(),
+                    align_of::<GpRegs>(),
+                )
+                .unwrap(),
+            )
+            .cast::<GpRegs>();
+            *p_usermode_regs = gp_regs.clone();
+            (*p_usermode_regs).eax = 0; // syscall return value for the child process
+            (*p_usermode_regs).ebp = stack_frame.ebp;
+            (*p_usermode_regs).esp = stack_frame.esp;
+
             let mut thread = Thread::new_with_stack(
                 copy_id,
                 thread_id,
                 jump_into_usermode as u32,
-                5 + size_of::<GpRegs>(),
-                // pass five arguments to jump_into_usermode and store the GP
-                // registers on the stack.  FIXME: memory leak
+                &[
+                    gdt::USERMODE_CODE_SEG as u32,
+                    gdt::USERMODE_DATA_SEG as u32,
+                    gdt::TLS_SEG as u32,
+                    stack_frame.eip,
+                    p_usermode_regs as u32,
+                ],
             );
             // FIXME: bad API
             thread.tcb.cr3 = copy_vas_cr3;
-
-            let kernel_stack_top = thread.tcb.esp as *mut u32;
-
-            let mut new_gp_regs = gp_regs.clone();
-            new_gp_regs.eax = 0; // syscall return value for the child process
-            new_gp_regs.ebp = stack_frame.ebp;
-            new_gp_regs.esp = stack_frame.esp;
-
-            let new_gp_regs_ptr: *mut GpRegs =
-                kernel_stack_top.wrapping_add(14).cast();
-            new_gp_regs_ptr.write(new_gp_regs);
-
-            println!("[SYS FORK] new_gp_regs = {:#X?}", new_gp_regs);
-
-            *kernel_stack_top.wrapping_add(9) = gdt::USERMODE_CODE_SEG as u32;
-            *kernel_stack_top.wrapping_add(10) = gdt::USERMODE_DATA_SEG as u32;
-            *kernel_stack_top.wrapping_add(11) = gdt::TLS_SEG as u32;
-            *kernel_stack_top.wrapping_add(12) = stack_frame.eip;
-            *kernel_stack_top.wrapping_add(13) = new_gp_regs_ptr as u32;
-
-            println!("[fork] esp = 0x{:08X}", stack_frame.esp);
-            println!("[fork] eip = 0x{:08X}", stack_frame.eip);
 
             SCHEDULER.add_runnable_thread(thread);
 
