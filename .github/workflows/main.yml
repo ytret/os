@@ -47,7 +47,7 @@ jobs:
           key: i686-elf-binutils-${{ env.BINUTILS_VERSION }}
 
       - name: Build i686-elf-binutils
-        if: steps.i686-elf-binutils-${{ env.BINUTILS_VERSION }}.outputs.cache-hit != true
+        if: steps.cache-i686-elf-binutils.outputs.cache-hit != 'true'
         run: |
           wget https://ftp.gnu.org/gnu/binutils/binutils-${{ env.BINUTILS_VERSION }}.tar.xz
           tar -xJf binutils-${{ env.BINUTILS_VERSION }}.tar.xz
@@ -85,7 +85,7 @@ jobs:
           key: i686-myos-toolchain-${{ env.BINUTILS_VERSION }}-${{ env.GCC_VERSION }}
 
       - name: Build i686-myos-binutils
-        if: i686-myos-toolchain-${{ env.BINUTILS_VERSION }}-${{ env.GCC_VERSION }}.outputs.cache-hit != true
+        if: steps.cache-i686-myos-toolchain.outputs.cache-hit != 'true'
         run: |
           cd $GITHUB_WORKSPACE/os/toolchain
           tar -xJf ../../binutils-${{ env.BINUTILS_VERSION }}.tar.xz
@@ -99,7 +99,7 @@ jobs:
           make install
 
       - name: Install mlibc headers
-        if: i686-myos-toolchain-${{ env.BINUTILS_VERSION }}-${{ env.GCC_VERSION }}.outputs.cache-hit != true
+        if: steps.cache-i686-myos-toolchain.outputs.cache-hit != 'true'
         run: |
           cd $GITHUB_WORKSPACE/mlibc
           meson builddir --cross-file ci/myos.headers.cross-file
@@ -107,7 +107,7 @@ jobs:
           cd builddir && DESTDIR=${{ env.SYSROOT }} ninja install
 
       - name: Build i686-myos-gcc
-        if: i686-myos-toolchain-${{ env.BINUTILS_VERSION }}-${{ env.GCC_VERSION }}.outputs.cache-hit != true
+        if: steps.cache-i686-myos-toolchain.outputs.cache-hit != 'true'
         run: |
           cd $GITHUB_WORKSPACE/os/toolchain
           wget https://ftp.gnu.org/gnu/gcc/gcc-${{ env.GCC_VERSION }}/gcc-${{ env.GCC_VERSION }}.tar.xz
@@ -124,7 +124,7 @@ jobs:
           make install-target-libgcc
 
       - name: Build mlibc
-        if: i686-myos-toolchain-${{ env.BINUTILS_VERSION }}-${{ env.GCC_VERSION }}.outputs.cache-hit != true
+        if: steps.cache-i686-myos-toolchain.outputs.cache-hit != 'true'
         run: |
           cd $GITHUB_WORKSPACE/mlibc
           rm -rf builddir
@@ -132,7 +132,7 @@ jobs:
           cd builddir && DESTDIR=${{ env.SYSROOT }} ninja install
 
       - name: Build C++ standard library
-        if: i686-myos-toolchain-${{ env.BINUTILS_VERSION }}-${{ env.GCC_VERSION }}.outputs.cache-hit != true
+        if: steps.cache-i686-myos-toolchain.outputs.cache-hit != 'true'
         run: |
           cd $GITHUB_WORKSPACE/os/toolchain/build-gcc-${{ env.GCC_VERSION }}
           make all-target-libstdc++-v3
