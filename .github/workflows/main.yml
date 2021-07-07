@@ -49,8 +49,8 @@ jobs:
         id: cache-i686-elf-binutils
         uses: actions/cache@v2
         with:
-          path: ${{ env.BINUTILS_PREFIX_ELF }}
-          key: i686-elf-binutils-${{ env.BINUTILS_VERSION }}-recache1
+          path: ${{ env.BINUTILS_PREFIX_ELF_RELATIVE }}
+          key: i686-elf-binutils-${{ env.BINUTILS_VERSION }}-recache2
 
       - name: Build i686-elf-binutils
         if: steps.cache-i686-elf-binutils.outputs.cache-hit != 'true'
@@ -152,5 +152,6 @@ jobs:
 env:
   BINUTILS_VERSION: 2.36.1
   GCC_VERSION: 10.2.0
+  BINUTILS_PREFIX_ELF_RELATIVE: i686-elf-binutils
   BINUTILS_PREFIX_ELF: $GITHUB_WORKSPACE/i686-elf-binutils
   SYSROOT: $GITHUB_WORKSPACE/os/sysroot
