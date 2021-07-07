@@ -39,6 +39,12 @@ jobs:
           autoconf --version
           automake-1.15 --version
 
+      - name: Dump paths
+        run: |
+          echo "GITHUB_WORKSPACE: ${{ env.GITHUB_WORKSPACE }}"
+          echo "BINUTILS_PREFIX_ELF: ${{ env.BINUTILS_PREFIX_ELF }}"
+          echo "SYSROOT: ${{ env.SYSROOT }}"
+
       - name: Cache i686-elf-binutils
         id: cache-i686-elf-binutils
         uses: actions/cache@v2
