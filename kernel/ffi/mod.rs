@@ -14,32 +14,5 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use alloc::vec::Vec;
-
-/// A type representing an owned, C-compatible, null-terminated string with no
-/// null bytes in the middle.
-///
-/// Cf. std::ffi::CString.
-pub struct CString {
-    bytes: Vec<u8>,
-}
-
-impl CString {
-    pub fn new<T: Into<Vec<u8>>>(t: T) -> Result<Self, NulError> {
-        let mut bytes = t.into();
-
-        if let Some(pos) = bytes.iter().position(|&x| x == 0) {
-            return Err(NulError(pos));
-        }
-
-        bytes.push(0);
-        Ok(CString { bytes })
-    }
-
-    pub fn as_ptr(&self) -> *const u8 {
-        self.bytes.as_ptr()
-    }
-}
-
-#[derive(Debug)]
-pub struct NulError(usize);
+pub mod cstr;
+pub mod cstring;

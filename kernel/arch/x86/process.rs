@@ -24,7 +24,7 @@ use crate::scheduler::SCHEDULER;
 use crate::arch::gdt;
 use crate::arch::syscall::GpRegs;
 use crate::arch::vas::Table;
-use crate::cstring::CString;
+use crate::ffi::cstring::CString;
 use crate::memory_region::Region;
 use crate::process::Process;
 
