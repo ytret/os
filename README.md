@@ -1,3 +1,5 @@
+[![CI](https://github.com/ytret/os/actions/workflows/main.yml/badge.svg)](https://github.com/ytret/os/actions/workflows/main.yml)
+
 ## Building
 
 ### Dependencies
