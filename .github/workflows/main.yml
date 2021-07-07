@@ -41,7 +41,7 @@ jobs:
 
       - name: Dump paths
         run: |
-          echo "GITHUB_WORKSPACE: ${{ env.GITHUB_WORKSPACE }}"
+          echo "GITHUB_WORKSPACE: $GITHUB_WORKSPACE"
           echo "BINUTILS_PREFIX_ELF: ${{ env.BINUTILS_PREFIX_ELF }}"
           echo "SYSROOT: ${{ env.SYSROOT }}"
 
@@ -50,7 +50,7 @@ jobs:
         uses: actions/cache@v2
         with:
           path: ${{ env.BINUTILS_PREFIX_ELF }}
-          key: i686-elf-binutils-${{ env.BINUTILS_VERSION }}
+          key: i686-elf-binutils-${{ env.BINUTILS_VERSION }}-recache1
 
       - name: Build i686-elf-binutils
         if: steps.cache-i686-elf-binutils.outputs.cache-hit != 'true'
