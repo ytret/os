@@ -57,7 +57,9 @@ SOURCES := \
 	kernel/fs/mod.rs \
 	kernel/fs/devfs.rs \
 	kernel/fs/ext2.rs \
-	kernel/cstring.rs \
+	kernel/ffi/mod.rs \
+	kernel/ffi/cstr.rs \
+	kernel/ffi/cstring.rs \
 	kernel/feeder.rs \
 	kernel/elf.rs \
 	$(ARCH_SOURCES)
