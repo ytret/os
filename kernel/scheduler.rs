@@ -286,7 +286,7 @@ fn schedule() {
                 process_id,
                 thread_id,
                 default_entry_point as u32,
-                0,
+                &[],
             );
             new_thread.tcb.cr3 = pgdir_phys;
             SCHEDULER.add_runnable_thread(new_thread);

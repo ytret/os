@@ -15,10 +15,12 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use crate::arch::thread::ThreadControlBlock;
+use crate::stack::Stack;
 
 pub struct Thread {
     pub id: usize,
     pub process_id: usize,
 
+    pub kernel_stack: Stack<u32>,
     pub tcb: ThreadControlBlock,
 }
