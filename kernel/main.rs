@@ -47,7 +47,7 @@ pub mod scheduler;
 
 pub mod fs;
 
-pub mod cstring;
+pub mod ffi;
 
 pub mod feeder;
 pub mod elf;
