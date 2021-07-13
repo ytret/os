@@ -52,6 +52,7 @@ const ENOTTY: i32 = -5;
 pub extern "C" fn syscall_handler(
     stack_frame: &InterruptStackFrame,
     gp_regs: &mut GpRegs,
+    usermode_ebp: u32,
 ) {
     // println!(
     //     "[SYS] Syscall number {} by PID {}",
@@ -269,7 +270,7 @@ pub extern "C" fn syscall_handler(
             .cast::<GpRegs>();
             *p_usermode_regs = gp_regs.clone();
             (*p_usermode_regs).eax = 0; // syscall return value for the child process
-            (*p_usermode_regs).ebp = stack_frame.ebp;
+            (*p_usermode_regs).ebp = usermode_ebp;
             (*p_usermode_regs).esp = stack_frame.esp;
 
             let mut thread = Thread::new_with_stack(
