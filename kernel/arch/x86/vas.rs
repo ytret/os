@@ -303,6 +303,10 @@ impl VirtAddrSpace {
         self.invalidate_cache(virt);
     }
 
+    pub fn is_mapped(&self, virt: u32) -> bool {
+        unsafe { self.virt_to_phys(virt).is_some() }
+    }
+
     /// Maps the specified region to pages given by the [PMM
     /// stack](static@super::pmm_stack::PMM_STACK).
     pub unsafe fn allocate_pages_from_stack(&self, start: u32, end: u32) {
@@ -513,6 +517,11 @@ kernel_static! {
 const KERNEL_REGION: Region<usize> = Region {
     start: 0x00000000,
     end: 0x08000000, // 128 MiB
+};
+
+pub const USERMODE_REGION: Region<usize> = Region {
+    start: 128 * 1024 * 1024,                      // 128 MiB
+    end: 3 * 1024 * 1024 * 1024 + 4 * 1024 * 1024, // 3 GiB + 4 MiB
 };
 
 #[no_mangle]

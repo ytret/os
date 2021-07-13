@@ -40,7 +40,7 @@ impl<T: RegionType> Region<T> {
         self.end - self.start
     }
 
-    pub fn overlapping_with(&self, region: Region<T>) -> OverlappingWith {
+    pub fn overlapping_with(&self, region: &Self) -> OverlappingWith {
         if self.start < region.start && self.end > region.end {
             return OverlappingWith::Covers;
         }
@@ -57,12 +57,24 @@ impl<T: RegionType> Region<T> {
         return OverlappingWith::NoOverlap;
     }
 
-    pub fn conflicts_with(&self, region: Region<T>) -> bool {
+    pub fn conflicts_with(&self, region: &Self) -> bool {
         self.overlapping_with(region) != OverlappingWith::NoOverlap
     }
 
     pub fn contains(&self, something: &T) -> bool {
         self.range().contains(something)
+    }
+
+    pub fn align_boundaries_at(&self, at: T) -> Region<T> {
+        // assert_eq!(at.count_ones(), 1, "at must be a power of two");
+        Region {
+            start: self.start & !(at - T::one()),
+            end: (self.end + at - T::one()) & !(at - T::one()),
+        }
+    }
+
+    pub fn is_in(&self, other: &Self) -> bool {
+        self.overlapping_with(other) == OverlappingWith::IsIn
     }
 }
 
@@ -82,10 +94,28 @@ pub enum OverlappingWith {
 }
 
 pub trait RegionType:
-    Copy + ops::Add<Output = Self> + ops::Sub<Output = Self> + cmp::PartialOrd
+    Copy
+    + ops::Add<Output = Self>
+    + ops::Sub<Output = Self>
+    + ops::Not<Output = Self>
+    + ops::BitAnd<Output = Self>
+    + cmp::PartialOrd
 {
+    fn one() -> Self;
 }
 
-impl RegionType for u32 {}
-impl RegionType for u64 {}
-impl RegionType for usize {}
+impl RegionType for u32 {
+    fn one() -> Self {
+        1
+    }
+}
+impl RegionType for u64 {
+    fn one() -> Self {
+        1
+    }
+}
+impl RegionType for usize {
+    fn one() -> Self {
+        1
+    }
+}

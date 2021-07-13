@@ -17,29 +17,20 @@
 use alloc::rc::Rc;
 
 use crate::fs::VFS_ROOT;
-use crate::scheduler::SCHEDULER;
+use crate::task_manager::TASK_MANAGER;
 
 use crate::bitflags::BitFlags;
 use crate::fs;
-use crate::process::OpenFileErr;
-
-macro_rules! running_process {
-    () => {
-        unsafe { SCHEDULER.running_process() }
-    };
-}
+use crate::task::OpenFileErr;
 
 pub fn open(pathname: &str) -> Result<i32, OpenErr> {
     println!("[SYS OPEN] pathname = {:?}", pathname);
+    let this_task = unsafe { TASK_MANAGER.this_task() };
     let maybe_node = VFS_ROOT.lock().as_mut().unwrap().path(pathname);
     if let Some(node) = maybe_node {
-        match running_process!().open_file_by_node(node) {
+        match this_task.open_file_by_node(node) {
             Ok(fd) => {
-                println!(
-                    "[SYS OPEN] fd = {} for pid {}",
-                    fd,
-                    running_process!().id,
-                );
+                println!("[SYS OPEN] fd = {} for pid {}", fd, this_task.id);
                 Ok(fd)
             }
             Err(err) => {
@@ -70,19 +61,20 @@ impl From<OpenFileErr> for OpenErr {
 }
 
 pub fn write(fd: i32, buf: &[u8]) -> Result<usize, WriteErr> {
-    // println!("[SYS WRITE] fd = {} by pid {}", fd, running_process!().id);
+    let this_task = unsafe { TASK_MANAGER.this_task() };
+
+    // println!("[SYS WRITE] fd = {} by pid {}", fd, this_task.id);
     // println!("[SYS WRITE] buf is at 0x{:08X}", &buf as *const _ as usize);
     // println!("[SYS WRITE] buf len = {}", buf.len());
 
-    if !running_process!().check_fd(fd) {
+    if !this_task.check_fd(fd) {
         println!(
             "[SYS WRITE] Invalid file descriptor {} for PID {}.",
-            fd,
-            running_process!().id,
+            fd, this_task.id,
         );
         Err(WriteErr::BadFd)
     } else {
-        let n = running_process!().opened_file(fd).write(&buf);
+        let n = this_task.opened_file(fd).write(&buf);
         Ok(n)
     }
 }
@@ -93,24 +85,25 @@ pub enum WriteErr {
 }
 
 pub fn read(fd: i32, buf: &mut [u8]) -> Result<usize, ReadErr> {
-    // println!("[SYS READ] fd = {} by pid {}", fd, running_process!().id);
+    let this_task = unsafe { TASK_MANAGER.this_task() };
+
+    // println!("[SYS READ] fd = {} by task ID {}", fd, this_task.id);
     // println!("[SYS READ] buf is at 0x{:08X}", &buf as *const _ as usize);
     // println!("[SYS READ] buf len = {}", buf.len());
 
     loop {
-        if !running_process!().check_fd(fd) {
+        if !this_task.check_fd(fd) {
             println!(
-                "[SYS READ] Invalid file descriptor {} for PID {}.",
-                fd,
-                running_process!().id,
+                "[SYS READ] Invalid file descriptor {} for task ID {}.",
+                fd, this_task.id,
             );
             return Err(ReadErr::BadFd);
         } else {
-            match running_process!().opened_file(fd).read(buf) {
+            match this_task.opened_file(fd).read(buf) {
                 Ok(n) => return Ok(n),
                 Err(err) => match err {
                     fs::ReadFileErr::Block => unsafe {
-                        SCHEDULER.block_running_thread();
+                        TASK_MANAGER.block_this_task();
                     },
                     fs::ReadFileErr::NotReadable => {
                         return Err(ReadErr::NotReadable);
@@ -129,17 +122,17 @@ pub enum ReadErr {
 }
 
 pub fn seek(variant: Seek, fd: i32, offset: usize) -> Result<usize, SeekErr> {
-    if !running_process!().check_fd(fd) {
+    let this_task = unsafe { TASK_MANAGER.this_task() };
+    if !this_task.check_fd(fd) {
         println!(
             "[SYS SEEK] Invalid file descriptor {} for PID {}.",
-            fd,
-            running_process!().id,
+            fd, this_task.id,
         );
         Err(SeekErr::BadFd)
     } else {
         Ok(match variant {
-            Seek::Abs => running_process!().opened_file(fd).seek_abs(offset),
-            Seek::Rel => running_process!().opened_file(fd).seek_rel(offset),
+            Seek::Abs => this_task.opened_file(fd).seek_abs(offset),
+            Seek::Rel => this_task.opened_file(fd).seek_rel(offset),
         })
     }
 }
@@ -221,7 +214,7 @@ pub fn mem_map(
     assert!(readable && writable);
     assert!(private && anonymous);
 
-    let mapping = unsafe { SCHEDULER.running_process().mem_map(len) };
+    let mapping = unsafe { TASK_MANAGER.this_task().mem_map(len) };
 
     Ok(mapping.region.start as usize)
 }
@@ -250,12 +243,14 @@ bitflags! {
 pub enum MemMapErr {}
 
 pub fn set_tls(ptr: usize) {
-    let this_thread = unsafe { SCHEDULER.running_thread() };
-    this_thread.set_tls(ptr);
-    println!(
-        "[SYS SET_TLS] tls_ptr = 0x{:08X} for pid {} tid {}",
-        ptr, this_thread.process_id, this_thread.id,
-    );
+    unsafe {
+        let this_task = TASK_MANAGER.this_task();
+        this_task.set_tls(ptr);
+        println!(
+            "[SYS SET_TLS] tls_ptr = 0x{:08X} for task ID {}",
+            ptr, this_task.id,
+        );
+    }
 }
 
 pub fn debug_print_num(num: u32) {
@@ -268,17 +263,18 @@ pub fn debug_print_str(s: &str) {
 
 pub fn exit(status: i32) -> ! {
     unsafe {
-        SCHEDULER.terminate_running_thread(status);
+        TASK_MANAGER.terminate_this_task(status);
     }
 }
 
 pub fn is_tty(fd: i32) -> Result<bool, IsTtyErr> {
-    if !running_process!().check_fd(fd) {
+    let this_task = unsafe { TASK_MANAGER.this_task() };
+    if !this_task.check_fd(fd) {
         return Err(IsTtyErr::BadFd);
     } else {
         // The char devices (and thus ttys) are currently located only in /dev.
         // Furthermore, they are named tty*.  So the check is fairly easy.
-        let f = running_process!().opened_file(fd);
+        let f = this_task.opened_file(fd);
         let devfs = VFS_ROOT
             .lock()
             .as_mut()
@@ -299,5 +295,5 @@ pub enum IsTtyErr {
 }
 
 pub fn get_pid() -> i32 {
-    unsafe { SCHEDULER.running_process().id as i32 }
+    unsafe { TASK_MANAGER.this_task().id as i32 }
 }

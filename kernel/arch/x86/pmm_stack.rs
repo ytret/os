@@ -46,7 +46,7 @@ impl PmmStack {
                 // End of slice.
                 break;
             }
-            match region.overlapping_with(KERNEL_INFO.arch.kernel_region) {
+            match region.overlapping_with(&KERNEL_INFO.arch.kernel_region) {
                 OverlappingWith::Covers => {
                     unimplemented!("a free region covers the kernel");
                 }
