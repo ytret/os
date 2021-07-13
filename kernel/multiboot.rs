@@ -319,7 +319,8 @@ pub unsafe fn parse(boot_info: *const BootInfo) {
     let bi = &*(ptr as *const BootInfo);
     println!(
         "Multiboot information is at 0x{:08X}, total size: {} bytes",
-        ptr as u32, bi.total_size,
+        ptr as u32,
+        { bi.total_size },
     );
     ptr = ptr.offset(8);
 
@@ -371,15 +372,16 @@ pub unsafe fn parse(boot_info: *const BootInfo) {
                 println!(
                     "Module: {}: start: 0x{:08X}, end: 0x{:08X}",
                     str_from_ascii(&tag.string, tag.tag_size - 16),
-                    tag.mod_start,
-                    tag.mod_end,
+                    { tag.mod_start },
+                    { tag.mod_end },
                 );
             }
             4 => {
                 let tag = &*(ptr as *const BasicMemoryInfo);
                 println!(
                     "Basic memory info: lower: {} KiB, upper: {} KiB",
-                    tag.mem_lower, tag.mem_upper,
+                    { tag.mem_lower },
+                    { tag.mem_upper },
                 );
             }
             5 => {
@@ -387,7 +389,9 @@ pub unsafe fn parse(boot_info: *const BootInfo) {
                 println!(
                     "BIOS boot device: drive num {}, partition: {}, \
                      subpartition: {}",
-                    tag.bios_dev, tag.partition as i32, tag.subpartition as i32,
+                    { tag.bios_dev },
+                    tag.partition as i32,
+                    tag.subpartition as i32,
                 );
             }
             6 => {
@@ -396,7 +400,9 @@ pub unsafe fn parse(boot_info: *const BootInfo) {
                 println!(
                     "Memory map: entry size: {}, entry version: {}, \
                      entries: {}",
-                    tag.entry_size, tag.entry_version, num_entries,
+                    { tag.entry_size },
+                    { tag.entry_version },
+                    num_entries,
                 );
                 let mut i = 0;
                 let mut added_to_info = 0;
@@ -445,10 +451,10 @@ pub unsafe fn parse(boot_info: *const BootInfo) {
                 println!(
                     "VBE info: mode: {}, interface seg: {}, \
                      interface off: {}, interface len: {}",
-                    tag.mode,
-                    tag.interface_seg,
-                    tag.interface_off,
-                    tag.interface_len,
+                    { tag.mode },
+                    { tag.interface_seg },
+                    { tag.interface_off },
+                    { tag.interface_len },
                 );
             }
             8 => {
@@ -457,10 +463,10 @@ pub unsafe fn parse(boot_info: *const BootInfo) {
                     "Framebuffer info: at phys: 0x{:08X}, pitch: {}, \
                      {}x{}, bpp: {}, type: {}",
                     tag.addr as u32,
-                    tag.pitch,
-                    tag.width,
-                    tag.height,
-                    tag.bpp,
+                    { tag.pitch },
+                    { tag.width },
+                    { tag.height },
+                    { tag.bpp },
                     FramebufferType::from(tag._type),
                 );
             }
@@ -468,7 +474,10 @@ pub unsafe fn parse(boot_info: *const BootInfo) {
                 let tag = &*(ptr as *const ElfSymbols);
                 println!(
                     "ELF symbols at 0x{:08X}: num: {}, entsize: {}, shndx: {}",
-                    tag as *const _ as u32, tag.num, tag.entsize, tag.shndx,
+                    tag as *const _ as u32,
+                    { tag.num },
+                    { tag.entsize },
+                    { tag.shndx },
                 );
             }
             10 => {
@@ -476,15 +485,18 @@ pub unsafe fn parse(boot_info: *const BootInfo) {
                 println!(
                     "APM table: v{}, cseg: 0x{:04X}, offset: 0x{:08X}, \
                      flags: {}, len: {}",
-                    tag.version, tag.cseg, tag.offset, tag.flags, tag.cseg_len
+                    { tag.version },
+                    { tag.cseg },
+                    { tag.offset },
+                    { tag.flags },
+                    { tag.cseg_len },
                 );
             }
             11 => {
                 let tag = &*(ptr as *const Efi32BitSystemTablePointer);
-                println!(
-                    "EFI 32-bit system table pointer: 0x{:08X}",
-                    tag.pointer,
-                );
+                println!("EFI 32-bit system table pointer: 0x{:08X}", {
+                    tag.pointer
+                });
             }
             12 => {
                 let tag = &*(ptr as *const Efi64BitSystemTablePointer);
@@ -540,7 +552,9 @@ pub unsafe fn parse(boot_info: *const BootInfo) {
                     let name = core::str::from_utf8(&sdt.signature).unwrap();
                     println!(
                         "{} at 0x{:08X}, length: {} bytes",
-                        name, *sdt_ptr as usize, sdt.length,
+                        name,
+                        *sdt_ptr as usize,
+                        { sdt.length },
                     );
 
                     if name == "HPET" {
@@ -564,7 +578,7 @@ pub unsafe fn parse(boot_info: *const BootInfo) {
                 let rsdp = (&tag.rsdpv2 as *const _ as *const sdt::NewRsdp)
                     .read_unaligned();
                 assert!(rsdp.is_valid());
-                assert_eq!(tag.tag_size - 8, rsdp.length);
+                assert_eq!(tag.tag_size - 8, { rsdp.length });
 
                 assert_eq!(rsdp.xsdt_phys_addr >> 32, 0);
                 let xsdt = (rsdp.xsdt_phys_addr as u32 as *const sdt::Sdt)
@@ -598,7 +612,9 @@ pub unsafe fn parse(boot_info: *const BootInfo) {
                     let name = core::str::from_utf8(&sdt.signature).unwrap();
                     println!(
                         "{} at 0x{:08X}, length: {} bytes",
-                        name, sdt_ptr as usize, sdt.length,
+                        name,
+                        sdt_ptr as usize,
+                        { sdt.length },
                     );
 
                     if name == "HPET" {
@@ -619,7 +635,8 @@ pub unsafe fn parse(boot_info: *const BootInfo) {
                 println!(
                     "EFI memory map: descriptor size: {}, \
                      descriptor version: {}",
-                    tag.descriptor_size, tag.descriptor_version,
+                    { tag.descriptor_size },
+                    { tag.descriptor_version },
                 );
             }
             18 => {
@@ -628,10 +645,9 @@ pub unsafe fn parse(boot_info: *const BootInfo) {
             }
             19 => {
                 let tag = &*(ptr as *const Efi32BitImageHandlePointer);
-                println!(
-                    "EFI 32-bit image handle pointer: 0x{:08X}",
-                    tag.pointer,
-                );
+                println!("EFI 32-bit image handle pointer: 0x{:08X}", {
+                    tag.pointer
+                });
             }
             20 => {
                 let tag = &*(ptr as *const Efi64BitImageHandlePointer);
@@ -643,10 +659,9 @@ pub unsafe fn parse(boot_info: *const BootInfo) {
             }
             21 => {
                 let tag = &*(ptr as *const ImageLoadBasePhysicalAddress);
-                println!(
-                    "Image load base physical address: 0x{:08X}",
-                    tag.load_base_addr,
-                );
+                println!("Image load base physical address: 0x{:08X}", {
+                    tag.load_base_addr
+                });
             }
             _ => {
                 println!("Ignoring unknown tag");
@@ -661,7 +676,8 @@ pub unsafe fn parse(boot_info: *const BootInfo) {
     let actual_size = ptr as u32 + 8 - boot_info as u32; // 8 is for the end tag
     println!("Actual MBI size: {} bytes", actual_size);
     assert_eq!(
-        bi.total_size, actual_size,
+        { bi.total_size },
+        actual_size,
         "declared and actual MBI sizes are different"
     );
 }

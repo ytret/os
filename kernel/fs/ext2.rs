@@ -372,7 +372,8 @@ impl Ext2 {
 
         let superblock = &*(raw_superblock.as_ptr() as *const Superblock);
         assert_eq!(
-            superblock.ext2_signature, EXT2_SIGNATURE,
+            { superblock.ext2_signature },
+            EXT2_SIGNATURE,
             "not ext2: invalid signature",
         );
 
