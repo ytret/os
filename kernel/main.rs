@@ -42,10 +42,8 @@ pub mod syscall;
 
 pub mod stack;
 
-pub mod process;
-pub mod thread;
-
-pub mod scheduler;
+pub mod task;
+pub mod task_manager;
 
 pub mod fs;
 
@@ -116,7 +114,7 @@ pub extern "C" fn main(magic_num: u32, boot_info: *const multiboot::BootInfo) {
         "VFS has not been initialized",
     );
 
-    scheduler::init();
+    task_manager::init();
     // loop {}
 
     // println!("Reached the end of main.");

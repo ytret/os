@@ -17,31 +17,35 @@
 use core::sync::atomic::Ordering;
 
 use crate::arch::vas::KERNEL_VAS;
-use crate::scheduler::{NO_SCHED_COUNTER, SCHEDULER, TEMP_SPAWNER_ON};
+use crate::task_manager::{NO_SCHED_COUNTER, TASK_MANAGER, TEMP_SPAWNER_ON};
 
 use crate::arch::gdt;
-use crate::arch::thread::ThreadControlBlock;
-use crate::process::Process;
-use crate::thread::Thread;
+use crate::arch::task::TaskControlBlock;
+use crate::task::Task;
+use crate::task_manager::TaskManager;
 
 extern "C" {
-    fn switch_threads(
-        from: *mut ThreadControlBlock,
-        to: *const ThreadControlBlock,
+    fn switch_tasks(
+        from: *const TaskControlBlock,
+        to: *const TaskControlBlock,
         tss: *mut gdt::TaskStateSegment,
     );
 }
 
-impl crate::scheduler::Scheduler {
-    pub unsafe fn switch_threads(
+impl TaskManager {
+    /// Stores the current task's context in its [TaskControlBlock] and loads
+    /// the next task's context.
+    ///
+    /// # Notes
+    /// Call this method with disabled interrupts and enable them after it
+    /// returns.
+    pub unsafe fn switch_tasks(
         &self,
-        from: *mut ThreadControlBlock,
-        to: *const ThreadControlBlock,
+        from: *const TaskControlBlock,
+        to: *const TaskControlBlock,
     ) {
-        // NOTE: call this method with interrupts disabled and enable them after
-        // it returns.
         let tss = &mut gdt::TSS as *mut gdt::TaskStateSegment;
-        switch_threads(from, to, tss);
+        switch_tasks(from, to, tss);
     }
 
     pub fn stop_scheduling(&self) {
@@ -66,18 +70,13 @@ pub fn init() {
     tss.ss0 = gdt::KERNEL_DATA_SEG;
 
     unsafe {
-        let init_process_id = SCHEDULER.allocate_process_id();
-        let mut init_process =
-            Process::new(init_process_id, KERNEL_VAS.lock().clone());
-        let init_thread_id = init_process.allocate_thread_id();
-        SCHEDULER.add_process(init_process);
+        let init_task_id = TASK_MANAGER.allocate_task_id();
 
-        // This thread has no entry point like an ordinary one, as it is simply
-        // the code that is executing now.  The first thread switch that happens
-        // after enablig the spawner will save the current context as a context
-        // of the thread with index 0.
-        let init_thread = Thread::new(init_process_id, init_thread_id);
-        tss.esp0 = init_thread.tcb.esp0;
+        // The init task is created with an empty kernel stack because it will
+        // not switched to, it will be switched from, so its context will be
+        // pushed, not popped on the next task switch.
+        let init_task =
+            Task::with_empty_stack(init_task_id, KERNEL_VAS.lock().clone());
 
         // Load the GDT with the new entries.
         gdt::GDT.lock().load();
@@ -85,9 +84,9 @@ pub fn init() {
         // Load the TSS.
         asm!("ltr %ax", in("ax") gdt::TSS_SEG, options(att_syntax));
 
-        SCHEDULER.run_thread(init_thread);
+        TASK_MANAGER.run_task(init_task);
 
-        println!("[SCHED] Enabling the spawner.");
+        println!("[TASKMGR] Enabling the spawner.");
         TEMP_SPAWNER_ON = true;
     }
 }

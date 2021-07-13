@@ -50,9 +50,8 @@ SOURCES := \
 	kernel/dev/console.rs \
 	kernel/multiboot.rs \
 	kernel/heap.rs \
-	kernel/process.rs \
-	kernel/thread.rs \
-	kernel/scheduler.rs \
+	kernel/task.rs \
+	kernel/task_manager.rs \
 	kernel/syscall.rs \
 	kernel/stack.rs \
 	kernel/fs/mod.rs \

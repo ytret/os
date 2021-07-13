@@ -19,6 +19,8 @@ use core::any::type_name;
 use core::mem::{align_of, size_of};
 use core::ops::Drop;
 
+use crate::memory_region::Region;
+
 pub struct Stack<T> {
     layout: Layout,
     max_top: *mut T,
@@ -27,30 +29,47 @@ pub struct Stack<T> {
 }
 
 impl<T> Stack<T> {
-    pub fn new(layout: Layout) -> Self {
+    /// Constructs a stack operating over the given memory region.
+    ///
+    /// # Safety
+    /// The region must be valid to be written to and read from, i.e. mapped
+    /// with suitable privileges.
+    pub unsafe fn from_region(region: Region<usize>) -> Self {
+        let layout = Layout::from_size_align(
+            region.len(),
+            2_usize.pow(region.start.trailing_zeros()),
+        )
+        .unwrap();
         assert_eq!(
             layout.align() % align_of::<T>(),
             0,
-            "align must be a multiple of align_of::<{}>",
+            "region align must be a multiple of align_of::<{}>() = {}",
             type_name::<T>(),
+            align_of::<T>(),
         );
         assert_eq!(
             layout.size() % size_of::<T>(),
             0,
-            "size must be a multiple of size_of::<{}>",
+            "region length must be a multiple of size_of::<{}>() = {}",
             type_name::<T>(),
+            size_of::<T>(),
         );
+        Stack {
+            layout,
+            max_top: region.start as *mut T,
+            top: region.end as *mut T,
+            bottom: region.end as *mut T,
+        }
+    }
 
+    pub fn with_layout(layout: Layout) -> Self {
         unsafe {
-            let max_top = alloc(layout) as *mut T;
-            let bottom = max_top.add(layout.size() / size_of::<T>());
-
-            Stack {
-                layout,
-                max_top,
-                top: bottom,
-                bottom,
-            }
+            let top = alloc(layout) as usize;
+            let bottom = top + layout.size();
+            Self::from_region(Region {
+                start: top,
+                end: bottom,
+            })
         }
     }
 

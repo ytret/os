@@ -15,20 +15,20 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 /*
- * Passes execution from the current thread to the specified one.  Updates the
+ * Passes execution from the current task to the specified one.  Updates the
  * ESP0 field in the specified Task State Segment.
- * Arguments: 1) from: *mut ThreadControlBlock
- *            2) to: *const ThreadControlBlock
+ * Arguments: 1) from: *const TaskControlBlock
+ *            2) to: *const TaskControlBlock
  *            3) tss: *mut TaskStateSegment
- * This function returns when the scheduler decides to run the caller's thread.
+ * This function returns when the scheduler decides to run the caller's task.
  * It returns as if it wasn't ever called (i.e. like a normal function).
  * NOTE: one must disable interrupts before calling this function and enable
- * them after it returns (this applies to both the current and the next thread's
+ * them after it returns (this applies to both the current and the next task's
  * code).
  */
-.global switch_threads
-.type switch_threads, @function
-switch_threads:
+.global switch_tasks
+.type switch_tasks, @function
+switch_tasks:
     pushl %ebp
     movl %esp, %ebp
 
@@ -39,17 +39,21 @@ switch_threads:
     pushl %esi
     pushl %edi
 
-    movl 8(%ebp), %esi          // esi = from: *mut ThreadControlBlock
-    movl 12(%ebp), %edi         // edi = to: *const ThreadControlBlock
+    movl 8(%ebp), %esi          // esi = from: *mut TaskControlBlock
+
+    // Save %esp of the current task in its TaskControlBlock.
+    movl 8(%esi), %eax
+    movl %esp, (%eax)
+
+    movl 12(%ebp), %edi         // edi = to: *const TaskControlBlock
     movl 16(%ebp), %eax         // eax = tss: *mut TaskStateSegment
 
-    // Save %esp of the current thread in its ThreadControlBlock.
-    movl %esp, 8(%esi)
-
-    // Load the next thread's ThreadControlBlock.
+    // Load the next task's TaskControlBlock.
     movl 0*4(%edi), %ebx        // ebx = cr3
-    movl 1*4(%edi), %ecx        // ecx = kernel stack bottom
-    movl 2*4(%edi), %esp        // esp = kernel stack top
+    movl 1*4(%edi), %ecx
+    movl (%ecx), %ecx           // ecx = kernel stack bottom
+    movl 2*4(%edi), %esp
+    movl (%esp), %esp           // esp = kernel stack top
 
     // Update the ESP0 field in the TSS.
     movl %ecx, 4(%eax)
@@ -68,9 +72,9 @@ switch_threads:
     popl %eax
     popl %ebp
 
-    // Load the next thread's %eip from its stack.
+    // Load the next task's %eip from its stack.
     ret
-.size switch_threads, . - switch_threads
+.size switch_tasks, . - switch_tasks
 
 /*
  * Does a far return with usermode segments to the specified function.

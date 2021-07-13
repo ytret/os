@@ -18,7 +18,7 @@ use alloc::collections::vec_deque::VecDeque;
 use alloc::rc::Rc;
 use core::cell::RefCell;
 
-use crate::scheduler::SCHEDULER;
+use crate::task_manager::TASK_MANAGER;
 
 use crate::arch::dev::keyboard::{Event, EventListener, Key, KEYBOARD};
 use crate::dev::char_device::{CharDevice, ReadErr, WriteErr};
@@ -35,7 +35,7 @@ pub struct Console {
     caps_lock: bool,
     num_lock: bool,
 
-    pid_tid_blocked_by_read: Option<(usize, usize)>,
+    task_blocked_by_read: Option<usize>,
     current_buf_idx: usize,
 }
 
@@ -56,7 +56,7 @@ impl Console {
             caps_lock: false,
             num_lock: false,
 
-            pid_tid_blocked_by_read: None,
+            task_blocked_by_read: None,
             current_buf_idx: 0,
         }
     }
@@ -210,10 +210,10 @@ impl EventListener for Console {
     fn receive_event(&mut self, event: Event) {
         if self.kbd_events.len() < MAX_KBD_EVENTS {
             self.kbd_events.push_back(event);
-            if let Some((pid, tid)) = self.pid_tid_blocked_by_read {
-                self.pid_tid_blocked_by_read = None;
+            if let Some(task_id) = self.task_blocked_by_read {
+                self.task_blocked_by_read = None;
                 unsafe {
-                    SCHEDULER.unblock_thread_by_id(pid, tid);
+                    TASK_MANAGER.unblock_task(task_id);
                 }
             }
         } else {
@@ -224,16 +224,15 @@ impl EventListener for Console {
 
 impl CharDevice for Console {
     fn read(&mut self) -> Result<u8, ReadErr> {
-        let pid = unsafe { SCHEDULER.running_process().id };
-        let tid = unsafe { SCHEDULER.running_thread().id };
+        let task_id = unsafe { TASK_MANAGER.this_task().id };
 
         let maybe_ascii = self.try_resolve_into_ascii();
-        if self.pid_tid_blocked_by_read.is_none() {
+        if self.task_blocked_by_read.is_none() {
             if let Some(ascii) = maybe_ascii {
                 self.write(ascii).unwrap();
                 Ok(ascii)
             } else {
-                self.pid_tid_blocked_by_read = Some((pid, tid));
+                self.task_blocked_by_read = Some(task_id);
                 Err(ReadErr::Block)
             }
         } else {
@@ -242,8 +241,7 @@ impl CharDevice for Console {
     }
 
     fn read_many(&mut self, buf: &mut [u8]) -> Result<usize, ReadErr> {
-        let pid = unsafe { SCHEDULER.running_process().id };
-        let tid = unsafe { SCHEDULER.running_thread().id };
+        let task_id = unsafe { TASK_MANAGER.this_task().id };
 
         let ch = self.read()?;
         if self.current_buf_idx < buf.len() {
@@ -258,7 +256,7 @@ impl CharDevice for Console {
             self.current_buf_idx = 0;
             Ok(bytes_read)
         } else {
-            self.pid_tid_blocked_by_read = Some((pid, tid));
+            self.task_blocked_by_read = Some(task_id);
             Err(ReadErr::Block)
         }
     }

@@ -19,14 +19,13 @@ use core::mem::{align_of, size_of};
 use core::slice;
 use core::str;
 
-use crate::scheduler::SCHEDULER;
+use crate::arch::task::jump_into_usermode;
+use crate::task_manager::TASK_MANAGER;
 
 use crate::arch::gdt;
 use crate::arch::interrupts::InterruptStackFrame;
-use crate::arch::process::jump_into_usermode;
 use crate::bitflags::BitFlags;
 use crate::syscall;
-use crate::thread::Thread;
 
 #[derive(Clone, Copy, Debug)]
 #[repr(C, packed)]
@@ -55,9 +54,9 @@ pub extern "C" fn syscall_handler(
     usermode_ebp: u32,
 ) {
     // println!(
-    //     "[SYS] Syscall number {} by PID {}",
+    //     "[SYS] Syscall number {} by task ID {}",
     //     gp_regs.eax,
-    //     unsafe { SCHEDULER.running_process().id },
+    //     unsafe { TASK_MANAGER.this_task().id },
     // );
     // println!("{:#010X?}", gp_regs);
     let syscall_num: u32 = { gp_regs.eax };
@@ -245,19 +244,9 @@ pub extern "C" fn syscall_handler(
     else if syscall_num == 13 {
         unsafe {
             println!(
-                "[SYS FORK] Origin pid {} tid {}",
-                SCHEDULER.running_process().id,
-                SCHEDULER.running_thread().id,
+                "[SYS FORK] Original task ID: {}.",
+                TASK_MANAGER.this_task().id,
             );
-
-            let copy_id = SCHEDULER.allocate_process_id();
-            let mut copy = SCHEDULER.running_process().clone(copy_id);
-
-            // Define these before moving `copy' into SCHEDULER.
-            let thread_id = copy.allocate_thread_id();
-            let copy_vas_cr3 = copy.vas.pgdir_phys;
-
-            SCHEDULER.add_process(copy);
 
             // FIXME: memory leak
             let p_usermode_regs = alloc(
@@ -273,9 +262,9 @@ pub extern "C" fn syscall_handler(
             (*p_usermode_regs).ebp = usermode_ebp;
             (*p_usermode_regs).esp = stack_frame.esp;
 
-            let mut thread = Thread::new_with_stack(
+            let copy_id = TASK_MANAGER.allocate_task_id();
+            let copy = TASK_MANAGER.this_task().clone(
                 copy_id,
-                thread_id,
                 jump_into_usermode as u32,
                 &[
                     gdt::USERMODE_CODE_SEG as u32,
@@ -285,12 +274,9 @@ pub extern "C" fn syscall_handler(
                     p_usermode_regs as u32,
                 ],
             );
-            // FIXME: bad API
-            thread.tcb.cr3 = copy_vas_cr3;
+            TASK_MANAGER.add_runnable_task(copy);
 
-            SCHEDULER.add_runnable_thread(thread);
-
-            println!("[SYS FORK] Copy pid {} tid {}", copy_id, thread_id);
+            println!("[SYS FORK] Cloned task ID: {}.", copy_id);
 
             return_value = copy_id as i32;
         }
