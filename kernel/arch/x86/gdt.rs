@@ -16,31 +16,28 @@
 
 use core::mem::size_of;
 
-use crate::bitflags::BitFlags;
 use crate::kernel_static::Mutex;
 
 extern "C" {
     fn load_gdt(gdt_descriptor: *const GdtDescriptor);
 }
 
-bitflags! {
-    #[repr(u8)]
-    pub enum AccessByte {
-        Accessed = 1 << 0,
-        ReadableWritable = 1 << 1,
-        ConformingDirection = 1 << 2,
-        Executable = 1 << 3, // not set: data segment
-        NotTaskStateSegment = 1 << 4,
-        Usermode = 0b11 << 5,
-        Present = 1 << 7,
+bitflags_new! {
+    pub struct AccessByte: u8 {
+        const ACCESSED = 1 << 0;
+        const READABLE_WRITABLE = 1 << 1;
+        const CONFORMING_DIRECTION = 1 << 2;
+        const EXECUTABLE = 1 << 3; // not set: data segment
+        const NOT_TASK_STATE_SEGMENT = 1 << 4;
+        const USERMODE = 0b11 << 5;
+        const PRESENT = 1 << 7;
     }
 }
 
-bitflags! {
-    #[repr(u8)]
-    pub enum EntryFlags {
-        ProtectedMode32Bit = 1 << 6, // not set: 16-bit protected mode
-        PageGranularity = 1 << 7, // not set: byte granularity
+bitflags_new! {
+    pub struct EntryFlags: u8 {
+        const PROTECTED_MODE_32_BIT = 1 << 6; // not set: 16-bit protected mode
+        const PAGE_GRANULARITY = 1 << 7; // not set: byte granularity
     }
 }
 
@@ -49,21 +46,48 @@ pub struct Entry {
     limit_0_15: u16,
     base_0_15: u16,
     base_16_23: u8,
-    access_byte: BitFlags<u8, AccessByte>,
-    flags_limit_16_19: BitFlags<u8, EntryFlags>,
+    access_byte: AccessByte,
+    flags_limit_16_19: u8,
     base_24_31: u8,
 }
 
 impl Entry {
-    pub fn new(base: u32, limit: u32, access_byte: u8, flags: u8) -> Self {
+    pub fn new(
+        base: u32,
+        limit: u32,
+        access_byte: AccessByte,
+        flags: EntryFlags,
+    ) -> Self {
         assert_eq!(limit >> 20, 0, "limit must be 20 bits wide");
         Entry {
             limit_0_15: limit as u16,
             base_0_15: base as u16,
             base_16_23: (base >> 16) as u8,
-            access_byte: BitFlags::new(access_byte),
-            flags_limit_16_19: BitFlags::new(flags | (limit >> 16) as u8 & 0xF),
+            access_byte,
+            flags_limit_16_19: flags.bits() | (limit >> 16) as u8 & 0xF,
             base_24_31: (base >> 24) as u8,
+        }
+    }
+
+    pub fn from_raw(raw: u64) -> Self {
+        Entry {
+            limit_0_15: raw as u16,
+            base_0_15: (raw >> 16) as u16,
+            base_16_23: (raw >> 32) as u8,
+            access_byte: AccessByte::from_bits((raw >> 40) as u8),
+            flags_limit_16_19: (raw >> 48) as u8,
+            base_24_31: (raw >> 56) as u8,
+        }
+    }
+
+    fn null() -> Self {
+        Entry {
+            limit_0_15: 0,
+            base_0_15: 0,
+            base_16_23: 0,
+            access_byte: AccessByte::empty(),
+            flags_limit_16_19: 0,
+            base_24_31: 0,
         }
     }
 
@@ -73,30 +97,19 @@ impl Entry {
         self.base_24_31 = (new_base >> 24) as u8;
     }
 
-    fn missing() -> Self {
-        Entry {
-            limit_0_15: 0,
-            base_0_15: 0,
-            base_16_23: 0,
-            access_byte: BitFlags::new(0),
-            flags_limit_16_19: BitFlags::new(0),
-            base_24_31: 0,
-        }
-    }
-
     fn is_null(&self) -> bool {
         self.limit_0_15 == 0
             && self.base_0_15 == 0
             && self.base_16_23 == 0
-            && self.access_byte.value == 0
-            && self.flags_limit_16_19.value == 0
+            && self.access_byte.is_empty()
+            && self.flags_limit_16_19 == 0
             && self.base_24_31 == 0
     }
 }
 
 impl Default for Entry {
     fn default() -> Self {
-        Entry::missing()
+        Entry::null()
     }
 }
 
@@ -239,14 +252,8 @@ struct GdtDescriptor {
 
 impl Into<Entry> for GdtDescriptor {
     fn into(self) -> Entry {
-        Entry {
-            limit_0_15: self.size,
-            base_0_15: self.offset as u16,
-            base_16_23: (self.offset >> 16) as u8,
-            access_byte: BitFlags::new((self.offset >> 24) as u8),
-            flags_limit_16_19: BitFlags::new(0),
-            base_24_31: 0,
-        }
+        let raw_entry = (self.size as u64) | ((self.offset as u64) << 16);
+        Entry::from_raw(raw_entry)
     }
 }
 
@@ -274,91 +281,63 @@ kernel_static! {
         gdt.0[KERNEL_CODE_IDX] = Entry::new(
             0x0000_0000,
             0xFFFFF,
-            (BitFlags::new(0)
-                | AccessByte::Present
-                | AccessByte::NotTaskStateSegment
-                | AccessByte::Executable
-                | AccessByte::ReadableWritable
-            ).value,
-            (BitFlags::new(0)
-             | EntryFlags::ProtectedMode32Bit
-             | EntryFlags::PageGranularity
-            ).value,
-        );
+            AccessByte::PRESENT
+                | AccessByte::NOT_TASK_STATE_SEGMENT
+                | AccessByte::EXECUTABLE
+                | AccessByte::READABLE_WRITABLE,
+                EntryFlags::PROTECTED_MODE_32_BIT | EntryFlags::PAGE_GRANULARITY,
+            );
 
         // Data segment.
         gdt.0[KERNEL_DATA_IDX] = Entry::new(
             0x0000_0000,
             0xFFFFF,
-            (BitFlags::new(0)
-                | AccessByte::Present
-                | AccessByte::NotTaskStateSegment
-                | AccessByte::ReadableWritable
-            ).value,
-            (BitFlags::new(0)
-             | EntryFlags::ProtectedMode32Bit
-             | EntryFlags::PageGranularity
-            ).value,
+            AccessByte::PRESENT
+                | AccessByte::NOT_TASK_STATE_SEGMENT
+                | AccessByte::READABLE_WRITABLE,
+            EntryFlags::PROTECTED_MODE_32_BIT | EntryFlags::PAGE_GRANULARITY,
         );
 
         // Usermode code segment.
         gdt.0[USERMODE_CODE_IDX] = Entry::new(
             0x0000_0000,
             0xFFFFF,
-            (BitFlags::new(0)
-                | AccessByte::Present
-                | AccessByte::Usermode
-                | AccessByte::NotTaskStateSegment
-                | AccessByte::Executable
-                | AccessByte::ReadableWritable)
-                .value,
-            (BitFlags::new(0)
-                | EntryFlags::ProtectedMode32Bit
-                | EntryFlags::PageGranularity)
-                .value,
+            AccessByte::PRESENT
+                | AccessByte::USERMODE
+                | AccessByte::NOT_TASK_STATE_SEGMENT
+                | AccessByte::EXECUTABLE
+                | AccessByte::READABLE_WRITABLE,
+            EntryFlags::PROTECTED_MODE_32_BIT | EntryFlags::PAGE_GRANULARITY,
         );
 
         // Usermode data segment.
         gdt.0[USERMODE_DATA_IDX] = Entry::new(
             0x0000_0000,
             0xFFFFF,
-            (BitFlags::new(0)
-                | AccessByte::Present
-                | AccessByte::Usermode
-                | AccessByte::NotTaskStateSegment
-                | AccessByte::ReadableWritable)
-                .value,
-            (BitFlags::new(0)
-                | EntryFlags::ProtectedMode32Bit
-                | EntryFlags::PageGranularity)
-                .value,
+            AccessByte::PRESENT
+                | AccessByte::USERMODE
+                | AccessByte::NOT_TASK_STATE_SEGMENT
+                | AccessByte::READABLE_WRITABLE,
+            EntryFlags::PROTECTED_MODE_32_BIT | EntryFlags::PAGE_GRANULARITY,
         );
 
         // Task state segment.
         gdt.0[TSS_IDX] = Entry::new(
             unsafe { &TSS as *const _ as u32 },
             size_of::<TaskStateSegment>() as u32,
-            (BitFlags::new(0)
-                | AccessByte::Present
-                | AccessByte::Executable
-                | AccessByte::Accessed)
-                .value,
-            (BitFlags::new(0) | EntryFlags::PageGranularity).value,
+            AccessByte::PRESENT | AccessByte::EXECUTABLE | AccessByte::ACCESSED,
+            EntryFlags::PAGE_GRANULARITY,
         );
 
         // Thread local storage.
         gdt.0[TLS_IDX] = Entry::new(
             0xDEADBEEF,
             7 * 4, // see mlibc/options/internal/include/mlibc/tcb.hpp
-            (BitFlags::new(0)
-                | AccessByte::Present
-                | AccessByte::NotTaskStateSegment
-                | AccessByte::Usermode
-                | AccessByte::ReadableWritable)
-                .value,
-            (BitFlags::new(0)
-                | EntryFlags::ProtectedMode32Bit)
-                .value,
+            AccessByte::PRESENT
+                | AccessByte::NOT_TASK_STATE_SEGMENT
+                | AccessByte::USERMODE
+                | AccessByte::READABLE_WRITABLE,
+            EntryFlags::PROTECTED_MODE_32_BIT,
         );
 
         gdt

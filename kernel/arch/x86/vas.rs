@@ -22,41 +22,38 @@ use crate::arch::pmm_stack::PMM_STACK;
 use crate::KERNEL_INFO;
 
 use crate::arch::interrupts::InterruptStackFrame;
-use crate::bitflags::BitFlags;
 use crate::kernel_static::Mutex;
 use crate::memory_region::Region;
 
-bitflags! {
-    #[repr(u32)]
-    pub enum PdeFlags {
-        Present = 1 << 0,             // not set: not present
-        ReadWrite = 1 << 1,           // not set: read-only
-        AnyDpl = 1 << 2,              // not set: must be DPL 0 to access
-        WriteThroughCaching = 1 << 3, // not set: write-back caching
-        NoCaching = 1 << 4,           // not set: enable caching
-        Accessed = 1 << 5,            // not set: not accessed
+bitflags_new! {
+    pub struct DirEntry: u32 {
+        const PRESENT = 1 << 0;               // not set: not PRESENT
+        const READ_WRITE = 1 << 1;            // not set: read-only
+        const ANY_DPL = 1 << 2;               // not set: must be DPL 0 to access
+        const WRITE_THROUGH_CACHING = 1 << 3; // not set: write-back caching
+        const NO_CACHING = 1 << 4;            // not set: enable caching
+        const ACCESSED = 1 << 5;              // not set: not accessed
         // Bit 6 must be zero.
-        PageSizeIs4Mib = 1 << 7,      // not set: page size is 4 KiB
+        const PAGE_SIZE_IS_4_MIB = 1 << 7;    // not set: page size is 4 KiB
         // Bit 8 is ignored.
     }
 }
 
-bitflags! {
-    #[repr(u32)]
-    pub enum PteFlags {
-        Present = 1 << 0,             // not set: not present
-        ReadWrite = 1 << 1,           // not set: read-only
-        AnyDpl = 1 << 2,              // not set: must be DPL 0 to access
-        WriteThroughCaching = 1 << 3, // not set: write-back caching
-        NoCaching = 1 << 4,           // not set: enable caching
-        Accessed = 1 << 5,            // not set: not accessed
-        Dirty = 1 << 6,               // not set: not dirty (not written to)
+bitflags_new! {
+    pub struct TableEntry: u32 {
+        const PRESENT = 1 << 0;               // not set: not PRESENT
+        const READ_WRITE = 1 << 1;            // not set: read-only
+        const ANY_DPL = 1 << 2;               // not set: must be DPL 0 to access
+        const WRITE_THROUGH_CACHING = 1 << 3; // not set: write-back caching
+        const NO_CACHING = 1 << 4;            // not set: enable caching
+        const ACCESSED = 1 << 5;              // not set: not accessed
+        const DIRTY = 1 << 6;                 // not set: not dirty (not written to)
         // Bit 7 must be zero if PAT is not supported.
-        Global = 1 << 8,              // not set: not invalidated on CR3 reset (set CR4)
+        const GLOBAL = 1 << 8;                // not set: not invalidated on CR3 reset (set CR4)
 
         // OS-specific:
-        GuardPage = 1 << 9,
-        WasPresent = 1 << 10,
+        const GUARD_PAGE = 1 << 9;
+        const WAS_PRESENT = 1 << 10;
     }
 }
 
@@ -84,15 +81,15 @@ impl VirtAddrSpace {
             for j in 0..pgtbls[i].0.len() {
                 let entry = &mut pgtbls[i].0[j];
                 entry.set_addr((i << 22 | j << 12) as u32);
-                entry.set_flag(PteFlags::Present);
-                entry.set_flag(PteFlags::ReadWrite);
-                entry.set_flag(PteFlags::AnyDpl);
+                entry.insert(TableEntry::PRESENT);
+                entry.insert(TableEntry::READ_WRITE);
+                entry.insert(TableEntry::ANY_DPL);
             }
 
             pgdir.0[i].set_addr(&pgtbls[i] as *const _ as u32);
-            pgdir.0[i].set_flag(PdeFlags::Present);
-            pgdir.0[i].set_flag(PdeFlags::ReadWrite);
-            pgdir.0[i].set_flag(PdeFlags::AnyDpl);
+            pgdir.0[i].insert(DirEntry::PRESENT);
+            pgdir.0[i].insert(DirEntry::READ_WRITE);
+            pgdir.0[i].insert(DirEntry::ANY_DPL);
 
             *pgtbls_ptrs.0.add(i) = &mut pgtbls[i] as *mut Table;
             *pgtbls_ptrs.1.add(i) = &pgtbls[i] as *const _ as u32;
@@ -141,7 +138,7 @@ impl VirtAddrSpace {
         let pgdir = (*kvas).pgdir_virt.as_mut().unwrap();
         for i in 0..1024 {
             let pde = &pgdir.0[i];
-            if pde.flags().has_set(PdeFlags::Present) {
+            if pde.contains(DirEntry::PRESENT) {
                 // Copy the corresponding page table.
                 let src = pde.addr() as *mut u8;
                 let dest = alloc(Layout::from_size_align(4096, 4096).unwrap());
@@ -153,20 +150,20 @@ impl VirtAddrSpace {
                 // Change the flags of all PTEs.
                 let pgtbl = (*vas.pgtbls_virt.add(i)).as_mut().unwrap();
                 for j in 0..1024 {
-                    if pgtbl.0[j].flags().has_set(PteFlags::Present) {
-                        pgtbl.0[j] = TableEntry::new(pgtbl.0[j].addr());
-                        pgtbl.0[j].set_flag(PteFlags::Present);
-                        pgtbl.0[j].set_flag(PteFlags::ReadWrite);
-                        pgtbl.0[j].set_flag(PteFlags::AnyDpl);
+                    if pgtbl.0[j].contains(TableEntry::PRESENT) {
+                        pgtbl.0[j] = TableEntry::with_addr(pgtbl.0[j].addr());
+                        pgtbl.0[j].insert(TableEntry::PRESENT);
+                        pgtbl.0[j].insert(TableEntry::READ_WRITE);
+                        pgtbl.0[j].insert(TableEntry::ANY_DPL);
                     }
                 }
 
                 // Set the PDE.
                 let pgdir = vas.pgdir_virt.as_mut().unwrap();
                 pgdir.0[i].set_addr(*vas.pgtbls_phys.add(i));
-                pgdir.0[i].set_flag(PdeFlags::Present);
-                pgdir.0[i].set_flag(PdeFlags::ReadWrite);
-                pgdir.0[i].set_flag(PdeFlags::AnyDpl);
+                pgdir.0[i].insert(DirEntry::PRESENT);
+                pgdir.0[i].insert(DirEntry::READ_WRITE);
+                pgdir.0[i].insert(DirEntry::ANY_DPL);
             }
         }
 
@@ -209,8 +206,8 @@ impl VirtAddrSpace {
             // println!("pde_idx = {}", pde_idx);
             // println!("pde = 0x{:08X}", pde as *const _ as u32);
 
-            if pde.flags().has_set(PdeFlags::Present) {
-                // println!("- is present");
+            if pde.contains(DirEntry::PRESENT) {
+                // println!("- is PRESENT");
 
                 let pgtbl_virt = self.pgtbl_virt_of((pde_idx as u32) << 22);
                 let new_pgtbl_virt =
@@ -234,7 +231,7 @@ impl VirtAddrSpace {
                 for (pte_idx, pte) in pgtbl.0.iter().enumerate() {
                     // println!(" - pte_idx = {}", pte_idx);
                     // println!(" - pte = 0x{:08X}", pte as *const _ as u32);
-                    if pte.flags().has_set(PteFlags::Present) {
+                    if pte.contains(TableEntry::PRESENT) {
                         let copy_from =
                             ((pde_idx << 22) | (pte_idx << 12)) as u32;
 
@@ -294,10 +291,10 @@ impl VirtAddrSpace {
 
         let entry = self.pgtbl_entry(virt);
         entry.set_addr(phys);
-        entry.set_flag(PteFlags::Present);
-        entry.set_flag(PteFlags::ReadWrite);
+        entry.insert(TableEntry::PRESENT);
+        entry.insert(TableEntry::READ_WRITE);
         if self.usermode {
-            entry.set_flag(PteFlags::AnyDpl);
+            entry.insert(TableEntry::ANY_DPL);
         }
 
         self.invalidate_cache(virt);
@@ -322,11 +319,11 @@ impl VirtAddrSpace {
         assert_eq!(at & 0xFFF, 0, "at must be page-aligned");
         let entry = self.pgtbl_entry(at);
 
-        if entry.flags().has_set(PteFlags::Present) {
-            entry.unset_flag(PteFlags::Present);
-            entry.set_flag(PteFlags::WasPresent);
+        if entry.contains(TableEntry::PRESENT) {
+            entry.insert(TableEntry::PRESENT);
+            entry.insert(TableEntry::WAS_PRESENT);
         }
-        entry.set_flag(PteFlags::GuardPage);
+        entry.insert(TableEntry::GUARD_PAGE);
 
         asm!("invlpg ({})", in(reg) at, options(att_syntax));
         println!("[VAS] Placed a guard page at 0x{:08X}.", at);
@@ -336,11 +333,11 @@ impl VirtAddrSpace {
         assert_eq!(from & 0xFFF, 0, "from must be page-aligned");
         let entry = self.pgtbl_entry(from);
 
-        if entry.flags().has_set(PteFlags::WasPresent) {
-            entry.unset_flag(PteFlags::WasPresent);
-            entry.set_flag(PteFlags::Present);
+        if entry.contains(TableEntry::WAS_PRESENT) {
+            entry.insert(TableEntry::WAS_PRESENT);
+            entry.insert(TableEntry::PRESENT);
         }
-        entry.unset_flag(PteFlags::GuardPage);
+        entry.insert(TableEntry::GUARD_PAGE);
 
         asm!("invlpg ({})", in(reg) from, options(att_syntax));
         println!("[VAS] Removed a guard page from 0x{:08X}.", from);
@@ -379,9 +376,9 @@ impl VirtAddrSpace {
     ///
     /// # Default flags
     /// The default flags are:
-    /// * [present](PdeFlags::Present),
-    /// * [readable and writable](PdeFlags::ReadWrite),
-    /// * [any DPL](PdeFlags::AnyDpl) (if [VirtAddrSpace::usermode] is `true`).
+    /// * [PRESENT](DirEntry::PRESENT),
+    /// * [readable and writable](DirEntry::READ_WRITE),
+    /// * [any DPL](DirEntry::ANY_DPL) (if [VirtAddrSpace::usermode] is `true`).
     unsafe fn set_pde_phys_virt(
         &self,
         pde_idx: usize,
@@ -396,10 +393,10 @@ impl VirtAddrSpace {
 
         let pgdir = self.pgdir_virt.as_mut().unwrap();
         pgdir.0[pde_idx].set_addr(pgtbl_phys);
-        pgdir.0[pde_idx].set_flag(PdeFlags::Present);
-        pgdir.0[pde_idx].set_flag(PdeFlags::ReadWrite);
+        pgdir.0[pde_idx].insert(DirEntry::PRESENT);
+        pgdir.0[pde_idx].insert(DirEntry::READ_WRITE);
         if self.usermode {
-            pgdir.0[pde_idx].set_flag(PdeFlags::AnyDpl);
+            pgdir.0[pde_idx].insert(DirEntry::ANY_DPL);
         }
     }
 
@@ -407,7 +404,7 @@ impl VirtAddrSpace {
         let pgtbl_virt = self.pgtbl_virt_of(virt);
         if !pgtbl_virt.is_null() {
             let pte = self.pgtbl_entry(virt);
-            if pte.flags().has_set(PteFlags::Present) {
+            if pte.contains(TableEntry::PRESENT) {
                 Some(pte.addr())
             } else {
                 None
@@ -438,43 +435,33 @@ impl VirtAddrSpace {
     }
 }
 
-#[derive(Clone, Copy)]
-#[repr(transparent)]
-pub struct Entry<F: Into<u32> + Copy>(BitFlags<u32, F>);
-
-impl<F: Into<u32> + Copy> Entry<F> {
-    fn new(addr: u32) -> Self {
-        Entry(BitFlags::new(addr))
-    }
-
-    fn missing() -> Self {
-        Self::new(0)
-    }
-
+impl DirEntry {
     fn addr(&self) -> u32 {
-        self.0.value & !0xFFF
-    }
-
-    fn flags(&self) -> BitFlags<u32, F> {
-        BitFlags::new(self.0.value & 0xFFF)
+        self.bits() & !0xFFF
     }
 
     fn set_addr(&mut self, addr: u32) {
-        assert_eq!(addr & 0xFFF, 0, "addr must be page-aligned");
-        self.0.value = addr | self.flags().value;
-    }
-
-    fn set_flag(&mut self, flag: F) {
-        self.0.set_flag(flag);
-    }
-
-    fn unset_flag(&mut self, flag: F) {
-        self.0.unset_flag(flag);
+        assert_eq!(addr % 4096, 0, "addr must be page-aligned");
+        self.0 = addr | self.bits() & 0xFFF;
     }
 }
 
-type DirEntry = Entry<PdeFlags>;
-type TableEntry = Entry<PteFlags>;
+impl TableEntry {
+    fn with_addr(addr: u32) -> Self {
+        let mut entry = Self::empty();
+        entry.set_addr(addr);
+        entry
+    }
+
+    fn addr(&self) -> u32 {
+        self.bits() & !0xFFF
+    }
+
+    fn set_addr(&mut self, addr: u32) {
+        assert_eq!(addr % 4096, 0, "addr must be page-aligned");
+        self.0 = addr | self.bits() & 0xFFF;
+    }
+}
 
 #[repr(align(4096))]
 pub struct Directory([DirEntry; 1024]);
@@ -485,13 +472,13 @@ pub struct Table([TableEntry; 1024]);
 
 impl Directory {
     fn new() -> Self {
-        Directory([Entry::missing(); 1024])
+        Directory([DirEntry::empty(); 1024])
     }
 }
 
 impl Table {
     fn new() -> Self {
-        Table([Entry::missing(); 1024])
+        Table([TableEntry::empty(); 1024])
     }
 }
 
@@ -576,7 +563,7 @@ pub extern "C" fn page_fault_handler(
             println!("No page table for 0x{:08X}.", cr2);
         } else {
             let entry = unsafe { kvas.pgtbl_entry(page) };
-            if entry.flags().has_set(PteFlags::GuardPage) {
+            if entry.contains(TableEntry::GUARD_PAGE) {
                 println!("There is a guard page at 0x{:08X}.", page);
             }
         }

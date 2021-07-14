@@ -181,11 +181,10 @@ enum SectionType {
     Relocation = 9,
 }
 
-bitflags! {
-    #[repr(u32)]
-    enum SectionAttr {
-        Writable = 1,
-        Alloc = 2,
+bitflags_new! {
+    struct SectionAttr: u32 {
+        const WRITABLE = 0b01;
+        const ALLOC = 0b10;
     }
 }
 

@@ -14,108 +14,114 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use core::marker::PhantomData;
-use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not};
+macro_rules! bitflags_new {
+    ($vis:vis struct $name:ident : $type:ty {
+        $(
+            const $flag:ident = $value:expr;
+        )+
+    }) => {
+        #[derive(Eq, PartialEq, Clone, Copy)]
+        #[repr(transparent)]
+        $vis struct $name($type);
 
-#[derive(Clone, Copy)]
-#[repr(transparent)]
-pub struct BitFlags<T, E>
-where
-    T: BitOrAssign
-        + BitAndAssign
-        + BitAnd<T, Output = T>
-        + Not<Output = T>
-        + PartialEq
-        + Copy,
-    E: Into<T> + Copy,
-{
-    pub value: T,
-    phantom: PhantomData<E>,
-}
-
-impl<T, E> BitFlags<T, E>
-where
-    T: BitOrAssign
-        + BitAndAssign
-        + BitAnd<T, Output = T>
-        + Not<Output = T>
-        + PartialEq
-        + Copy,
-    E: Into<T> + Copy,
-{
-    pub fn new(value: T) -> Self {
-        Self {
-            value,
-            phantom: PhantomData,
-        }
-    }
-
-    pub fn set_flag(&mut self, flag: E) {
-        self.value |= flag.into();
-    }
-
-    pub fn unset_flag(&mut self, flag: E) {
-        self.value &= !flag.into();
-    }
-
-    pub fn has_set(&self, flag: E) -> bool {
-        (self & flag) == flag.into()
-    }
-}
-
-impl<T, E> BitOr<E> for BitFlags<T, E>
-where
-    T: BitOrAssign
-        + BitAndAssign
-        + BitAnd<T, Output = T>
-        + Not<Output = T>
-        + PartialEq
-        + Copy,
-    E: Into<T> + Copy,
-{
-    type Output = BitFlags<T, E>;
-    fn bitor(self, rhs: E) -> Self::Output {
-        let mut res = self;
-        res.set_flag(rhs);
-        res
-    }
-}
-
-impl<T, E> BitAnd<E> for &BitFlags<T, E>
-where
-    T: BitOrAssign
-        + BitAndAssign
-        + BitAnd<T, Output = T>
-        + Not<Output = T>
-        + PartialEq
-        + Copy,
-    E: Into<T> + Copy,
-{
-    type Output = T;
-    fn bitand(self, rhs: E) -> Self::Output {
-        self.value & rhs.into()
-    }
-}
-
-macro_rules! bitflags {
-    (#[repr($R:ident)] ($($vis:tt)*) enum $N:ident { $($V:ident = $E:expr,)+ }) => {
         #[allow(dead_code)]
-        #[derive(Clone, Copy, Debug)]
-        #[repr($R)]
-        $($vis)* enum $N {
-            $($V = $E,)+
-        }
+        impl $name {
+            $(const $flag: $name = $name($value);)+
 
-        impl Into<$R> for $N {
-            fn into(self) -> $R {
-                self as $R
+            pub fn empty() -> Self {
+                Self(0)
+            }
+
+            pub fn bits(&self) -> $type {
+                self.0
+            }
+
+            pub fn from_bits(mut bits: $type) -> Self {
+                let mut result = Self::empty();
+                $(
+                    if bits & $name::$flag.0 != 0 {
+                        result.insert($name::$flag);
+                        bits &= !$name::$flag.0;
+                    }
+                )+
+                assert_eq!(
+                    bits, 0,
+                    "{}::from_bits(): unknown bits: {:b}",
+                    stringify!($name),
+                    bits,
+                );
+                result
+            }
+
+            pub fn from_bits_unchecked(bits: $type) -> Self {
+                Self(bits)
+            }
+
+            pub fn is_empty(&self) -> bool {
+                self.0 == 0
+            }
+
+            pub fn contains(&self, flags: $name) -> bool {
+                (self.0 & flags.0) == flags.0
+            }
+
+            pub fn insert(&mut self, flags: $name) {
+                self.0 |= flags.0;
+            }
+
+            pub fn remove(&mut self, flags: $name) {
+                self.0 &= !flags.0;
+            }
+
+            pub fn toggle(&mut self, flags: $name) {
+                self.0 ^= flags.0;
             }
         }
-    };
-    (#[repr($R:ident)] pub enum $N:ident { $($V:ident = $E:expr,)+ }) => {
-        bitflags!(#[repr($R)] (pub) enum $N { $($V = $E,)+ });
-    };
-    (#[repr($R:ident)] enum $N:ident { $($V:ident = $E:expr,)+ }) => {
-        bitflags!(#[repr($R)] () enum $N { $($V = $E,)+ });
+
+        #[allow(unused_assignments)]
+        impl core::fmt::Debug for $name {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+            {
+                let mut first = true;
+                $(
+                    if self.0 & $name::$flag.0 != 0 {
+                        if first {
+                            first = false;
+                        } else {
+                            f.write_str(" | ")?;
+                        }
+                        f.write_str(stringify!($flag))?;
+                    }
+                )+
+                Ok(())
+            }
+        }
+
+        impl core::ops::BitAnd for $name {
+            type Output = Self;
+
+            fn bitand(self, rhs: Self) -> Self::Output {
+                Self(self.0 & rhs.0)
+            }
+        }
+
+        impl core::ops::BitOr for $name {
+            type Output = Self;
+
+            fn bitor(self, rhs: Self) -> Self::Output {
+                Self(self.0 | rhs.0)
+            }
+        }
+
+        impl core::ops::Not for $name {
+            type Output = Self;
+
+            fn not(mut self) -> Self::Output {
+                $(
+                    self.toggle($name::$flag);
+                )+
+                self
+            }
+        }
     }
 }

@@ -19,7 +19,6 @@ use alloc::rc::Rc;
 use crate::fs::VFS_ROOT;
 use crate::task_manager::TASK_MANAGER;
 
-use crate::bitflags::BitFlags;
 use crate::fs;
 use crate::task::OpenFileErr;
 
@@ -151,14 +150,14 @@ pub enum SeekErr {
 pub fn mem_map(
     addr: usize,
     len: usize,
-    prot: BitFlags<u32, MemMapProt>,
-    flags: BitFlags<u32, MemMapFlags>,
+    prot: MemMapProt,
+    flags: MemMapFlags,
     fd: i32,
     offset: usize,
 ) -> Result<usize, MemMapErr> {
     println!(
-        "[SYS MEM_MAP] addr = 0x{:08X}, len = 0x{:08X}, prot = {}, flags = {}, fd = {}, offset = 0x{:08X}",
-        addr, len, prot.value, flags.value, fd, offset,
+        "[SYS MEM_MAP] addr = 0x{:08X}, len = 0x{:08X}, prot = {:?}, flags = {:?}, fd = {}, offset = 0x{:08X}",
+        addr, len, prot, flags, fd, offset,
     );
 
     if addr != 0 {
@@ -171,71 +170,29 @@ pub fn mem_map(
         println!("[SYS MEM_MAP] non-zero offset (0x{:X}) is ignored", offset);
     }
 
-    let mut readable = false;
-    let mut writable = false;
-
-    let mut prot_left = prot;
-    if prot_left.has_set(MemMapProt::None) {
-        prot_left.unset_flag(MemMapProt::None);
-    }
-    if prot_left.has_set(MemMapProt::Read) {
-        readable = true;
-        prot_left.unset_flag(MemMapProt::Read);
-    }
-    if prot_left.has_set(MemMapProt::Write) {
-        writable = true;
-        prot_left.unset_flag(MemMapProt::Write);
-    }
-    if prot_left.has_set(MemMapProt::Exec) {
-        unimplemented!("syscall mem_map: MemMapProt::Exec");
-    }
-    assert_eq!(prot_left.value, 0, "unknown prot: {}", prot_left.value);
-
-    let mut private = false;
-    let mut anonymous = false;
-
-    let mut flags_left = flags;
-    if flags_left.has_set(MemMapFlags::Private) {
-        private = true;
-        flags_left.unset_flag(MemMapFlags::Private);
-    }
-    if flags_left.has_set(MemMapFlags::Anonymous) {
-        anonymous = true;
-        flags_left.unset_flag(MemMapFlags::Anonymous);
-    }
-    if flags_left.has_set(MemMapFlags::Shared) {
-        unimplemented!("syscall mem_map: MemMapFlags::Shared");
-    }
-    if flags_left.has_set(MemMapFlags::Fixed) {
-        unimplemented!("syscall mem_map: MemMapFlags::Fixed");
-    }
-    assert_eq!(flags_left.value, 0, "unknown flags: {}", flags_left.value);
-
-    assert!(readable && writable);
-    assert!(private && anonymous);
+    assert_eq!(prot, MemMapProt::READ | MemMapProt::WRITE);
+    assert_eq!(flags, MemMapFlags::PRIVATE | MemMapFlags::ANONYMOUS);
 
     let mapping = unsafe { TASK_MANAGER.this_task().mem_map(len) };
 
     Ok(mapping.region.start as usize)
 }
 
-bitflags! {
-    #[repr(u32)]
-    pub enum MemMapProt {
-        None = 1 << 0,
-        Read = 1 << 1,
-        Write = 1 << 2,
-        Exec = 1 << 3,
+bitflags_new! {
+    pub struct MemMapProt: u32 {
+        const NONE = 0b0001;
+        const READ = 0b0010;
+        const WRITE = 0b0100;
+        const EXEC = 0b1000;
     }
 }
 
-bitflags! {
-    #[repr(u32)]
-    pub enum MemMapFlags {
-        Private = 1 << 0,
-        Anonymous = 1 << 1,
-        Shared = 1 << 2,
-        Fixed = 1 << 3,
+bitflags_new! {
+    pub struct MemMapFlags: u32 {
+        const PRIVATE = 0b0001;
+        const ANONYMOUS = 0b0010;
+        const SHARED = 0b0100;
+        const FIXED = 0b1000;
     }
 }
 

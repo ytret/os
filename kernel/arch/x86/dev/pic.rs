@@ -15,7 +15,6 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use crate::arch::port_io;
-use crate::bitflags::BitFlags;
 
 #[allow(dead_code)]
 #[repr(u16)]
@@ -26,39 +25,36 @@ enum Port {
     SlaveData = 0xA1,
 }
 
-bitflags! {
-    #[repr(u8)]
-    enum InitCommandWord1 {
-        Icw4Needed = 1 << 0,          // not set: no ICW4 needed
-        SingleMode = 1 << 1,          // not set: cascade mode
-        CallAddrIntervalOf4 = 1 << 2, // not set: call address interval of 8
-        LevelTriggeredMode = 1 << 3,  // not set: edge triggered mode
-        Icw1 = 1 << 4,                // must be set
+bitflags_new! {
+    struct InitCommandWord1: u8 {
+        const ICW4_NEEDED = 1 << 0;             // not set: no ICW4 needed
+        const SINGLE_MODE = 1 << 1;             // not set: cascade mode
+        const CALL_ADDR_INTERVAL_OF_4 = 1 << 2; // not set: call address interval of 8
+        const LEVEL_TRIGGERED_MODE = 1 << 3;    // not set: edge triggered mode
+        const ICW1 = 1 << 4;                    // must be set
     }
 }
 
-bitflags! {
-    #[repr(u8)]
-    enum InitCommandWord4 {
-        Mode8086 = 1 << 0,               // not set: MCS-80/85 mode
-        AutoEoi = 1 << 1,                // not set: normal EOI
-        BufferedModeMaster = 0b11 << 2,  // not set: non-buffered mode
-        BufferedModeSlave = 0b10 << 2,   // not set: non-buffered mode
-        SpecialFullyNestedMode = 1 << 4, // not set: not special f. n. mode
+bitflags_new! {
+    struct InitCommandWord4: u8 {
+        const MODE_8086 = 1 << 0;                 // not set: MCS-80/85 mode
+        const AUTO_EOI = 1 << 1;                  // not set: normal EOI
+        const BUFFERED_MODE_MASTER = 0b11 << 2;   // not set: non-buffered mode
+        const BUFFERED_MODE_SLAVE = 0b10 << 2;    // not set: non-buffered mode
+        const SPECIAL_FULLY_NESTED_MODE = 1 << 4; // not set: not special f. n. mode
     }
 }
 
-bitflags! {
-    #[repr(u8)]
-    enum OpControlWord3 {
+bitflags_new! {
+    struct OpControlWord3: u8 {
         // Bit 7 must be zero.
-        ResetSpecialMask = 0b10 << 5,   // not set: no action
-        SetSpecialMask = 0b11 << 5,     // not set: no action
+        const RESET_SPECIAL_MASK = 0b10 << 5; // not set: no action
+        const SET_SPECIAL_MASK = 0b11 << 5;   // not set: no action
         // Bit 4 must be zero.
-        MustBeSet = 1 << 3,
-        PollCommand = 1 << 2,           // not set: no poll command
-        ReadIrr = 10,                   // not set: no action
-        ReadIsr = 11,                   // not set: no action
+        const MUST_BE_SET = 1 << 3;
+        const POLL_COMMAND = 1 << 2;          // not set: no poll command
+        const READ_IRR = 0b10;                // not set: no action
+        const READ_ISR = 0b11;                // not set: no action
     }
 }
 
@@ -74,11 +70,9 @@ pub struct Pic {
 impl Pic {
     fn init(&self) {
         // ICW1: Start the init sequence.
-        let icw1: BitFlags<u8, InitCommandWord1> = BitFlags::new(0)
-            | InitCommandWord1::Icw1
-            | InitCommandWord1::Icw4Needed;
-        self.send_master_command(icw1.value);
-        self.send_slave_command(icw1.value);
+        let icw1 = InitCommandWord1::ICW1 | InitCommandWord1::ICW4_NEEDED;
+        self.send_master_command(icw1.bits());
+        self.send_slave_command(icw1.bits());
 
         // ICW2: Tell PICs their vector offsets.
         self.send_master_data(self.master_vector_offset);
@@ -89,10 +83,9 @@ impl Pic {
         self.send_slave_data(self.slave_id);
 
         // ICW4: Set 8086/8088 mode.
-        let icw4: BitFlags<u8, InitCommandWord4> =
-            BitFlags::new(0) | InitCommandWord4::Mode8086;
-        self.send_master_data(icw4.value);
-        self.send_slave_data(icw4.value);
+        let icw4 = InitCommandWord4::MODE_8086;
+        self.send_master_data(icw4.bits());
+        self.send_slave_data(icw4.bits());
 
         // Mask IRQs.
         self.mask_irqs();
@@ -156,11 +149,9 @@ impl Pic {
     }
 
     pub fn get_isr(&self) -> u16 {
-        let ocw3: BitFlags<u8, OpControlWord3> = BitFlags::new(0)
-            | OpControlWord3::MustBeSet
-            | OpControlWord3::ReadIsr;
-        self.send_master_command(ocw3.value);
-        self.send_slave_command(ocw3.value);
+        let ocw3 = OpControlWord3::MUST_BE_SET | OpControlWord3::READ_ISR;
+        self.send_master_command(ocw3.bits());
+        self.send_slave_command(ocw3.bits());
         unsafe {
             let master_isr = port_io::inb(Port::MasterCommand as u16) as u16;
             let slave_isr = port_io::inb(Port::SlaveCommand as u16) as u16;

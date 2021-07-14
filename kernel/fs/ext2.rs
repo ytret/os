@@ -21,7 +21,6 @@ use alloc::vec;
 use alloc::vec::Vec;
 use core::cell::RefCell;
 use core::convert::TryFrom;
-use core::fmt;
 use core::mem::{align_of, drop, size_of};
 use core::ops::Range;
 use core::slice;
@@ -30,7 +29,6 @@ use super::{
     FileSystem, Node, NodeInternals, NodeType, ReadDirErr, ReadFileErr,
     WriteFileErr,
 };
-use crate::bitflags::BitFlags;
 use crate::dev::disk;
 
 #[allow(dead_code)]
@@ -112,34 +110,31 @@ struct ExtendedSuperblock {
     orphan_inode_list_head: u32,
 }
 
-bitflags! {
-    #[repr(u32)]
-    enum OptionalFeature {
-        PreallocForDir = 0x01,
-        AfsServerInodesExist = 0x02,
-        FsHasJournal = 0x04,
-        InodesWithExtAttr = 0x08,
-        FsCanResize = 0x10,
-        DirsUseHashIdx = 0x20,
+bitflags_new! {
+    struct OptionalFeatures: u32 {
+        const PREALLOC_FOR_DIR = 0x01;
+        const AFS_SERVER_INODES_EXIST = 0x02;
+        const FS_HAS_JOURNAL = 0x04;
+        const INODES_WITH_EXT_ATTR = 0x08;
+        const FS_CAN_RESIZE = 0x10;
+        const DIRS_USE_HASH_IDX = 0x20;
     }
 }
 
-bitflags! {
-    #[repr(u32)]
-    pub enum RequiredFeature {
-        Compression = 0x01,
-        DirsWithType = 0x02,
-        FsNeedsToReplayJournal = 0x04,
-        FsUsesJournalDevice = 0x08,
+bitflags_new! {
+    pub struct RequiredFeatures: u32 {
+        const COMPRESSION = 0x01;
+        const DIRS_WITH_TYPE = 0x02;
+        const FS_NEEDS_TO_REPLAY_JOURNAL = 0x04;
+        const FS_USES_JOURNAL_DEVICE = 0x08;
     }
 }
 
-bitflags! {
-    #[repr(u32)]
-    enum ReadOnlyFeature {
-        SparseSuperblocksAndBgdTables = 0x01,
-        FileSize64Bit = 0x02,
-        DirContentsInBinaryTree = 0x04,
+bitflags_new! {
+    struct ReadOnlyFeatures: u32 {
+        const SPARSE_SUPERBLOCKS_AND_BGD_TABLES = 0x01;
+        const FILE_SIZE_64_BIT = 0x02;
+        const DIR_CONTENTS_IN_BINARY_TREE = 0x04;
     }
 }
 
@@ -165,7 +160,7 @@ pub struct BlockGroupDescriptor {
 pub struct Inode {
     type_and_permissions: u16,
     user_id: u16,
-    size: u32, // if ReadOnlyFeature::FileSize64Bit, these are the bits 0..31
+    size: u32, // if ReadOnlyFeatures::FileSize64Bit, these are the bits 0..31
     last_access_time: u32,
     creation_time: u32,
     last_modification_time: u32,
@@ -192,7 +187,7 @@ pub struct Inode {
     triply_indirect_block_ptr: u32,
     generation_number: u32,
     extended_attr_block: u32,  // if major version >= 1
-    file_size_bits_32_63: u32, // if ReadOnlyFeature::FileSize64Bit
+    file_size_bits_32_63: u32, // if ReadOnlyFeatures::FileSize64Bit
     fragment_block_addr: u32,
     os_specific_2: [u8; 12],
 }
@@ -286,7 +281,7 @@ struct DirEntry {
     inode: u32,
     total_size: u16, // including the subfields
     name_len_0_7: u8,
-    type_or_name_len_8_16: u8, // type if RequiredFeature::DirsWithType
+    type_or_name_len_8_16: u8, // type if RequiredFeatures::DirsWithType
     name: [u8; 0],
 }
 
@@ -334,9 +329,9 @@ pub struct Ext2 {
     rw_interface: Weak<dyn disk::ReadWriteInterface>,
 
     version: (u32, u16), // major, minor
-    optional_features: BitFlags<u32, OptionalFeature>,
-    required_features: BitFlags<u32, RequiredFeature>,
-    read_only_features: BitFlags<u32, ReadOnlyFeature>,
+    optional_features: OptionalFeatures,
+    required_features: RequiredFeatures,
+    read_only_features: ReadOnlyFeatures,
 
     total_num_blocks: u32,
     block_size: usize,
@@ -395,87 +390,52 @@ impl Ext2 {
             version: (superblock.version_major, superblock.version_minor),
             optional_features: {
                 if superblock.version_major >= 1 {
-                    let of = BitFlags::new(
+                    let of = OptionalFeatures::from_bits(
                         extended_superblock.unwrap().optional_features,
                     );
-                    let absent = of;
-
-                    let mut names = Vec::new();
-                    if absent.has_set(OptionalFeature::PreallocForDir) {
-                        names.push("PreallocForDir");
-                    }
-                    if absent.has_set(OptionalFeature::AfsServerInodesExist) {
-                        names.push("AfsServerInodesExist");
-                    }
-                    if absent.has_set(OptionalFeature::FsHasJournal) {
-                        names.push("FsHasJournal");
-                    }
-                    if absent.has_set(OptionalFeature::InodesWithExtAttr) {
-                        names.push("InodesWithExtAttr");
-                    }
-                    if absent.has_set(OptionalFeature::FsCanResize) {
-                        names.push("FsCanResize");
-                    }
-                    if absent.has_set(OptionalFeature::DirsUseHashIdx) {
-                        names.push("DirsUseHashIdx");
-                    }
-                    println!(
-                        "[EXT2] Unsupported optional features: {}.",
-                        names.join(", "),
-                    );
-
+                    println!("[EXT2] Unsupported optional features: {:?}.", of);
                     of
                 } else {
-                    BitFlags::new(0)
+                    OptionalFeatures::empty()
                 }
             },
             required_features: {
                 if superblock.version_major >= 1 {
-                    let rf = BitFlags::new(
+                    let rf = RequiredFeatures::from_bits(
                         extended_superblock.unwrap().required_features,
                     );
-                    let mut absent = rf;
 
-                    // Supported features.
-                    if absent.has_set(RequiredFeature::DirsWithType) {
-                        absent.unset_flag(RequiredFeature::DirsWithType);
-                    }
-
-                    // Any unsupported features?
-                    if absent.value != 0 {
-                        return Err(FromRawErr::NoRequiredFeatures(absent));
+                    let supported = RequiredFeatures::DIRS_WITH_TYPE;
+                    if !(rf & !supported).is_empty() {
+                        return Err(FromRawErr::NoRequiredFeatures(
+                            rf & !supported,
+                        ));
                     }
 
                     rf
                 } else {
-                    BitFlags::new(0)
+                    RequiredFeatures::empty()
                 }
             },
             read_only_features: {
                 if superblock.version_major >= 1 {
-                    let rof = BitFlags::new(
+                    let rof = ReadOnlyFeatures::from_bits(
                         extended_superblock.unwrap().read_only_features,
                     );
-                    let mut absent = rof;
 
-                    // Supported features.
-                    if absent.has_set(ReadOnlyFeature::FileSize64Bit) {
-                        absent.unset_flag(ReadOnlyFeature::FileSize64Bit);
-                    }
-
-                    // Any unsupported features?
-                    if absent.value != 0 {
+                    let supported = ReadOnlyFeatures::FILE_SIZE_64_BIT;
+                    if !(rof & !supported).is_empty() {
                         println!(
-                            "[EXT2] Unsupported read-only features 0x{:02X}. \
+                            "[EXT2] Unsupported read-only features: {:?}. \
                              File system is read-only.",
-                            absent.value,
+                            rof & !supported,
                         );
                         read_only = true;
                     }
 
                     rof
                 } else {
-                    BitFlags::new(0)
+                    ReadOnlyFeatures::empty()
                 }
             },
 
@@ -697,19 +657,9 @@ impl Ext2 {
     }
 }
 
+#[derive(Debug)]
 pub enum FromRawErr {
-    NoRequiredFeatures(BitFlags<u32, RequiredFeature>),
-}
-
-impl fmt::Debug for FromRawErr {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            FromRawErr::NoRequiredFeatures(rf) => f.write_fmt(format_args!(
-                "NoRequiredFeatures(0x{:0X})",
-                rf.value,
-            )),
-        }
-    }
+    NoRequiredFeatures(RequiredFeatures),
 }
 
 #[derive(Debug)]
@@ -842,7 +792,7 @@ impl FileSystem for Ext2 {
             let _type = {
                 if self
                     .required_features
-                    .has_set(RequiredFeature::DirsWithType)
+                    .contains(RequiredFeatures::DIRS_WITH_TYPE)
                 {
                     NodeType::try_from(
                         DirEntryType::try_from(entry.type_or_name_len_8_16)
@@ -976,7 +926,7 @@ impl FileSystem for Ext2 {
         let size = inode.size as usize;
         if self
             .read_only_features
-            .has_set(ReadOnlyFeature::FileSize64Bit)
+            .contains(ReadOnlyFeatures::FILE_SIZE_64_BIT)
         {
             if inode.file_size_bits_32_63 != 0 {
                 // FIXME: abort on 32-bit machines and proceed on 64-bit ones.

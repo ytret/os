@@ -24,7 +24,6 @@ use crate::task_manager::TASK_MANAGER;
 
 use crate::arch::gdt;
 use crate::arch::interrupts::InterruptStackFrame;
-use crate::bitflags::BitFlags;
 use crate::syscall;
 
 #[derive(Clone, Copy, Debug)]
@@ -168,8 +167,8 @@ pub extern "C" fn syscall_handler(
 
         let addr = args[0] as usize;
         let len = args[1] as usize;
-        let prot = BitFlags::<u32, syscall::MemMapProt>::new(args[2]);
-        let flags = BitFlags::<u32, syscall::MemMapFlags>::new(args[3]);
+        let prot = syscall::MemMapProt::from_bits(args[2]);
+        let flags = syscall::MemMapFlags::from_bits(args[3]);
         let fd = args[4] as i32;
         let offset = args[5] as usize;
 
